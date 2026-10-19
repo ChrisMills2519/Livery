@@ -1,0 +1,143 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://Models/medieval_village/fence_713fa0e6.glb" id="fence_model"]
+[sub_resource type="BoxShape3D" id="arena_col_x"]
+size = Vector3(20.000, 1.32, 0.30)
+[sub_resource type="BoxShape3D" id="arena_col_z"]
+size = Vector3(0.30, 1.32, 40.000)
+[sub_resource type="BoxShape3D" id="arena_col_z_north"]
+size = Vector3(0.30, 1.32, 14.920)
+[sub_resource type="BoxShape3D" id="arena_col_z_south"]
+size = Vector3(0.30, 1.32, 18.000)
+
+[node name="ArenaFence" type="Node3D"]
+
+[node name="ArenaFenceX0" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -33.33333, 0.00000, -20.00000)
+
+[node name="ArenaFenceX1" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -30.00000, 0.00000, -20.00000)
+
+[node name="ArenaFenceX2" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -26.66667, 0.00000, -20.00000)
+
+[node name="ArenaFenceX3" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -23.33333, 0.00000, -20.00000)
+
+[node name="ArenaFenceX4" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -20.00000, 0.00000, -20.00000)
+
+[node name="ArenaFenceX5" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -16.66667, 0.00000, -20.00000)
+
+[node name="ArenaFenceX6" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -33.33333, 0.00000, 20.00000)
+
+[node name="ArenaFenceX7" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -30.00000, 0.00000, 20.00000)
+
+[node name="ArenaFenceX8" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -26.66667, 0.00000, 20.00000)
+
+[node name="ArenaFenceX9" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -23.33333, 0.00000, 20.00000)
+
+[node name="ArenaFenceX10" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -20.00000, 0.00000, 20.00000)
+
+[node name="ArenaFenceX11" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -16.66667, 0.00000, 20.00000)
+
+[node name="ArenaFenceZ12" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -18.46154)
+
+[node name="ArenaFenceZ13" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -15.38462)
+
+[node name="ArenaFenceZ14" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -12.30769)
+
+[node name="ArenaFenceZ15" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -9.23077)
+
+[node name="ArenaFenceZ16" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -6.15385)
+
+[node name="ArenaFenceZ17" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -3.07692)
+
+[node name="ArenaFenceZ18" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 0.00000)
+
+[node name="ArenaFenceZ19" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 3.07692)
+
+[node name="ArenaFenceZ20" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 6.15385)
+
+[node name="ArenaFenceZ21" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 9.23077)
+
+[node name="ArenaFenceZ22" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 12.30769)
+
+[node name="ArenaFenceZ23" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 15.38462)
+
+[node name="ArenaFenceZ24" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 18.46154)
+
+[node name="ArenaFenceZ25" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -18.46154)
+
+[node name="ArenaFenceZ26" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -15.38462)
+
+[node name="ArenaFenceZ27" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -12.30769)
+
+[node name="ArenaFenceZ28" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -9.23077)
+
+[node name="ArenaFenceZ29" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -6.15385)
+
+[node name="ArenaFenceZ32" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 3.07692)
+
+[node name="ArenaFenceZ33" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 6.15385)
+
+[node name="ArenaFenceZ34" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 9.23077)
+
+[node name="ArenaFenceZ35" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 12.30769)
+
+[node name="ArenaFenceZ36" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 15.38462)
+
+[node name="ArenaFenceZ37" parent="." instance=ExtResource("fence_model")]
+transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 18.46154)
+
+[node name="ArenaCollision" type="StaticBody3D" parent="."]
+
+[node name="NorthShape" type="CollisionShape3D" parent="ArenaCollision"]
+shape = SubResource("arena_col_x")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25.000, 0.660, -20.000)
+
+[node name="SouthShape" type="CollisionShape3D" parent="ArenaCollision"]
+shape = SubResource("arena_col_x")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25.000, 0.660, 20.000)
+
+[node name="WestShape" type="CollisionShape3D" parent="ArenaCollision"]
+shape = SubResource("arena_col_z")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35.000, 0.660, 0.000)
+
+[node name="EastShapeNorth" type="CollisionShape3D" parent="ArenaCollision"]
+shape = SubResource("arena_col_z_north")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.000, 0.660, -12.540)
+
+[node name="EastShapeSouth" type="CollisionShape3D" parent="ArenaCollision"]
+shape = SubResource("arena_col_z_south")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.000, 0.660, 11.000)

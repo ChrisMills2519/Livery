@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="PlayerModelProfile" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/player_model_profile.gd" id="1_profile"]
+[ext_resource type="PackedScene" path="res://Models/chris.glb" id="2_scene"]
+
+[resource]
+script = ExtResource("1_profile")
+display_name = "Chris"
+role = "Steady hand"
+blurb = "An adult seat on long leathers — calm, balanced and built for schooling a green horse."
+accent = Color(0.76, 0.86, 0.58, 1)
+scene = ExtResource("2_scene")
+model_yaw_degrees = 180.0
+preview_yaw_degrees = -90.0
+model_scale = 1.0
+hips_to_seat = 0.1
+stirrup_lift = 0.0
+hand_anchor_offset = Vector3(0, 0, 0)
+ride_pivot = Vector3(0, 1, 0)
+ride_camera = Vector3(0, 0, 4.2)

@@ -1,0 +1,90 @@
+[gd_scene format=3 uid="uid://di1xghu1ii0jf"]
+
+[ext_resource type="PackedScene" uid="uid://icu26x70xkab" path="res://scenes/player.tscn" id="1_player"]
+[ext_resource type="PackedScene" path="res://scenes/horse.tscn" id="2_horse"]
+[ext_resource type="PackedScene" path="res://scenes/forest.tscn" id="3_forest"]
+[ext_resource type="PackedScene" path="res://scenes/nature_props.tscn" id="4_nature"]
+[ext_resource type="PackedScene" path="res://scenes/terrain.tscn" id="5_terrain"]
+[ext_resource type="PackedScene" path="res://scenes/stable.tscn" id="6_stable"]
+[ext_resource type="PackedScene" path="res://scenes/arena_fence.tscn" id="7_arena"]
+[ext_resource type="PackedScene" path="res://scenes/arena_course.tscn" id="8_course"]
+[ext_resource type="PackedScene" path="res://scenes/grooming_bay.tscn" id="9_bay"]
+[ext_resource type="Script" path="res://scripts/riding_course.gd" id="11_course"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="12_hud"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tuyoq"]
+sky_top_color = Color(0.23, 0.42, 0.72, 1)
+sky_horizon_color = Color(0.72, 0.81, 0.88, 1)
+sky_curve = 0.15
+sky_energy_multiplier = 1.0
+ground_bottom_color = Color(0.18, 0.2, 0.16, 1)
+ground_horizon_color = Color(0.55, 0.6, 0.52, 1)
+ground_curve = 0.03
+sun_angle_max = 20.0
+sun_curve = 0.1
+
+[sub_resource type="Sky" id="Sky_qlg0r"]
+sky_material = SubResource("ProceduralSkyMaterial_tuyoq")
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 2
+background_energy_multiplier = 1.0
+sky = SubResource("Sky_qlg0r")
+ambient_light_source = 3
+ambient_light_sky_contribution = 1.0
+ambient_light_energy = 0.55
+reflected_light_source = 2
+tonemap_mode = 3
+tonemap_exposure = 1.0
+tonemap_white = 6.0
+adjustment_enabled = true
+adjustment_saturation = 1.05
+adjustment_contrast = 1.03
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
+size = Vector3(200, 0.2, 200)
+
+[node name="Main" type="Node3D" unique_id=862945312]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1276750483]
+environment = SubResource("Environment_main")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1239613529]
+transform = Transform3D(0.866, -0.3345, 0.3715, 0, 0.743, 0.669, -0.5, -0.5794, 0.6434, 0, 12, 0)
+light_color = Color(1, 0.94, 0.86, 1)
+light_energy = 1.25
+shadow_enabled = true
+shadow_blur = 1.2
+directional_shadow_max_distance = 60.0
+
+[node name="Ground" type="StaticBody3D" parent="." unique_id=1005392174]
+
+[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=1600037838]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+shape = SubResource("BoxShape3D_ground")
+
+[node name="Terrain" parent="." unique_id=92666194 instance=ExtResource("5_terrain")]
+
+[node name="Stable" parent="." unique_id=880955720 instance=ExtResource("6_stable")]
+
+[node name="GroomingBay" parent="." unique_id=880955721 instance=ExtResource("9_bay")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -12.5)
+
+[node name="ArenaFence" parent="." unique_id=1932956482 instance=ExtResource("7_arena")]
+
+[node name="Forest" parent="." unique_id=769391700 instance=ExtResource("3_forest")]
+
+[node name="NatureProps" parent="." unique_id=944556164 instance=ExtResource("4_nature")]
+
+[node name="ArenaCourse" parent="." unique_id=1932956483 instance=ExtResource("8_course")]
+
+[node name="Horse" parent="." unique_id=1922402386 instance=ExtResource("2_horse")]
+
+[node name="Player" parent="." unique_id=2005174848 instance=ExtResource("1_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6)
+
+[node name="RidingCourse" type="Node3D" parent="."]
+script = ExtResource("11_course")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("12_hud")

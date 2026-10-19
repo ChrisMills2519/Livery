@@ -1,0 +1,5 @@
+Medieval Village Pack by Quaternius (CC0 / Public Domain)
+Source: https://poly.pizza/bundle/Medieval-Village-Pack-NsHhjhlrfY
+Files downloaded from https://static.poly.pizza/<id>.glb (39 GLB models).
+Used for: stable (fantasy_stable), fences (fence), hay (hay), well, barrels, crates, carts, benches, gazebo, market stands, and buildings.
+License: CC0 - free for commercial and personal use, no attribution required.

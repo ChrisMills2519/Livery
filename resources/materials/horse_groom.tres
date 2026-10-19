@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3]
+
+[ext_resource type="Shader" path="res://res/shaders/horse_groom.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" path="res://Models/horse_riggedgame_ready_clips_Image_0.png" id="2_coat"]
+
+[resource]
+shader = ExtResource("1_shader")
+shader_parameter/coat_texture = ExtResource("2_coat")
+shader_parameter/dirt_level = 1.0
+shader_parameter/mask_view = 0.0
+shader_parameter/dirt_color = Color(0.48, 0.39, 0.28, 1)
+shader_parameter/sheen_color = Color(0.95, 0.88, 0.68, 1)
+shader_parameter/sheen_strength = 0.24
+shader_parameter/dirt_strength = 0.4

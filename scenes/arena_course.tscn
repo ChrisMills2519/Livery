@@ -1,0 +1,72 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/02_BarrierEvery3D.glb" id="1_4xk6m"]
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/01_Barrier2.glb" id="2_sjyjo"]
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/00_Barrier1.glb" id="3_fwqpp"]
+[ext_resource type="PackedScene" path="res://Models/split/horse_riding_obstacles_box_1_to_10_wooden_fence/05_No_1_Box.glb" id="4_u7h7q"]
+[ext_resource type="PackedScene" path="res://Models/split/horse_riding_obstacles_box_1_to_10_wooden_fence/06_No_2_Box.glb" id="5_2xk54"]
+[ext_resource type="PackedScene" path="res://Models/split/horse_riding_obstacles_box_1_to_10_wooden_fence/07_No_3_Box.glb" id="6_x1e2e"]
+[ext_resource type="PackedScene" path="res://Models/split/horse_riding_obstacles_box_1_to_10_wooden_fence/00_Cone_obstacle_A1.glb" id="7_34c0e"]
+[ext_resource type="PackedScene" path="res://Models/split/horse_riding_obstacles_box_1_to_10_wooden_fence/01_Cone_obstacle_B2.glb" id="8_wsghj"]
+[ext_resource type="PackedScene" path="res://Models/split/horse_riding_obstacles_box_1_to_10_wooden_fence/02_Fence_1.glb" id="9_eir6h"]
+[ext_resource type="PackedScene" path="res://Models/split/horse_riding_obstacles_box_1_to_10_wooden_fence/03_Fence_2.glb" id="10_6s62g"]
+
+[node name="ArenaCourse" type="Node3D" unique_id=1837494464]
+
+[node name="ArenaJumps" type="Node3D" parent="." unique_id=678844189]
+
+[node name="Jump_01" type="Node3D" parent="ArenaJumps" unique_id=1769879685 instance=ExtResource("1_4xk6m")]
+transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, -26.9305, 6.973743e-08, -12)
+
+[node name="Jump_02" type="Node3D" parent="ArenaJumps" unique_id=2045050443 instance=ExtResource("1_4xk6m")]
+transform = Transform3D(0.6, 0, 0, 0, 0.6, 0, 0, 0, 0.6, -27.782, 6.437302e-08, 2.0000002)
+
+[node name="Jump_03" type="Node3D" parent="ArenaJumps" unique_id=1197181222 instance=ExtResource("2_sjyjo")]
+transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, -23.9305, 7.821834e-08, 15.017036)
+
+[node name="Cavaletti_01" type="Node3D" parent="ArenaJumps" unique_id=1494452339 instance=ExtResource("3_fwqpp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -33.962082, -0.00031749788, -5.4072795)
+
+[node name="Cavaletti_02" type="Node3D" parent="ArenaJumps" unique_id=231763114 instance=ExtResource("3_fwqpp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -33.962082, -0.00031749788, -4.0072794)
+
+[node name="Cavaletti_03" type="Node3D" parent="ArenaJumps" unique_id=971361018 instance=ExtResource("3_fwqpp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -33.962082, -0.00031749788, -2.6072795)
+
+[node name="Cavaletti_04" type="Node3D" parent="ArenaJumps" unique_id=1870962214 instance=ExtResource("3_fwqpp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -33.962082, -0.00031749788, -1.2072794)
+
+[node name="Marker_01" type="Node3D" parent="ArenaJumps" unique_id=1923262286 instance=ExtResource("4_u7h7q")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, -19.453176, -0.0131883435, -12.616963)
+
+[node name="Marker_02" type="Node3D" parent="ArenaJumps" unique_id=1528125698 instance=ExtResource("5_2xk54")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, -21.009056, -0.013188353, 3.1973617)
+
+[node name="Marker_03" type="Node3D" parent="ArenaJumps" unique_id=1027656753 instance=ExtResource("6_x1e2e")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, -17.419157, -0.013188353, 13.383037)
+
+[node name="SchoolingGround" type="Node3D" parent="." unique_id=1330428897]
+
+[node name="Cone_01" type="Node3D" parent="SchoolingGround" unique_id=1428144817 instance=ExtResource("7_34c0e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.057013, -0.0018014184, 2.5467827)
+
+[node name="Cone_02" type="Node3D" parent="SchoolingGround" unique_id=9201052 instance=ExtResource("8_wsghj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30.60038, -0.0018014184, -1.3349438)
+
+[node name="Cone_03" type="Node3D" parent="SchoolingGround" unique_id=245736106 instance=ExtResource("7_34c0e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 34.05701, -0.0018014184, 2.5467827)
+
+[node name="Cone_04" type="Node3D" parent="SchoolingGround" unique_id=1146976358 instance=ExtResource("8_wsghj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 38.60038, -0.0018014184, -1.3349438)
+
+[node name="Cone_05" type="Node3D" parent="SchoolingGround" unique_id=792542507 instance=ExtResource("7_34c0e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42.05701, -0.0018014184, 2.5467827)
+
+[node name="Cone_06" type="Node3D" parent="SchoolingGround" unique_id=384930435 instance=ExtResource("8_wsghj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 46.60038, -0.0018014184, -1.3349438)
+
+[node name="Fence_01" type="Node3D" parent="SchoolingGround" unique_id=828526338 instance=ExtResource("9_eir6h")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.171349, 0.001117305, -12.238104)
+
+[node name="Fence_02" type="Node3D" parent="SchoolingGround" unique_id=1703601167 instance=ExtResource("10_6s62g")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 41.406807, 0.001117305, -18.338985)

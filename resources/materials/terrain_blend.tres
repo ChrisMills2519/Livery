@@ -1,0 +1,37 @@
+[gd_resource type="ShaderMaterial" load_steps=11 format=3]
+
+[ext_resource type="Shader" path="res://res/shaders/terrain_blend.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground/grass_albedo.jpg" id="2_grass_a"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground/grass_normal.jpg" id="3_grass_n"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground/dirt_albedo.jpg" id="4_dirt_a"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground/dirt_normal.jpg" id="5_dirt_n"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground/path_albedo.jpg" id="6_path_a"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground/path_normal.jpg" id="7_path_n"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground/sand_albedo.jpg" id="8_sand_a"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground/sand_normal.jpg" id="9_sand_n"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground/terrain_control.png" id="10_control"]
+
+[resource]
+shader = ExtResource("1_shader")
+shader_parameter/grass_albedo = ExtResource("2_grass_a")
+shader_parameter/grass_normal = ExtResource("3_grass_n")
+shader_parameter/dirt_albedo = ExtResource("4_dirt_a")
+shader_parameter/dirt_normal = ExtResource("5_dirt_n")
+shader_parameter/path_albedo = ExtResource("6_path_a")
+shader_parameter/path_normal = ExtResource("7_path_n")
+shader_parameter/sand_albedo = ExtResource("8_sand_a")
+shader_parameter/sand_normal = ExtResource("9_sand_n")
+shader_parameter/control_map = ExtResource("10_control")
+shader_parameter/control_center = Vector2(10, -5)
+shader_parameter/control_size = Vector2(128, 128)
+shader_parameter/grass_tile = 15.0
+shader_parameter/dirt_tile = 2.1
+shader_parameter/path_tile = 5.0
+shader_parameter/sand_tile = 2.5
+shader_parameter/blend_sharpness = 1.35
+shader_parameter/normal_strength = 0.85
+shader_parameter/macro_strength = 0.1
+shader_parameter/grass_tint = Color(0.85, 0.95, 0.8, 1)
+shader_parameter/dirt_tint = Color(0.92, 0.8, 0.68, 1)
+shader_parameter/path_tint = Color(0.95, 0.9, 0.8, 1)
+shader_parameter/sand_tint = Color(0.89, 0.85, 0.76, 1)

@@ -1,0 +1,65 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/horse.gd" id="1_horse"]
+[ext_resource type="PackedScene" path="res://Models/horse_riggedgame_ready_clips.glb" id="2_model"]
+[ext_resource type="AudioStream" path="res://assets/sounds/horse/grass.mp3" id="3_gallop"]
+[ext_resource type="AudioStream" path="res://assets/sounds/horse/neigh_zebra.ogg" id="4_neigh"]
+[ext_resource type="Script" path="res://scripts/animation_state_machine.gd" id="5_fsm"]
+[ext_resource type="Script" path="res://scripts/horse_jump_pose.gd" id="6_jump_pose"]
+[ext_resource type="PackedScene" path="res://Models/tack/horse_saddle.glb" id="7_saddle"]
+[ext_resource type="PackedScene" path="res://Models/tack/horse_bridle.glb" id="8_bridle"]
+[ext_resource type="Script" path="res://scripts/stirrup_fit.gd" id="9_stirrup"]
+[ext_resource type="Script" path="res://scripts/groom_surface.gd" id="10_groom"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(0.6, 1.4, 2.2)
+
+[node name="Horse" type="CharacterBody3D"]
+script = ExtResource("1_horse")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_body")
+position = Vector3(0, 0.7, 0)
+
+[node name="Model" parent="." instance=ExtResource("2_model")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="Tack" type="Node3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="Saddle" parent="Tack" instance=ExtResource("7_saddle")]
+script = ExtResource("9_stirrup")
+
+[node name="Bridle" parent="Tack" instance=ExtResource("8_bridle")]
+
+[node name="RiderSeat" type="Marker3D" parent="."]
+position = Vector3(0, 1.57, 0.03)
+
+[node name="MountPrompt" type="Label3D" parent="."]
+visible = false
+position = Vector3(0, 2.3, 0)
+pixel_size = 0.006
+billboard = 1
+no_depth_test = true
+text = "E  MOUNT"
+font_size = 48
+outline_size = 8
+
+[node name="Gallop" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("3_gallop")
+unit_size = 8.0
+max_distance = 40.0
+
+[node name="Neigh" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("4_neigh")
+unit_size = 10.0
+max_distance = 60.0
+
+[node name="AnimStateMachine" type="Node" parent="."]
+script = ExtResource("5_fsm")
+
+[node name="JumpPose" type="Node" parent="."]
+script = ExtResource("6_jump_pose")
+
+[node name="GroomSurface" type="Node" parent="."]
+script = ExtResource("10_groom")

@@ -1,0 +1,92 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/00_default.glb" id="1_r63p5"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/04_default2.glb" id="2_tghhe"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/05_default3.glb" id="3_7cipc"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/08_default6.glb" id="4_dcuk5"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/06_default4.glb" id="5_4kco8"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/02_default10.glb" id="6_o720l"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/09_default7.glb" id="7_pk82b"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/01_default1.glb" id="8_bep7i"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/10_default8.glb" id="9_u1fcd"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/11_default9.glb" id="10_fxbu0"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/03_default11.glb" id="11_mnpd2"]
+[ext_resource type="PackedScene" path="res://Models/split/low_poly_nature_assets_1/07_default5.glb" id="12_xh4si"]
+
+[node name="NatureProps" type="Node3D" unique_id=46398276]
+
+[node name="Path" type="Node3D" parent="." unique_id=1242411068]
+
+[node name="Prop_01" type="Node3D" parent="Path" unique_id=917990829 instance=ExtResource("1_r63p5")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -2.6705961, 0.019633483, -17.543804)
+
+[node name="Prop_02" type="Node3D" parent="Path" unique_id=79794092 instance=ExtResource("2_tghhe")]
+transform = Transform3D(5.9999995, 0, 10.392305, 0, 12, 0, -10.392305, 0, 5.9999995, 2.8706539, 0.03573303, -14.529129)
+
+[node name="Prop_03" type="Node3D" parent="Path" unique_id=356267633 instance=ExtResource("3_7cipc")]
+transform = Transform3D(-5.0000005, 0, 8.660254, 0, 10, 0, -8.660254, 0, -5.0000005, -3.0910087, 0.0024014434, -9.317571)
+
+[node name="Prop_04" type="Node3D" parent="Path" unique_id=1795474138 instance=ExtResource("1_r63p5")]
+transform = Transform3D(-12, 0, -1.0490733e-06, 0, 12, 0, 1.0490733e-06, 0, -12, 2.770596, 0.019633483, -6.4561963)
+
+[node name="Prop_05" type="Node3D" parent="Path" unique_id=290611057 instance=ExtResource("2_tghhe")]
+transform = Transform3D(-5.999999, 0, -10.392305, 0, 12, 0, 10.392305, 0, -5.999999, -2.8706539, 0.03573303, -2.470871)
+
+[node name="Prop_06" type="Node3D" parent="Path" unique_id=2146624952 instance=ExtResource("4_dcuk5")]
+transform = Transform3D(5.999999, 0, -10.392305, 0, 12, 0, 10.392305, 0, 5.999999, 3.2541637, 1.2000002e-07, 2.9332764)
+
+[node name="Yard" type="Node3D" parent="." unique_id=176468210]
+
+[node name="Prop_01" type="Node3D" parent="Yard" unique_id=744967821 instance=ExtResource("5_4kco8")]
+transform = Transform3D(10.392304, 0, 6, 0, 12, 0, -6, 0, 10.392304, -10.08028, 0.048684843, -28.43108)
+
+[node name="Prop_02" type="Node3D" parent="Yard" unique_id=1752002848 instance=ExtResource("6_o720l")]
+transform = Transform3D(-4.808253e-07, 0, 11, 0, 11, 0, -11, 0, -4.808253e-07, 12.210137, -6.600001e-07, -28.857176)
+
+[node name="Prop_03" type="Node3D" parent="Yard" unique_id=698640704 instance=ExtResource("7_pk82b")]
+transform = Transform3D(-10.392304, 0, 6.000001, 0, 12, 0, -6.000001, 0, -10.392304, -12.406761, 0.041034, -15.457867)
+
+[node name="Prop_04" type="Node3D" parent="Yard" unique_id=137898230 instance=ExtResource("8_bep7i")]
+transform = Transform3D(-10.392304, 0, -5.9999995, 0, 12, 0, 5.9999995, 0, -10.392304, 10.927073, 1.2000002e-07, -15.081886)
+
+[node name="Paddock" type="Node3D" parent="." unique_id=1787305103]
+
+[node name="Prop_01" type="Node3D" parent="Paddock" unique_id=601931893 instance=ExtResource("9_u1fcd")]
+transform = Transform3D(10, 0, 0, 0, 10, 0, 0, 0, 10, -1.5051768, -6.0000013e-07, -26.3924)
+
+[node name="Prop_02" type="Node3D" parent="Paddock" unique_id=879709315 instance=ExtResource("10_fxbu0")]
+transform = Transform3D(-1.7364819, 0, 9.848078, 0, 10, 0, -9.848078, 0, -1.7364819, 12.882175, -6.0000013e-07, -23.626064)
+
+[node name="Prop_03" type="Node3D" parent="Paddock" unique_id=1717348529 instance=ExtResource("9_u1fcd")]
+transform = Transform3D(-9.396926, 0, -3.4202015, 0, 10, 0, 3.4202015, 0, -9.396926, 12.842776, -6.0000013e-07, -21.880545)
+
+[node name="Prop_04" type="Node3D" parent="Paddock" unique_id=1417739804 instance=ExtResource("10_fxbu0")]
+transform = Transform3D(-1.7364813, 0, -9.848078, 0, 10, 0, 9.848078, 0, -1.7364813, -1.1131415, -6.0000013e-07, -22.584703)
+
+[node name="ArenaEdge" type="Node3D" parent="." unique_id=627924272]
+
+[node name="Prop_01" type="Node3D" parent="ArenaEdge" unique_id=487397528 instance=ExtResource("11_mnpd2")]
+transform = Transform3D(8.485281, 0, 8.485281, 0, 12, 0, -8.485281, 0, 8.485281, -36.6559, 2.4000005e-07, -13.807821)
+
+[node name="Prop_02" type="Node3D" parent="ArenaEdge" unique_id=779427227 instance=ExtResource("5_4kco8")]
+transform = Transform3D(-8.485281, 0, 8.485281, 0, 12, 0, -8.485281, 0, -8.485281, -37.800877, 0.048684843, -1.3891819)
+
+[node name="Prop_03" type="Node3D" parent="ArenaEdge" unique_id=974103600 instance=ExtResource("6_o720l")]
+transform = Transform3D(-8.485282, 0, -8.485281, 0, 12, 0, 8.485281, 0, -8.485282, -37.93762, -7.200001e-07, 13.342034)
+
+[node name="Prop_04" type="Node3D" parent="ArenaEdge" unique_id=1432785340 instance=ExtResource("7_pk82b")]
+transform = Transform3D(8.48528, 0, -8.485283, 0, 12, 0, 8.485283, 0, 8.48528, -32.11323, 0.041034, 23.193989)
+
+[node name="TrainingEdge" type="Node3D" parent="." unique_id=1330679678]
+
+[node name="Prop_01" type="Node3D" parent="TrainingEdge" unique_id=1253811458 instance=ExtResource("1_r63p5")]
+transform = Transform3D(11.276312, 0, 4.1042414, 0, 12, 0, -4.1042414, 0, 11.276312, 15.841639, 0.019633483, -12.521065)
+
+[node name="Prop_02" type="Node3D" parent="TrainingEdge" unique_id=708720945 instance=ExtResource("3_7cipc")]
+transform = Transform3D(-4.1042414, 0, 11.276312, 0, 12, 0, -11.276312, 0, -4.1042414, 15.513891, 0.0028817323, 2.7458344)
+
+[node name="Prop_03" type="Node3D" parent="TrainingEdge" unique_id=1340766539 instance=ExtResource("2_tghhe")]
+transform = Transform3D(-10.336618, 0, -3.7622218, 0, 11, 0, 3.7622218, 0, -10.336618, 15.568391, 0.032755274, 12.271006)
+
+[node name="Prop_04" type="Node3D" parent="TrainingEdge" unique_id=403704404 instance=ExtResource("12_xh4si")]
+transform = Transform3D(3.762221, 0, -10.336618, 0, 11, 0, 10.336618, 0, 3.762221, 54.260693, 0.0038550603, -14.089386)

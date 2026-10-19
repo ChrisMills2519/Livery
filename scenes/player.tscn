@@ -1,0 +1,106 @@
+[gd_scene format=3 uid="uid://icu26x70xkab"]
+
+[ext_resource type="Script" uid="uid://pox0uqs8ca5d" path="res://scripts/player_controller.gd" id="1_player"]
+[ext_resource type="AudioStream" uid="uid://m1r5munjw8t0" path="res://assets/sounds/footsteps/footstep_grass_000.ogg" id="2_step"]
+[ext_resource type="PackedScene" uid="uid://bwpmc5m4mxonl" path="res://Models/chris.glb" id="3_chris"]
+[ext_resource type="AnimationLibrary" uid="uid://dfsra7w0v3omm" path="res://assets/animations/humanoid.res" id="3_dqkch"]
+[ext_resource type="Script" path="res://scripts/ride_pose.gd" id="7_ride_pose"]
+[ext_resource type="Script" path="res://scripts/reins.gd" id="8_reins"]
+[ext_resource type="Resource" path="res://resources/characters/chris.tres" id="9_chris_profile"]
+[ext_resource type="Resource" path="res://resources/characters/liv.tres" id="10_liv_profile"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.3
+height = 1.7
+
+[node name="Player" type="CharacterBody3D" unique_id=1892282212]
+script = ExtResource("1_player")
+character_profile = ExtResource("9_chris_profile")
+character_profiles = Array[ExtResource("9_chris_profile")]([ExtResource("9_chris_profile"), ExtResource("10_liv_profile")])
+
+[node name="Collision" type="CollisionShape3D" parent="." unique_id=1569596614]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="Model" parent="." unique_id=2008143807 instance=ExtResource("3_chris")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="GeneralSkeleton" parent="Model/Armature" parent_id_path=PackedInt32Array(2008143807, 301883499) index="0" unique_id=2000969285]
+bones/0/position = Vector3(0.0028801037, 0.94023633, -0.09152401)
+bones/0/rotation = Quaternion(-0.05534227, -0.115434945, -0.0064542866, 0.9917512)
+bones/1/rotation = Quaternion(-0.0007883195, 0.11285555, 0.98719823, -0.11270615)
+bones/2/rotation = Quaternion(0.016404288, 0.98213106, -0.15008718, 0.11235375)
+bones/3/rotation = Quaternion(-0.09656066, 0.7413243, -0.66415, 0.004380945)
+bones/4/rotation = Quaternion(4.396705e-08, 1, 6.074223e-08, 1.6108169e-08)
+bones/6/rotation = Quaternion(0.08382261, 0.000110294844, 0.0002584153, 0.9964807)
+bones/7/rotation = Quaternion(0.08382248, 0.00031361476, 0.00025198524, 0.99648064)
+bones/8/rotation = Quaternion(-0.083822496, -0.00021222925, -0.00026384462, 0.9964807)
+bones/9/rotation = Quaternion(0.07762251, 0.095478, 0.009376362, 0.9923562)
+bones/10/rotation = Quaternion(0.48748112, 0.52661526, 0.5263816, -0.4560275)
+bones/11/rotation = Quaternion(-0.06317342, 0.8169618, -0.5731373, 0.009816873)
+bones/12/rotation = Quaternion(0.16771331, -0.65471435, 0.16030985, 0.71939015)
+bones/13/rotation = Quaternion(0.09913022, 0.70686626, 0.06290038, 0.69753635)
+bones/14/rotation = Quaternion(0.6295967, -2.6077032e-08, -4.414002e-06, 0.7769221)
+bones/15/rotation = Quaternion(0.6233418, -7.584706e-08, -4.5000315e-06, 0.7819495)
+bones/16/rotation = Quaternion(0.62334156, -6.756698e-08, -4.3810605e-06, 0.78194976)
+bones/17/rotation = Quaternion(0.62889445, -0.029734802, -4.410505e-06, 0.776922)
+bones/18/rotation = Quaternion(0.6227326, -0.027554587, -4.321337e-06, 0.7819495)
+bones/19/rotation = Quaternion(0.6226685, -0.028961474, -4.377684e-06, 0.78194964)
+bones/20/rotation = Quaternion(0.6630006, -0.044529997, 0.073693976, 0.7436508)
+bones/21/rotation = Quaternion(0.6203665, -0.062293854, 0.01557314, 0.7816793)
+bones/22/rotation = Quaternion(0.62192154, -0.042051695, -4.5432253e-06, 0.78194964)
+bones/23/rotation = Quaternion(0.6291979, -0.022414055, -4.3775635e-06, 0.776922)
+bones/24/rotation = Quaternion(0.62294716, -0.022176137, -4.4140024e-06, 0.7819495)
+bones/25/rotation = Quaternion(0.62289846, -0.023505384, -4.4339095e-06, 0.7819495)
+bones/26/rotation = Quaternion(-0.123819225, 0.71952325, 0.2018357, 0.6528534)
+bones/27/rotation = Quaternion(0.1818072, 0.11012441, 0.060062934, 0.97530055)
+bones/28/rotation = Quaternion(0.5994297, 0.27396548, 0.19463225, 0.72646075)
+bones/29/rotation = Quaternion(0.5397209, -0.47448963, -0.47470164, -0.50815296)
+bones/30/rotation = Quaternion(0.042620633, 0.86952215, -0.4919794, -0.008426622)
+bones/31/rotation = Quaternion(0.2946239, 0.5186468, -0.19178818, 0.7793714)
+bones/32/rotation = Quaternion(0.120249785, -0.69903094, -0.056890093, 0.702609)
+bones/33/rotation = Quaternion(0.6295972, -3.894175e-08, 4.1162175e-06, 0.77692175)
+bones/34/rotation = Quaternion(0.6233413, 2.6724217e-07, 4.357656e-06, 0.78195)
+bones/35/rotation = Quaternion(0.6233419, -3.674115e-08, 4.4802428e-06, 0.7819494)
+bones/36/rotation = Quaternion(0.6288943, 0.029734917, 4.4074854e-06, 0.77692205)
+bones/37/rotation = Quaternion(0.6227325, 0.027554411, 4.4073663e-06, 0.7819496)
+bones/38/rotation = Quaternion(0.6226687, 0.028961478, 4.397592e-06, 0.78194946)
+bones/39/rotation = Quaternion(0.6630009, 0.044529885, -0.07369413, 0.74365056)
+bones/40/rotation = Quaternion(0.6203661, 0.062293876, -0.015572954, 0.7816795)
+bones/41/rotation = Quaternion(0.6219218, 0.042051446, 4.394094e-06, 0.7819495)
+bones/42/rotation = Quaternion(0.62919784, 0.02241388, 4.347642e-06, 0.776922)
+bones/43/rotation = Quaternion(0.62294716, 0.022176074, 4.258474e-06, 0.7819496)
+bones/44/rotation = Quaternion(0.6228984, 0.023505392, 4.142523e-06, 0.7819496)
+bones/45/rotation = Quaternion(-0.12381934, -0.71952325, -0.20183575, 0.6528533)
+bones/46/rotation = Quaternion(0.18180746, -0.11012445, -0.0600632, 0.97530055)
+bones/47/rotation = Quaternion(0.5994298, -0.27396536, -0.19463229, 0.7264608)
+bones/48/rotation = Quaternion(0.0008056903, -0.11903871, 0.9861851, 0.115187734)
+bones/49/rotation = Quaternion(-0.02980563, 0.92893684, -0.08365715, -0.35942933)
+bones/50/rotation = Quaternion(0.17139645, 0.6588326, -0.7325035, 0.0012420936)
+bones/51/rotation = Quaternion(-7.473898e-09, 1, 1.1376019e-09, 4.9456414e-08)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=424910657]
+root_node = NodePath("../Model")
+libraries/humanoid = ExtResource("3_dqkch")
+
+[node name="RidePose" type="Node" parent="."]
+script = ExtResource("7_ride_pose")
+
+[node name="SeatContact" type="Marker3D" parent="."]
+
+[node name="Reins" type="Node3D" parent="."]
+script = ExtResource("8_reins")
+
+[node name="CameraPivot" type="Node3D" parent="." unique_id=1235735689]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+
+[node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=839831806]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
+current = true
+
+[node name="Footsteps" type="AudioStreamPlayer3D" parent="." unique_id=1881919144]
+stream = ExtResource("2_step")
+unit_size = 4.0
+max_distance = 25.0
+
+[editable path="Model"]

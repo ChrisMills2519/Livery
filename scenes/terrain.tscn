@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Material" path="res://resources/materials/terrain_blend.tres" id="1_blend"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+size = Vector2(200, 200)
+
+[node name="Terrain" type="Node3D"]
+
+[node name="GroundBlend" type="MeshInstance3D" parent="."]
+mesh = SubResource("PlaneMesh_ground")
+cast_shadow = 0
+surface_material_override/0 = ExtResource("1_blend")

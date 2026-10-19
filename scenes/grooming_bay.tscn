@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/grooming_bay.gd" id="1_bay"]
+[ext_resource type="Script" path="res://scripts/grooming_session.gd" id="2_session"]
+
+[node name="GroomingBay" type="Node3D"]
+script = ExtResource("1_bay")
+
+[node name="HorseAnchor" type="Marker3D" parent="."]
+
+[node name="GroomerAnchor" type="Marker3D" parent="."]
+position = Vector3(-1.35, 0.03, 0.15)
+
+[node name="Session" type="Node" parent="."]
+script = ExtResource("2_session")
