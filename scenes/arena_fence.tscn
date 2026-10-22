@@ -1,143 +1,246 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3]
 
-[ext_resource type="PackedScene" path="res://Models/medieval_village/fence_713fa0e6.glb" id="fence_model"]
-[sub_resource type="BoxShape3D" id="arena_col_x"]
-size = Vector3(20.000, 1.32, 0.30)
-[sub_resource type="BoxShape3D" id="arena_col_z"]
-size = Vector3(0.30, 1.32, 40.000)
-[sub_resource type="BoxShape3D" id="arena_col_z_north"]
-size = Vector3(0.30, 1.32, 14.920)
-[sub_resource type="BoxShape3D" id="arena_col_z_south"]
-size = Vector3(0.30, 1.32, 18.000)
+[ext_resource type="PackedScene" path="res://Models/medieval_village/fence_713fa0e6.glb" id="1_nbmpr"]
 
-[node name="ArenaFence" type="Node3D"]
+[sub_resource type="BoxShape3D" id="BoxShape3D_uhpp8"]
+size = Vector3(35.3, 1.32, 0.3)
 
-[node name="ArenaFenceX0" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -33.33333, 0.00000, -20.00000)
+[sub_resource type="BoxShape3D" id="BoxShape3D_ehg01"]
+size = Vector3(35.3, 1.32, 0.3)
 
-[node name="ArenaFenceX1" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -30.00000, 0.00000, -20.00000)
+[sub_resource type="BoxShape3D" id="BoxShape3D_4h64l"]
+size = Vector3(0.3, 1.32, 70.3)
 
-[node name="ArenaFenceX2" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -26.66667, 0.00000, -20.00000)
+[sub_resource type="BoxShape3D" id="BoxShape3D_7rbhr"]
+size = Vector3(0.3, 1.32, 30.734783)
 
-[node name="ArenaFenceX3" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -23.33333, 0.00000, -20.00000)
+[sub_resource type="BoxShape3D" id="BoxShape3D_6t1cg"]
+size = Vector3(0.3, 1.32, 33.77826)
 
-[node name="ArenaFenceX4" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -20.00000, 0.00000, -20.00000)
+[node name="ArenaFence" type="Node3D" unique_id=467371888]
 
-[node name="ArenaFenceX5" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -16.66667, 0.00000, -20.00000)
+[node name="ArenaFenceN0" type="Node3D" parent="." unique_id=1907312279 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -48.51989, 0.011303279, -35.00051)
 
-[node name="ArenaFenceX6" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -33.33333, 0.00000, 20.00000)
+[node name="ArenaFenceN1" type="Node3D" parent="." unique_id=596159068 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -45.60322, 0.011303279, -35.00051)
 
-[node name="ArenaFenceX7" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -30.00000, 0.00000, 20.00000)
+[node name="ArenaFenceN2" type="Node3D" parent="." unique_id=1867136075 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -42.686554, 0.011303279, -35.00051)
 
-[node name="ArenaFenceX8" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -26.66667, 0.00000, 20.00000)
+[node name="ArenaFenceN3" type="Node3D" parent="." unique_id=834664770 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -39.76989, 0.011303279, -35.00051)
 
-[node name="ArenaFenceX9" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -23.33333, 0.00000, 20.00000)
+[node name="ArenaFenceN4" type="Node3D" parent="." unique_id=1298016418 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -36.85322, 0.011303279, -35.00051)
 
-[node name="ArenaFenceX10" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -20.00000, 0.00000, 20.00000)
+[node name="ArenaFenceN5" type="Node3D" parent="." unique_id=1056363664 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -33.936554, 0.011303279, -35.00051)
 
-[node name="ArenaFenceX11" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(4.00000, 0.00000, -0.00000, 0.00000, 4.00000, 0.00000, 0.00000, 0.00000, 4.00000, -16.66667, 0.00000, 20.00000)
+[node name="ArenaFenceN6" type="Node3D" parent="." unique_id=1364442112 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -31.019888, 0.011303279, -35.00051)
 
-[node name="ArenaFenceZ12" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -18.46154)
+[node name="ArenaFenceN7" type="Node3D" parent="." unique_id=264417459 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -28.103222, 0.011303279, -35.00051)
 
-[node name="ArenaFenceZ13" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -15.38462)
+[node name="ArenaFenceN8" type="Node3D" parent="." unique_id=1033425068 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -25.186556, 0.011303279, -35.00051)
 
-[node name="ArenaFenceZ14" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -12.30769)
+[node name="ArenaFenceN9" type="Node3D" parent="." unique_id=1540804579 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -22.269888, 0.011303279, -35.00051)
 
-[node name="ArenaFenceZ15" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -9.23077)
+[node name="ArenaFenceN10" type="Node3D" parent="." unique_id=194309100 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -19.353222, 0.011303279, -35.00051)
 
-[node name="ArenaFenceZ16" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -6.15385)
+[node name="ArenaFenceN11" type="Node3D" parent="." unique_id=1612155675 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -16.436556, 0.011303279, -35.00051)
 
-[node name="ArenaFenceZ17" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, -3.07692)
+[node name="ArenaFenceS0" type="Node3D" parent="." unique_id=1446736519 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -48.51989, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ18" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 0.00000)
+[node name="ArenaFenceS1" type="Node3D" parent="." unique_id=82370716 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -45.60322, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ19" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 3.07692)
+[node name="ArenaFenceS2" type="Node3D" parent="." unique_id=646030642 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -42.686554, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ20" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 6.15385)
+[node name="ArenaFenceS3" type="Node3D" parent="." unique_id=1903239746 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -39.76989, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ21" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 9.23077)
+[node name="ArenaFenceS4" type="Node3D" parent="." unique_id=1700022466 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -36.85322, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ22" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 12.30769)
+[node name="ArenaFenceS5" type="Node3D" parent="." unique_id=1908899878 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -33.936554, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ23" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 15.38462)
+[node name="ArenaFenceS6" type="Node3D" parent="." unique_id=304075774 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -31.019888, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ24" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -35.00000, 0.00000, 18.46154)
+[node name="ArenaFenceS7" type="Node3D" parent="." unique_id=1384360007 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -28.103222, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ25" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -18.46154)
+[node name="ArenaFenceS8" type="Node3D" parent="." unique_id=1206584785 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -25.186556, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ26" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -15.38462)
+[node name="ArenaFenceS9" type="Node3D" parent="." unique_id=194928935 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -22.269888, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ27" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -12.30769)
+[node name="ArenaFenceS10" type="Node3D" parent="." unique_id=2110709909 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -19.353222, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ28" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -9.23077)
+[node name="ArenaFenceS11" type="Node3D" parent="." unique_id=1437814620 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, -16.436556, 0.011303279, 34.99949)
 
-[node name="ArenaFenceZ29" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, -6.15385)
+[node name="ArenaFenceW0" type="Node3D" parent="." unique_id=1513892407 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -33.50004)
 
-[node name="ArenaFenceZ32" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 3.07692)
+[node name="ArenaFenceW1" type="Node3D" parent="." unique_id=960750689 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -30.45656)
 
-[node name="ArenaFenceZ33" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 6.15385)
+[node name="ArenaFenceW2" type="Node3D" parent="." unique_id=432710342 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -27.413082)
 
-[node name="ArenaFenceZ34" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 9.23077)
+[node name="ArenaFenceW3" type="Node3D" parent="." unique_id=867655873 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -24.369604)
 
-[node name="ArenaFenceZ35" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 12.30769)
+[node name="ArenaFenceW4" type="Node3D" parent="." unique_id=1023472416 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -21.326126)
 
-[node name="ArenaFenceZ36" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 15.38462)
+[node name="ArenaFenceW5" type="Node3D" parent="." unique_id=173618050 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -18.282648)
 
-[node name="ArenaFenceZ37" parent="." instance=ExtResource("fence_model")]
-transform = Transform3D(0.00000, 0.00000, -4.00000, 0.00000, 4.00000, 0.00000, 4.00000, 0.00000, 0.00000, -15.00000, 0.00000, 18.46154)
+[node name="ArenaFenceW6" type="Node3D" parent="." unique_id=283935294 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -15.239169)
 
-[node name="ArenaCollision" type="StaticBody3D" parent="."]
+[node name="ArenaFenceW7" type="Node3D" parent="." unique_id=516774208 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -12.195691)
 
-[node name="NorthShape" type="CollisionShape3D" parent="ArenaCollision"]
-shape = SubResource("arena_col_x")
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25.000, 0.660, -20.000)
+[node name="ArenaFenceW8" type="Node3D" parent="." unique_id=668334439 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -9.152213)
 
-[node name="SouthShape" type="CollisionShape3D" parent="ArenaCollision"]
-shape = SubResource("arena_col_x")
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25.000, 0.660, 20.000)
+[node name="ArenaFenceW9" type="Node3D" parent="." unique_id=1633163156 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -6.108735)
 
-[node name="WestShape" type="CollisionShape3D" parent="ArenaCollision"]
-shape = SubResource("arena_col_z")
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35.000, 0.660, 0.000)
+[node name="ArenaFenceW10" type="Node3D" parent="." unique_id=1147037505 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -3.0652566)
 
-[node name="EastShapeNorth" type="CollisionShape3D" parent="ArenaCollision"]
-shape = SubResource("arena_col_z_north")
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.000, 0.660, -12.540)
+[node name="ArenaFenceW11" type="Node3D" parent="." unique_id=1070537894 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, -0.021778345)
 
-[node name="EastShapeSouth" type="CollisionShape3D" parent="ArenaCollision"]
-shape = SubResource("arena_col_z_south")
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.000, 0.660, 11.000)
+[node name="ArenaFenceW12" type="Node3D" parent="." unique_id=1642259541 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 3.0217)
+
+[node name="ArenaFenceW13" type="Node3D" parent="." unique_id=567297973 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 6.065178)
+
+[node name="ArenaFenceW14" type="Node3D" parent="." unique_id=1733394549 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 9.108657)
+
+[node name="ArenaFenceW15" type="Node3D" parent="." unique_id=274873941 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 12.152135)
+
+[node name="ArenaFenceW16" type="Node3D" parent="." unique_id=1396129120 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 15.195613)
+
+[node name="ArenaFenceW17" type="Node3D" parent="." unique_id=746710606 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 18.239092)
+
+[node name="ArenaFenceW18" type="Node3D" parent="." unique_id=1435067118 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 21.28257)
+
+[node name="ArenaFenceW19" type="Node3D" parent="." unique_id=672639184 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 24.326048)
+
+[node name="ArenaFenceW20" type="Node3D" parent="." unique_id=1751736030 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 27.369526)
+
+[node name="ArenaFenceW21" type="Node3D" parent="." unique_id=2073892708 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 30.413004)
+
+[node name="ArenaFenceW22" type="Node3D" parent="." unique_id=269934782 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -50.00051, 0.011303279, 33.456482)
+
+[node name="ArenaFenceE0" type="Node3D" parent="." unique_id=283676050 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -33.50004)
+
+[node name="ArenaFenceE1" type="Node3D" parent="." unique_id=1209925960 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -30.45656)
+
+[node name="ArenaFenceE2" type="Node3D" parent="." unique_id=1968708236 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -27.413082)
+
+[node name="ArenaFenceE3" type="Node3D" parent="." unique_id=1792450110 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -24.369604)
+
+[node name="ArenaFenceE4" type="Node3D" parent="." unique_id=667635139 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -21.326126)
+
+[node name="ArenaFenceE5" type="Node3D" parent="." unique_id=78739530 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -18.282648)
+
+[node name="ArenaFenceE6" type="Node3D" parent="." unique_id=1037197722 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -15.239169)
+
+[node name="ArenaFenceE7" type="Node3D" parent="." unique_id=1292720786 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -12.195691)
+
+[node name="ArenaFenceE8" type="Node3D" parent="." unique_id=1577088889 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -9.152213)
+
+[node name="ArenaFenceE9" type="Node3D" parent="." unique_id=713699975 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, -6.108735)
+
+[node name="ArenaFenceE12" type="Node3D" parent="." unique_id=1611210737 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 3.0217)
+
+[node name="ArenaFenceE13" type="Node3D" parent="." unique_id=2100845440 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 6.065178)
+
+[node name="ArenaFenceE14" type="Node3D" parent="." unique_id=1996554051 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 9.108657)
+
+[node name="ArenaFenceE15" type="Node3D" parent="." unique_id=316491543 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 12.152135)
+
+[node name="ArenaFenceE16" type="Node3D" parent="." unique_id=1386128763 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 15.195613)
+
+[node name="ArenaFenceE17" type="Node3D" parent="." unique_id=237841156 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 18.239092)
+
+[node name="ArenaFenceE18" type="Node3D" parent="." unique_id=649517176 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 21.28257)
+
+[node name="ArenaFenceE19" type="Node3D" parent="." unique_id=233280933 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 24.326048)
+
+[node name="ArenaFenceE20" type="Node3D" parent="." unique_id=1017991154 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 27.369526)
+
+[node name="ArenaFenceE21" type="Node3D" parent="." unique_id=1457733940 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 30.413004)
+
+[node name="ArenaFenceE22" type="Node3D" parent="." unique_id=776760680 instance=ExtResource("1_nbmpr")]
+transform = Transform3D(-1.7484555e-07, 0, 4, 0, 4, 0, -4, 0, -1.7484555e-07, -15.000511, 0.011303279, 33.456482)
+
+[node name="ArenaCollision" type="StaticBody3D" parent="." unique_id=1083497590]
+
+[node name="NorthShape" type="CollisionShape3D" parent="ArenaCollision" unique_id=1311949868]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32.5, 0.66, -35)
+shape = SubResource("BoxShape3D_uhpp8")
+
+[node name="SouthShape" type="CollisionShape3D" parent="ArenaCollision" unique_id=1260644155]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32.5, 0.66, 35)
+shape = SubResource("BoxShape3D_ehg01")
+
+[node name="WestShape" type="CollisionShape3D" parent="ArenaCollision" unique_id=1521918550]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 0.66, 0)
+shape = SubResource("BoxShape3D_4h64l")
+
+[node name="EastShapeNorth" type="CollisionShape3D" parent="ArenaCollision" unique_id=1634867826]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0.66, -19.782608)
+shape = SubResource("BoxShape3D_7rbhr")
+
+[node name="EastShapeSouth" type="CollisionShape3D" parent="ArenaCollision" unique_id=279891147]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0.66, 18.26087)
+shape = SubResource("BoxShape3D_6t1cg")

@@ -1,0 +1,19 @@
+Farmhouse interior assets
+=========================
+
+kenney_furniture_kit/
+  140 GLB models from Kenney's "Furniture Kit" (2018, v1.0).
+  https://kenney.nl/assets/furniture-kit
+  License: Creative Commons Zero (CC0 1.0). See kenney_furniture_kit_LICENSE.txt.
+  Only the .glb files are kept; the .fbx/.obj/.dae/.stl/.mtl copies in the
+  original archive are redundant for Godot.
+
+textures/
+  wood_floor_diff_1k.jpg
+    Poly Haven, "Wood Floor" (CC0 1.0).
+    https://polyhaven.com/a/wood_floor
+  painted_plaster_wall_diff_1k.jpg
+    Poly Haven, "Painted Plaster Wall" (CC0 1.0).
+    https://polyhaven.com/a/painted_plaster_wall
+  1024x1024 diffuse maps, downloaded through the public files API
+  (https://api.polyhaven.com/files/<asset>).

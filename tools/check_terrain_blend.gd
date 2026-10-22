@@ -74,7 +74,7 @@ func _check_control(control: Texture2D) -> void:
 	_expect_dominant(image, "stable yard", Vector2(0.0, -22.0), 0)
 	_expect_dominant(image, "path", Vector2(0.0, -6.5), 1)
 	_expect_dominant(image, "training ground", Vector2(35.0, 0.0), 2)
-	_expect_dominant(image, "arena", Vector2(-25.0, 0.0), 3)
+	_expect_dominant(image, "arena", Vector2(-32.5, 0.0), 3)
 
 	var grass := _sample(image, Vector2(70.0, 40.0))
 	if grass.r + grass.g + grass.b + grass.a > 0.02:

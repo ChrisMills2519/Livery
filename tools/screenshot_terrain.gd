@@ -18,7 +18,7 @@ const SHOTS := [
 	{"file": "terrain_yard_edge", "pos": Vector3(22, 1.7, -22), "look": Vector3(0, 0.6, -22), "fov": 60.0},
 	{"file": "terrain_path_end", "pos": Vector3(0, 1.6, 16), "look": Vector3(0, 0.5, 0), "fov": 60.0},
 	{"file": "terrain_training_edge", "pos": Vector3(66, 1.7, 0), "look": Vector3(35, 0.5, 0), "fov": 60.0},
-	{"file": "terrain_arena_edge", "pos": Vector3(-25, 1.7, 27), "look": Vector3(-25, 0.5, 0), "fov": 60.0},
+	{"file": "terrain_arena_edge", "pos": Vector3(-32.5, 1.7, 42), "look": Vector3(-32.5, 0.5, 0), "fov": 60.0},
 	{"file": "terrain_gate", "pos": Vector3(-9, 1.5, 0), "look": Vector3(-17, 0.6, -1.5), "fov": 60.0},
 ]
 

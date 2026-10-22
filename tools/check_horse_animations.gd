@@ -3,27 +3,23 @@ extends SceneTree
 ## Headless verification for the split horse clips.
 ##   godot --headless --path . --script tools/check_horse_animations.gd
 
+## The current horse GLB ships its own clip library.  Durations are the glTF
+## sampler lengths in seconds.
 const EXPECTED := {
-	"Idle_Standing_A": 5.5,
-	"Paw": 3.5,
-	"Idle_Look_A": 4.0,
-	"Idle_Standing_B": 4.5,
-	"Look": 3.5,
-	"Paw_Hind": 3.0,
-	"Graze": 3.0,
-	"Idle_Standing_C": 2.5,
-	"Trot": 91.0 / 24.0,
-	"Canter": 55.0 / 24.0,
-	"Walk": 82.0 / 24.0,
-	"LieDown": 2.5,
-	"StandUp": 0.5,
-	"Rear": 31.0 / 24.0,
-	"Buck": 31.0 / 24.0,
-	"HeadToss": 106.0 / 24.0,
-	"Idle_Standing_D": 79.0 / 24.0,
-	"LookUp": 46.0 / 24.0,
-	"Idle_Standing_E": 67.0 / 24.0,
-	"Idle_Low": 80.0 / 24.0,
+	"Death": 1.400,
+	"Eating": 2.667,
+	"Head_But": 1.000,
+	"Idle": 2.667,
+	"Kick": 1.300,
+	"Rear": 2.933,
+	"Rest_Pose": 0.167,
+	"Run": 0.433,
+	"Sleep": 2.000,
+	"Trot": 0.700,
+	"Turn_Left": 4.667,
+	"Turn_Right": 4.667,
+	"Walk": 0.967,
+	"lay_to_idle": 2.667,
 }
 
 var _frames := 0
@@ -65,7 +61,7 @@ func _process(_delta: float) -> bool:
 		if delta > 0.02:
 			failures.append("%s length %.4f != %.4f" % [n, anim.length, expected])
 
-	for n in ["Idle_Look_A", "Walk", "Trot", "Canter"]:
+	for n in ["Idle", "Walk", "Trot", "Run"]:
 		if player.has_animation(n) and player.get_animation(n).loop_mode != Animation.LOOP_LINEAR:
 			failures.append(n + " is not looping")
 

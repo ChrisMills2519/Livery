@@ -15,6 +15,7 @@ const PROFILES := [
 	preload("res://resources/characters/liv.tres"),
 ]
 const BACKDROP_SHADER := preload("res://res/shaders/select_backdrop.gdshader")
+const LiveryLogoButton := preload("res://scripts/livery_logo_button.gd")
 
 const TEXT_COLOR := Color(0.96, 0.97, 0.92, 1.0)
 const DIM_COLOR := Color(0.74, 0.79, 0.71, 1.0)
@@ -45,6 +46,7 @@ var _starting := false
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	TouchControls.set_mode("select")
 	_build_environment()
 	_build_stage()
 	_build_previews()
@@ -63,7 +65,12 @@ func _process(delta: float) -> void:
 
 	# A drag takes over from the turntable; letting go eases back into the
 	# automatic presentation spin instead of snapping.
-	if _dragging and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if Device.is_touch():
+		# Touch swipes come from the TouchControls layer; the emulated mouse only
+		# follows the first finger, so it is not used here.
+		_dragging = TouchControls.is_swiping()
+		_turntable.rotation.y += TouchControls.consume_swipe() * 0.012
+	elif _dragging and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		_dragging = false
 	if _dragging:
 		_spin_speed = 0.0
@@ -74,6 +81,8 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _starting:
+		return
+	if Device.is_touch() and event is InputEventMouse:
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		_dragging = event.pressed
@@ -411,7 +420,7 @@ func _build_ui() -> void:
 
 	var hint := _label(
 		left,
-		"A / D  or  ← / →   choose      ·      Enter   ride out      ·      drag   turn",
+		Device.pick("A / D  or  ← / →   choose      ·      Enter   ride out      ·      drag   turn", "Swipe turn   ·   tap a rider   ·   tap Ride out"),
 		14,
 		DIM_COLOR
 	)
@@ -422,11 +431,11 @@ func _build_ui() -> void:
 	_index_label.anchor_right = 1.0
 	_index_label.offset_left = -280.0
 	_index_label.offset_right = -64.0
-	_index_label.offset_top = 42.0
-	_index_label.offset_bottom = 106.0
+	_index_label.offset_top = 78.0
+	_index_label.offset_bottom = 142.0
 	_index_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
-	var drag_hint := _label(root, "DRAG TO TURN", 14, Color(0.86, 0.90, 0.82, 0.58))
+	var drag_hint := _label(root, Device.pick("DRAG TO TURN", "SWIPE TO TURN"), 14, Color(0.86, 0.90, 0.82, 0.58))
 	drag_hint.anchor_left = 1.0
 	drag_hint.anchor_right = 1.0
 	drag_hint.anchor_top = 1.0
@@ -436,6 +445,15 @@ func _build_ui() -> void:
 	drag_hint.offset_top = -52.0
 	drag_hint.offset_bottom = -24.0
 	drag_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+	var logo := LiveryLogoButton.new()
+	logo.name = "LiveryLogoButton"
+	root.add_child(logo)
+	logo.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	logo.offset_left = -24.0 - LiveryLogoButton.BASE_SIZE.x
+	logo.offset_right = -24.0
+	logo.offset_top = 18.0
+	logo.offset_bottom = 18.0 + LiveryLogoButton.BASE_SIZE.y
 
 
 

@@ -46,13 +46,19 @@ func _process(_delta: float) -> bool:
 				_setup_approach()
 				_next(3, now)
 		3:
-			# Ride straight at the fence without jumping.  The rails must stop
-			# the horse.
+			# Ride straight at the fence without jumping.  The rail must be
+			# knocked down but must not stop the horse dead: it carries on.
 			_max_z = maxf(_max_z, _horse.global_position.z)
 			if elapsed >= 1800:
-				print("ground approach: z=%.2f max_z=%.2f" % [_horse.global_position.z, _max_z])
-				if _max_z > _fence_z - 0.7:
-					_fail("horse passed through the fence without jumping (z=%.2f)" % _max_z)
+				print("ground approach: z=%.2f max_z=%.2f faults=%d" % [
+					_horse.global_position.z, _max_z, _course.faults
+				])
+				if _max_z < _fence_z - 0.7:
+					_fail("horse did not reach the fence on the ground (z=%.2f)" % _max_z)
+				if _max_z < _fence_z + 0.5:
+					_fail("knocked rail stopped the horse dead (z=%.2f)" % _max_z)
+				if _course.faults < 4:
+					_fail("hitting the fence did not record a knockdown (faults=%d)" % _course.faults)
 				Input.action_release("move_forward")
 				Input.action_release("run")
 				_next(4, now)
@@ -119,7 +125,11 @@ func _setup_approach() -> void:
 	var centre := aabb.get_center()
 	_fence_x = centre.x
 	_fence_z = centre.z
+	var jump_node: Node3D = jump["node"]
+	if jump_node.has_method("reset_jump"):
+		jump_node.reset_jump()
 	_horse.global_position = Vector3(_fence_x, 0.05, _fence_z - 5.0)
+	_horse.rotation.y = PI
 	_horse.velocity = Vector3(0.0, 0.0, 6.5)
 	_horse.set("_ride_speed", 6.5)
 	_horse.airborne = false

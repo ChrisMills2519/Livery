@@ -22,8 +22,19 @@ extends SceneTree
 const FOREST_PATH := "res://scenes/forest.tscn"
 const NATURE_PATH := "res://scenes/nature_props.tscn"
 const COURSE_PATH := "res://scenes/arena_course.tscn"
+const ARENA_FENCE_PATH := "res://scenes/arena_fence.tscn"
 
 const SPLIT := "res://Models/split/"
+const ARENA_FENCE_MODEL := "res://Models/medieval_village/fence_713fa0e6.glb"
+const ARENA_FENCE_SCALE := 4.0
+const ARENA_COLLISION_HEIGHT := 1.32
+const ARENA_COLLISION_DEPTH := 0.30
+# The arena grew from 20 x 40 m to 35 x 70 m (about 3x the area). The east
+# rail stays at x = -15 so the existing gate, stable yard and path still line up.
+const ARENA_MIN := Vector2(-50.0, -35.0)
+const ARENA_MAX := Vector2(-15.0, 35.0)
+const GATE_MIN_Z := -5.0
+const GATE_MAX_Z := 2.0
 
 # --- asset keys -------------------------------------------------------------
 
@@ -76,6 +87,7 @@ func _initialize() -> void:
 	print("=== BUILD SCENERY ===")
 	_build_forest()
 	_build_nature()
+	_build_arena_fence()
 	_build_course()
 	print("=== DONE ===")
 	quit(0)
@@ -95,13 +107,13 @@ func _build_forest() -> void:
 		["d", 38.0, -47.0, 160.0, 1.10],
 		["g", 46.0, -53.0, 90.0, 1.25],
 	], TREES))
-	# West belt, outside the arena rail at x = -35.
+	# West belt, outside the wide arena rail at x = -50.
 	items.append_array(_zone("West", [
-		["h", -50.0, -28.0, 30.0, 1.00],
-		["a", -52.0, -14.0, 100.0, 1.10],
-		["f", -49.0, 0.0, 190.0, 1.00],
-		["a", -54.0, 12.0, 270.0, 1.05],
-		["d", -48.0, 24.0, 340.0, 1.15],
+		["h", -57.0, -28.0, 30.0, 1.00],
+		["a", -59.0, -14.0, 100.0, 1.10],
+		["f", -56.0, 0.0, 190.0, 1.00],
+		["a", -61.0, 12.0, 270.0, 1.05],
+		["d", -55.0, 24.0, 340.0, 1.15],
 	], TREES))
 	# East grove, beyond the training ground.
 	items.append_array(_zone("East", [
@@ -154,10 +166,10 @@ func _build_nature() -> void:
 		["n11", -0.6, -22.0, 260.0, 10.0],
 	], NATURE))
 	items.append_array(_zone("ArenaEdge", [
-		["n3", -37.5, -14.0, 45.0, 12.0],
-		["n6", -37.5, 0.0, 135.0, 12.0],
-		["n2", -37.5, 14.0, 225.0, 12.0],
-		["n9", -33.0, 23.0, 315.0, 12.0],
+		["n3", -53.5, -14.0, 45.0, 12.0],
+		["n6", -54.0, 0.0, 135.0, 12.0],
+		["n2", -53.5, 14.0, 225.0, 12.0],
+		["n9", -53.0, 30.0, 315.0, 12.0],
 	], NATURE))
 	items.append_array(_zone("TrainingEdge", [
 		["n0", 16.0, -12.0, 20.0, 12.0],
@@ -168,36 +180,124 @@ func _build_nature() -> void:
 	_build_scene(NATURE_PATH, "NatureProps", items)
 
 
-func _build_course() -> void:
-	var items: Array = []
-	var jumps: Array = [
-		["jump", "Jump_01", -25.0, -12.0, 0.0, 0.65],
-		["jump", "Jump_02", -26.0, 2.0, 0.0, 0.60],
-		["barrier", "Jump_03", -22.0, 14.0, 0.0, 0.65],
-	]
-	items.append_array(_zone("ArenaJumps", jumps, JUMPING))
-	# Trot-pole line along the west side of the arena.
-	var cavaletti: Array = []
-	for i in range(4):
-		cavaletti.append(["cavaletti", "Cavaletti_0%d" % (i + 1), -31.0, -4.0 + i * 1.4, 0.0, 1.0])
-	items.append_array(_zone("ArenaJumps", cavaletti, JUMPING))
-	items.append_array(_zone("ArenaJumps", [
-		["box_1", "Marker_01", -21.5, -12.0, 0.0, 1.5],
-		["box_2", "Marker_02", -22.5, 2.0, 0.0, 1.5],
-		["box_3", "Marker_03", -18.5, 14.0, 0.0, 1.5],
-	], FENCES))
+## Builds the enlarged arena rail from the fence module's measured length.
+## Modules butt together (a tiny overlap) and the east run skips the gate span.
+func _build_arena_fence() -> void:
+	var packed := load(ARENA_FENCE_MODEL) as PackedScene
+	if packed == null:
+		push_error("cannot load arena fence model")
+		quit(1)
+		return
+	var probe := packed.instantiate() as Node3D
+	if probe == null:
+		push_error("cannot instantiate arena fence model")
+		quit(1)
+		return
+	var module_length := _aabb_of(probe).size.x * ARENA_FENCE_SCALE
+	probe.free()
+	if module_length <= 0.001:
+		push_error("arena fence module has no length")
+		quit(1)
+		return
 
-	var cones: Array = []
-	for i in range(6):
-		var key := "cone_a" if i % 2 == 0 else "cone_b"
-		cones.append([key, "Cone_0%d" % (i + 1), 24.0 + i * 4.0, 1.5 if i % 2 == 0 else -1.5, 0.0, 1.0])
-	items.append_array(_zone("SchoolingGround", cones, FENCES))
-	items.append_array(_zone("SchoolingGround", [
-		["fence_long", "Fence_01", 30.0, -14.5, 0.0, 1.0],
-		# 03_Fence_2 runs along Z in its source layout; yaw it to continue the rail.
-		["fence_cross", "Fence_02", 40.5, -14.2, 90.0, 1.0],
-	], FENCES))
-	_build_scene(COURSE_PATH, "ArenaCourse", items)
+	var width := ARENA_MAX.x - ARENA_MIN.x
+	var depth := ARENA_MAX.y - ARENA_MIN.y
+	var nx := maxi(1, ceili(width / module_length))
+	var nz := maxi(1, ceili(depth / module_length))
+	var step_x := width / float(nx)
+	var step_z := depth / float(nz)
+
+	var root := Node3D.new()
+	root.name = "ArenaFence"
+
+	for side in range(2):
+		var z := ARENA_MIN.y if side == 0 else ARENA_MAX.y
+		for i in range(nx):
+			var x := ARENA_MIN.x + (i + 0.5) * step_x
+			var inst := _make_instance(ARENA_FENCE_MODEL, Vector3(x, 0.0, z), 0.0, ARENA_FENCE_SCALE)
+			if inst == null:
+				root.free()
+				return
+			inst.name = "ArenaFence%s%d" % ["N" if side == 0 else "S", i]
+			root.add_child(inst)
+			inst.owner = root
+
+	var gate_start := INF
+	var gate_end := -INF
+	for side in range(2):
+		var x := ARENA_MIN.x if side == 0 else ARENA_MAX.x
+		for i in range(nz):
+			var z := ARENA_MIN.y + (i + 0.5) * step_z
+			if side == 1 and z > GATE_MIN_Z and z < GATE_MAX_Z:
+				gate_start = minf(gate_start, z - step_z * 0.5)
+				gate_end = maxf(gate_end, z + step_z * 0.5)
+				continue
+			var inst := _make_instance(ARENA_FENCE_MODEL, Vector3(x, 0.0, z), 90.0, ARENA_FENCE_SCALE)
+			if inst == null:
+				root.free()
+				return
+			inst.name = "ArenaFence%s%d" % ["W" if side == 0 else "E", i]
+			root.add_child(inst)
+			inst.owner = root
+
+	var body := StaticBody3D.new()
+	body.name = "ArenaCollision"
+	root.add_child(body)
+	body.owner = root
+	var mitre := ARENA_COLLISION_DEPTH
+	_add_collision_box(body, root, "NorthShape",
+		Vector3(width + mitre, ARENA_COLLISION_HEIGHT, mitre),
+		Vector3((ARENA_MIN.x + ARENA_MAX.x) * 0.5, ARENA_COLLISION_HEIGHT * 0.5, ARENA_MIN.y))
+	_add_collision_box(body, root, "SouthShape",
+		Vector3(width + mitre, ARENA_COLLISION_HEIGHT, mitre),
+		Vector3((ARENA_MIN.x + ARENA_MAX.x) * 0.5, ARENA_COLLISION_HEIGHT * 0.5, ARENA_MAX.y))
+	_add_collision_box(body, root, "WestShape",
+		Vector3(mitre, ARENA_COLLISION_HEIGHT, depth + mitre),
+		Vector3(ARENA_MIN.x, ARENA_COLLISION_HEIGHT * 0.5, (ARENA_MIN.y + ARENA_MAX.y) * 0.5))
+	if gate_start == INF or gate_end == -INF:
+		gate_start = ARENA_MIN.y
+		gate_end = ARENA_MAX.y
+	var north_len := gate_start - ARENA_MIN.y
+	var south_len := ARENA_MAX.y - gate_end
+	if north_len > 0.01:
+		_add_collision_box(body, root, "EastShapeNorth",
+			Vector3(mitre, ARENA_COLLISION_HEIGHT, north_len + mitre),
+			Vector3(ARENA_MAX.x, ARENA_COLLISION_HEIGHT * 0.5, ARENA_MIN.y + north_len * 0.5))
+	if south_len > 0.01:
+		_add_collision_box(body, root, "EastShapeSouth",
+			Vector3(mitre, ARENA_COLLISION_HEIGHT, south_len + mitre),
+			Vector3(ARENA_MAX.x, ARENA_COLLISION_HEIGHT * 0.5, gate_end + south_len * 0.5))
+
+	var scene := PackedScene.new()
+	var err := scene.pack(root)
+	if err != OK:
+		push_error("pack failed for %s (error %d)" % [ARENA_FENCE_PATH, err])
+		root.free()
+		quit(1)
+		return
+	err = ResourceSaver.save(scene, ARENA_FENCE_PATH)
+	if err != OK:
+		push_error("save failed for %s (error %d)" % [ARENA_FENCE_PATH, err])
+		root.free()
+		quit(1)
+		return
+	print("  wrote %s (%d fence modules)" % [ARENA_FENCE_PATH, nx * 2 + nz * 2])
+	root.free()
+
+
+func _add_collision_box(body: StaticBody3D, owner_root: Node, shape_name: String, size: Vector3, pos: Vector3) -> void:
+	var shape := BoxShape3D.new()
+	shape.size = size
+	var node := CollisionShape3D.new()
+	node.name = shape_name
+	node.shape = shape
+	node.position = pos
+	body.add_child(node)
+	node.owner = owner_root
+
+
+func _build_course() -> void:
+	push_warning("arena_course.tscn is hand-authored; skipping generated course")
 
 
 ## Turn a compact table into full item dictionaries with resolved asset paths.

@@ -1,0 +1,42 @@
+# Netlify hosting for the Godot web export.
+#
+# Build locally, then deploy the folder:
+#
+#   godot --headless --path . --export-release "Web" build/web/index.html
+#   netlify deploy --prod --dir=build/web --site=66c08511-2b84-47e1-98e2-1a96e0aebd05
+#
+# The export is single-threaded, so it needs no COOP/COEP headers.
+
+[build]
+  publish = "build/web"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "same-origin"
+
+# Godot refuses to start if the engine binary is served with the wrong type.
+[[headers]]
+  for = "/*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"
+    Cache-Control = "public, max-age=3600"
+
+# The data pack is the bulk of the download; let repeat loads reuse it, but
+# keep the window short so a redeploy is picked up within the hour.
+[[headers]]
+  for = "/*.pck"
+  [headers.values]
+    Content-Type = "application/octet-stream"
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/index.js"
+  [headers.values]
+    Cache-Control = "no-cache"

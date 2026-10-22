@@ -56,7 +56,7 @@ func _run_checks() -> void:
 		return
 	var seat: Vector3 = _horse.get_rider_seat_position()
 	var skeleton: Skeleton3D = _horse.find_children("*", "Skeleton3D", true, false)[0]
-	var seat_bone := skeleton.find_bone("Bip01 Spine1_04_20")
+	var seat_bone := skeleton.find_bone("spine_3")
 	var seat_bone_global := skeleton.global_transform * skeleton.get_bone_global_pose(seat_bone)
 	print("seat=%s spine=%s" % [seat, seat_bone_global.origin])
 
@@ -96,7 +96,7 @@ func _run_checks() -> void:
 			_fail("BitAnchor_%s missing" % side)
 			continue
 		var bit := anchor.global_position
-		var head_idx := skeleton.find_bone("Bip01 Head_06_5")
+		var head_idx := skeleton.find_bone("head")
 		var head_now := skeleton.global_transform * skeleton.get_bone_global_pose(head_idx)
 		print("bit_%s=%s head_dist=%.3f" % [side, bit, bit.distance_to(head_now.origin)])
 		if bit.distance_to(head_now.origin) > 0.65:
@@ -147,14 +147,21 @@ func _run_checks() -> void:
 	if mesh == null or mesh.mesh == null:
 		_fail("rein mesh missing")
 	else:
-		print("rein surfaces=%d visible=%s" % [
+		print("rein surfaces=%d visible=%s transform=%s" % [
 			mesh.mesh.get_surface_count(),
 			str(mesh.visible),
+			str(mesh.global_transform),
 		])
 		if not mesh.visible:
 			_fail("reins are hidden while mounted")
 		if mesh.mesh.get_surface_count() == 0:
 			_fail("reins produced no geometry")
+		# Rein vertices are authored in world space, so any inherited
+		# transform shifts the leather away from the bit and hands.
+		if not mesh.global_transform.is_equal_approx(Transform3D.IDENTITY):
+			_fail("rein mesh carries a transform (%.2f, %.2f, %.2f)" % [
+				mesh.global_position.x, mesh.global_position.y, mesh.global_position.z
+			])
 
 	_finish()
 

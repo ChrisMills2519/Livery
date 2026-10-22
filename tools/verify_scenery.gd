@@ -11,7 +11,7 @@ extends SceneTree
 const SCENES := {
 	"res://scenes/forest.tscn": 30,
 	"res://scenes/nature_props.tscn": 22,
-	"res://scenes/arena_course.tscn": 18,
+	"res://scenes/arena_course.tscn": 21,
 }
 const BASE_TOLERANCE := 0.02
 const GROUND_SNAP := 0.001
@@ -36,11 +36,12 @@ func _initialize() -> void:
 		var worst_name := ""
 		for prop in _props_of(inst):
 			props += 1
-			var bounds := _aabb_of(prop, Transform3D.IDENTITY)
-			var base := bounds.position.y
-			if absf(base) > absf(worst):
-				worst = base
-				worst_name = String(prop.name)
+			if not (prop as Node).has_method("reset_jump"):
+				var bounds := _aabb_of(prop, Transform3D.IDENTITY)
+				var base := bounds.position.y
+				if absf(base) > absf(worst):
+					worst = base
+					worst_name = String(prop.name)
 			var count := _count_meshes(prop)
 			meshes += int(count.meshes)
 			tris += int(count.tris)

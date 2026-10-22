@@ -1,0 +1,123 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/jump_obstacle.gd" id="1_fewvf"]
+[ext_resource type="AudioStream" path="res://assets/sounds/horse/wood_clatter.wav" id="2_klqwq"]
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/05_FlagRed.glb" id="3_kablc"]
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/06_FlagWhite.glb" id="4_f2i71"]
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/13_Pole.glb" id="5_pole"]
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/07_HalfBarrier1.glb" id="6_wing_l"]
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/09_HalfBarrier2.glb" id="7_wing_r"]
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/11_Holder1.glb" id="8_cup_l"]
+[ext_resource type="PackedScene" path="res://Models/split/show_jumping____horse_jumping_obstacles/12_Holder2.glb" id="9_cup_r"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pole"]
+size = Vector3(3, 0.12, 0.12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_knock"]
+size = Vector3(3.1, 0.3, 0.3)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_clear"]
+size = Vector3(3.2, 4.0, 0.55)
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_interact"]
+radius = 2.5
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wing_l"]
+size = Vector3(0.25, 1.55, 0.25)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wing_r"]
+size = Vector3(0.25, 1.55, 0.25)
+
+[node name="JumpObstacle" type="Node3D" unique_id=813689707]
+script = ExtResource("1_fewvf")
+
+[node name="ClatterAudio" type="AudioStreamPlayer3D" parent="." unique_id=1292632727]
+stream = ExtResource("2_klqwq")
+volume_db = 2.0
+max_distance = 35.0
+
+[node name="WingLeftCol" type="StaticBody3D" parent="." unique_id=689352013]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, 0)
+
+[node name="WingLeftShape" type="CollisionShape3D" parent="WingLeftCol"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.78, 0)
+shape = SubResource("BoxShape3D_wing_l")
+
+[node name="WingRightCol" type="StaticBody3D" parent="." unique_id=249137244]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0, 0)
+
+[node name="WingRightShape" type="CollisionShape3D" parent="WingRightCol"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.78, 0)
+shape = SubResource("BoxShape3D_wing_r")
+
+[node name="WingLeft" type="Node3D" parent="." unique_id=814437115]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.10746247, 0, 1.56467057)
+
+[node name="HalfBarrierLeft" type="Node3D" parent="WingLeft" instance=ExtResource("6_wing_l")]
+
+[node name="WingRight" type="Node3D" parent="." unique_id=1859229597]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.04746264, 0, 1.56467057)
+
+[node name="HalfBarrierRight" type="Node3D" parent="WingRight" instance=ExtResource("7_wing_r")]
+
+[node name="FlagRed" type="Node3D" parent="." unique_id=451577586 instance=ExtResource("3_kablc")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 3.03150287, -0.58621526, -0.00025757)
+
+[node name="FlagWhite" type="Node3D" parent="." unique_id=1497958972 instance=ExtResource("4_f2i71")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 4.09649735, -0.58621526, -0.00025757)
+
+[node name="Cups" type="Node3D" parent="." unique_id=200461175]
+
+[node name="CupLeft" type="Node3D" parent="Cups" instance=ExtResource("8_cup_l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.00491267, -1.71019232, 0)
+
+[node name="CupRight" type="Node3D" parent="Cups" instance=ExtResource("9_cup_r")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.94491261, -1.71019232, 0)
+
+[node name="PoleTop" type="RigidBody3D" parent="." unique_id=1223092326]
+mass = 8.0
+freeze = true
+continuous_cd = true
+contact_monitor = true
+max_contacts_reported = 4
+
+[node name="PoleMesh" type="Node3D" parent="PoleTop" instance=ExtResource("5_pole")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.97000027, -1.76085162, 0)
+
+[node name="PoleShape" type="CollisionShape3D" parent="PoleTop"]
+shape = SubResource("BoxShape3D_pole")
+
+[node name="KnockDetector" type="Area3D" parent="." unique_id=1450931380]
+
+[node name="KnockShape" type="CollisionShape3D" parent="KnockDetector"]
+shape = SubResource("BoxShape3D_knock")
+
+[node name="ClearDetector" type="Area3D" parent="." unique_id=2093664428]
+
+[node name="ClearShape" type="CollisionShape3D" parent="ClearDetector"]
+shape = SubResource("BoxShape3D_clear")
+
+[node name="InteractArea" type="Area3D" parent="." unique_id=1560860729]
+
+[node name="InteractShape" type="CollisionShape3D" parent="InteractArea"]
+shape = SubResource("SphereShape3D_interact")
+
+[node name="PromptLabel" type="Label3D" parent="." unique_id=1003762943]
+billboard = 1
+no_depth_test = true
+modulate = Color(1, 0.95, 0.75, 1)
+outline_modulate = Color(0.05, 0.08, 0.04, 1)
+text = "E: Adjust Height"
+font_size = 42
+outline_size = 8
+
+[node name="NumberLabel" type="Label3D" parent="." unique_id=86730578]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.05, 0)
+pixel_size = 0.006
+billboard = 1
+no_depth_test = true
+modulate = Color(0.95, 0.92, 0.72, 1)
+outline_modulate = Color(0.05, 0.08, 0.04, 1)
+text = "1"
+font_size = 56
+outline_size = 10

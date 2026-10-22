@@ -19,7 +19,16 @@ var _can_groom := false
 var _tick := 0.0
 
 
+## CONTEXT offer in the bay: groom the horse once it is brought in.  Top
+## priority, because grooming is the reason to be in the bay.
+func touch_context() -> Dictionary:
+	if _can_groom and _prompt != null and _prompt.visible:
+		return {"action": "groom", "label": "GROOM", "priority": 5}
+	return {}
+
+
 func _ready() -> void:
+	add_to_group("touch_context")
 	_build_set()
 	_prompt = Label3D.new()
 	_prompt.name = "GroomPrompt"
@@ -106,7 +115,7 @@ func _process(delta: float) -> void:
 	elif not horse_near:
 		_prompt.text = "BRING YOUR HORSE HERE"
 	else:
-		_prompt.text = "G  ·  GROOM"
+		_prompt.text = Device.pick("G  ·  GROOM", "TAP  ·  GROOM")
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -18,6 +18,9 @@ class_name GroomSurface
 
 signal painted
 signal mask_reset
+## Emitted once when an anatomical area crosses its clean threshold.  The
+## session turns this into the PowerWash-style ding and HUD toast.
+signal region_completed(region: int)
 
 ## 256 is the sweet spot: the coat mask is a soft, painterly layer, and the
 ## smaller bake keeps the character-select handoff under a second on a modest
@@ -31,14 +34,59 @@ const ZONE_HOOF := 4
 const ZONE_MANE := 5
 const ZONE_TAIL := 6
 
+## Anatomical areas shown in the HUD and completed one at a time.  The body is
+## split into five sections and the legs are tracked separately by side, so a
+## session produces a steady stream of dings instead of one global percentage.
+enum Region {
+	HEAD,
+	NECK,
+	CHEST,
+	BARREL,
+	HINDQUARTERS,
+	FRONT_L,
+	FRONT_R,
+	HIND_L,
+	HIND_R,
+	COUNT,
+}
+const REGION_NONE := Region.COUNT
+const REGION_NAMES := [
+	"Head",
+	"Neck",
+	"Chest / shoulders",
+	"Barrel",
+	"Hindquarters",
+	"Front left leg",
+	"Front right leg",
+	"Hind left leg",
+	"Hind right leg",
+]
+## A completed area snaps to clean, so the threshold can leave the final
+## sliver to the snap instead of making the player hunt it.  The head is small
+## and awkward, and the legs have no curry pass, so they get a little slack.
+const REGION_CLEAN_THRESHOLDS := [0.78, 0.85, 0.85, 0.85, 0.85, 0.82, 0.82, 0.82, 0.82]
+
 const MIN_ISLAND_VERTICES := 30
+## How many candidate triangles are remembered per mask texel.  Mirror-shared
+## UVs give a texel two candidates (left + right); the spare slots cover the
+## rare overlapping shell.
+const PIXEL_TRI_STRIDE := 4
 const GroomPickerScript := preload("res://scripts/groom_picker.gd")
 
 const SOFT_MIN_CLEAN := 0.5
 const UPLOAD_INTERVAL := 1.0 / 30.0
+const HIGHLIGHT_DURATION := 2.2
+const HIGHLIGHT_COLORS := {
+	"curry": Color(1.0, 0.55, 0.35, 1.0),
+	"dandy": Color(1.0, 0.82, 0.38, 1.0),
+	"soft": Color(0.62, 0.88, 1.0, 1.0),
+	"face": Color(1.0, 0.62, 0.86, 1.0),
+	"hoof": Color(1.0, 0.42, 0.24, 1.0),
+}
 
 var material: ShaderMaterial
 var mask_texture: ImageTexture
+var zone_texture: ImageTexture
 var picker
 
 var mesh_instance: MeshInstance3D
@@ -54,15 +102,24 @@ var _mask_image: Image
 var _mask_data := PackedByteArray()
 var _zone_map := PackedByteArray()
 var _island_map := PackedInt32Array()
+var _pixel_tris := PackedInt32Array()
 var _tri_zones := PackedByteArray()
 var _tri_islands := PackedInt32Array()
+var _tri_regions := PackedByteArray()
+var _region_map := PackedByteArray()
+var _region_pixels: Array = []
+var _region_totals := PackedInt32Array()
+var _region_polishable := PackedInt32Array()
+var _region_clean_sums := PackedFloat64Array()
+var _region_polish_sums := PackedFloat64Array()
+var _region_complete := PackedByteArray()
 var _rest_vertices := PackedVector3Array()
 var _uvs := PackedVector2Array()
 var _indices := PackedInt32Array()
 var _bones := PackedInt32Array()
 var _weights := PackedFloat32Array()
 var _bind_to_bone := PackedInt32Array()
-var _bind_inv: Array = []
+var _bind_pose: Array = []
 var _uf := PackedInt32Array()
 var _island_vertex_count := {}
 var _zone_counts := {}
@@ -72,6 +129,18 @@ var _polishable_count := 0
 var _dirty := false
 var _upload_accum := 0.0
 var _ready_done := false
+var _groom_uv2 := false
+var _highlight_time := 0.0
+var _highlight_duration := HIGHLIGHT_DURATION
+## Why the last stamp did or did not change anything.  The session turns this
+## into a hint, so "nothing happened" must not be reported as "wrong area".
+enum PaintStatus {
+	NONE,
+	PAINTED,
+	ALREADY_CLEAN,
+	NO_TARGET,
+}
+var _last_paint_status := PaintStatus.NONE
 
 
 func _ready() -> void:
@@ -88,6 +157,7 @@ func _deferred_setup() -> void:
 
 
 func _process(delta: float) -> void:
+	_update_highlight(delta)
 	if not _dirty:
 		return
 	_upload_accum += delta
@@ -95,6 +165,16 @@ func _process(delta: float) -> void:
 		return
 	_upload_accum = 0.0
 	flush_texture()
+
+
+func _update_highlight(delta: float) -> void:
+	if _highlight_time <= 0.0 or material == null:
+		return
+	_highlight_time = maxf(0.0, _highlight_time - delta)
+	var elapsed := _highlight_duration - _highlight_time
+	var fade_in := clampf(elapsed / 0.12, 0.0, 1.0)
+	var fade_out := clampf(_highlight_time / 0.55, 0.0, 1.0)
+	material.set_shader_parameter("highlight_strength", minf(fade_in, fade_out))
 
 
 func _setup() -> void:
@@ -116,12 +196,19 @@ func _setup() -> void:
 		return
 	var arrays := mesh.surface_get_arrays(0)
 	_rest_vertices = arrays[Mesh.ARRAY_VERTEX]
-	var uv_array = arrays[Mesh.ARRAY_TEX_UV]
+	# The coat texture uses TEXCOORD_0, whose left and right sides are mirrored
+	# and share texels.  A second set (TEXCOORD_1) places the two sides in
+	# disjoint halves so the groom mask can clean one side only.  Fall back to
+	# the first set on any mesh that has not been re-exported with the split.
+	var groom_uvs = arrays[Mesh.ARRAY_TEX_UV2]
+	_groom_uv2 = groom_uvs != null and not (groom_uvs as PackedVector2Array).is_empty()
+	if not _groom_uv2:
+		groom_uvs = arrays[Mesh.ARRAY_TEX_UV]
 	var index_array = arrays[Mesh.ARRAY_INDEX]
-	if uv_array == null or index_array == null:
+	if groom_uvs == null or index_array == null:
 		push_warning("GroomSurface: horse mesh has no UVs or indices")
 		return
-	_uvs = uv_array
+	_uvs = groom_uvs
 	_indices = index_array
 	if _uvs.is_empty() or _indices.is_empty():
 		push_warning("GroomSurface: horse mesh has no UVs or indices")
@@ -158,28 +245,63 @@ func _find_skeleton(root: Node) -> Skeleton3D:
 func _build_bind_map() -> void:
 	var bind_count := skin.get_bind_count()
 	_bind_to_bone.resize(bind_count)
-	_bind_inv.resize(bind_count)
+	_bind_pose.resize(bind_count)
 	for i in range(bind_count):
 		var bind_name := skin.get_bind_name(i)
 		_bind_to_bone[i] = skeleton.find_bone(bind_name)
-		_bind_inv[i] = skin.get_bind_pose(i).affine_inverse()
+		# Godot stores the inverse bind matrix here (it maps skeleton space
+		# back into the bone's bind space), so it is applied directly.
+		_bind_pose[i] = skin.get_bind_pose(i)
 
 
 func _zone_for_bone(bone_name: String) -> int:
-	var n := bone_name
-	if n.contains("Toe") or n.contains("Finger"):
+	# Lower-case so the classifier works on both the old Bip01 names and the
+	# newer rig's front_leg_* / back_leg_* names.
+	var n := bone_name.to_lower()
+	if n.contains("toe") or n.contains("finger") or n.contains("leg_foot"):
 		return ZONE_HOOF
-	if n.contains("Ponytail"):
+	if n.contains("ponytail"):
 		return ZONE_MANE
-	if n.contains("Tail"):
+	if n.contains("tail"):
 		return ZONE_TAIL
-	if n.contains("Head"):
+	if n.contains("head") or n.contains("nose") or n.contains("mouth") or n.contains("ear"):
 		return ZONE_FACE
-	if n.contains("UpperArm") or n.contains("Forearm") or n.contains("Hand"):
-		return ZONE_LEG
-	if n.contains("Thigh") or n.contains("Calf") or n.contains("Foot") or n.contains("HorseLink"):
+	# The leg rule has to name the leg bones outright.  A bare "front_" also
+	# caught "ribcage_front", which put the chest and belly in the leg zone.
+	if (
+		n.contains("upperarm") or n.contains("forearm") or n.contains("hand")
+		or n.contains("thigh") or n.contains("calf") or n.contains("foot")
+		or n.contains("horselink") or n.contains("humerus") or n.contains("scapula")
+		or n.contains("front_leg") or n.contains("front_scapula") or n.contains("front_humerus")
+		or n.contains("back_leg_")
+	):
 		return ZONE_LEG
 	return ZONE_COAT
+
+
+## The nine areas the HUD tracks one at a time.  The head, neck, chest,
+## barrel and hindquarters come from the spine chain and the shoulders; the
+## four legs are split by the _l / _r suffix on their bones.
+func _region_for_bone(bone_name: String) -> int:
+	var n := bone_name.to_lower()
+	if n.begins_with("ear_") or n in ["head", "head_leaf", "nose", "mouth", "mouth_tip"]:
+		return Region.HEAD
+	if n in ["spine_4", "spine_5", "spine_6"]:
+		return Region.NECK
+	if n.begins_with("ribcage_front") or n.begins_with("front_scapula") or n.begins_with("front_humerus"):
+		return Region.CHEST
+	if (
+		n == "root" or n == "hips" or n.begins_with("spine_1") or n.begins_with("spine_2")
+		or n.begins_with("spine_3") or n.begins_with("ribcage_middle") or n.begins_with("ribcage_leaf")
+	):
+		return Region.BARREL
+	if n.begins_with("tail") or n.begins_with("back_leg_pelvis"):
+		return Region.HINDQUARTERS
+	if n.begins_with("front_leg"):
+		return Region.FRONT_R if n.ends_with("_r") else Region.FRONT_L
+	if n.begins_with("back_leg"):
+		return Region.HIND_R if n.ends_with("_r") else Region.HIND_L
+	return Region.BARREL
 
 
 func _build_islands() -> void:
@@ -222,12 +344,14 @@ func _build_triangles() -> void:
 	var tri_count := _indices.size() / 3
 	_tri_zones.resize(tri_count)
 	_tri_islands.resize(tri_count)
+	_tri_regions.resize(tri_count)
 	_zone_counts.clear()
 	for t in range(tri_count):
 		var i0 := _indices[t * 3]
 		var i1 := _indices[t * 3 + 1]
 		var i2 := _indices[t * 3 + 2]
 		var zone_weights := {}
+		var region_weights := {}
 		for vertex_index in [i0, i1, i2]:
 			for k in range(4):
 				var array_index: int = int(vertex_index) * 4 + k
@@ -239,8 +363,11 @@ func _build_triangles() -> void:
 				var bind := _bones[array_index]
 				if bind < 0 or bind >= skin.get_bind_count():
 					continue
-				var zone := _zone_for_bone(String(skin.get_bind_name(bind)))
+				var bind_name := String(skin.get_bind_name(bind))
+				var zone := _zone_for_bone(bind_name)
 				zone_weights[zone] = float(zone_weights.get(zone, 0.0)) + weight
+				var region := _region_for_bone(bind_name)
+				region_weights[region] = float(region_weights.get(region, 0.0)) + weight
 		var dominant := ZONE_COAT
 		var best := -1.0
 		for zone in zone_weights.keys():
@@ -250,6 +377,14 @@ func _build_triangles() -> void:
 				dominant = int(zone)
 		_tri_zones[t] = dominant
 		_tri_islands[t] = _uf_find(i0)
+		var dominant_region := Region.BARREL
+		var best_region := -1.0
+		for region in region_weights.keys():
+			var value: float = region_weights[region]
+			if value > best_region:
+				best_region = value
+				dominant_region = int(region)
+		_tri_regions[t] = dominant_region
 		_zone_counts[dominant] = int(_zone_counts.get(dominant, 0)) + 1
 	picker = GroomPickerScript.new()
 	picker.setup(_rest_vertices, _uvs, _indices, _tri_zones, _tri_islands)
@@ -261,9 +396,14 @@ func _rasterise_mask() -> void:
 	_mask_data.fill(0)
 	_zone_map.resize(pixels)
 	_zone_map.fill(ZONE_NONE)
+	_region_map.resize(pixels)
+	_region_map.fill(REGION_NONE)
 	_island_map.resize(pixels)
 	for i in range(pixels):
 		_island_map[i] = -1
+	_pixel_tris.resize(pixels * PIXEL_TRI_STRIDE)
+	for i in range(pixels * PIXEL_TRI_STRIDE):
+		_pixel_tris[i] = -1
 	_groomable_count = 0
 	_cleanable_count = 0
 	_polishable_count = 0
@@ -307,7 +447,9 @@ func _rasterise_mask() -> void:
 					continue
 				var pixel := py * MASK_SIZE + px
 				_zone_map[pixel] = zone
+				_region_map[pixel] = int(_tri_regions[t])
 				_island_map[pixel] = island
+				_record_pixel_tri(pixel, t)
 				if groomable:
 					var alpha_index := pixel * 4 + 3
 					if _mask_data[alpha_index] == 0:
@@ -327,6 +469,66 @@ func _rasterise_mask() -> void:
 			_cleanable_count += 1
 		if zone == ZONE_COAT or zone == ZONE_LEG:
 			_polishable_count += 1
+	_build_region_stats()
+
+
+## Collect the groomable texels of every anatomical area.  The HUD shows one
+## row per area, so each region needs its own texel list, its own clean and
+## polish sums, and the threshold it has to reach to count as done.
+func _build_region_stats() -> void:
+	_region_pixels.clear()
+	_region_totals.resize(Region.COUNT)
+	_region_totals.fill(0)
+	_region_polishable.resize(Region.COUNT)
+	_region_polishable.fill(0)
+	_region_clean_sums.resize(Region.COUNT)
+	_region_clean_sums.fill(0.0)
+	_region_polish_sums.resize(Region.COUNT)
+	_region_polish_sums.fill(0.0)
+	_region_complete.resize(Region.COUNT)
+	_region_complete.fill(0)
+	for i in range(Region.COUNT):
+		_region_pixels.append(PackedInt32Array())
+	for pixel in range(MASK_SIZE * MASK_SIZE):
+		if _mask_data[pixel * 4 + 3] == 0:
+			continue
+		var region := int(_region_map[pixel])
+		if region < 0 or region >= Region.COUNT:
+			continue
+		var list: PackedInt32Array = _region_pixels[region]
+		list.append(pixel)
+		_region_pixels[region] = list
+		_region_totals[region] += 1
+		var zone := int(_zone_map[pixel])
+		if zone == ZONE_COAT or zone == ZONE_LEG:
+			_region_polishable[region] += 1
+
+
+func _record_pixel_tri(pixel: int, triangle: int) -> void:
+	var base := pixel * PIXEL_TRI_STRIDE
+	for slot in range(PIXEL_TRI_STRIDE):
+		var existing := _pixel_tris[base + slot]
+		if existing == triangle:
+			return
+		if existing == -1:
+			_pixel_tris[base + slot] = triangle
+			return
+
+
+## A texel may be painted when at least one of the triangles that maps onto it
+## is under the brush.  This is what stops a stamp from bleeding onto a texel
+## that only belongs to a far part of the coat sharing the same atlas space.
+func _pixel_tri_allowed(pixel: int, allowed: PackedByteArray) -> bool:
+	if allowed.is_empty():
+		return true
+	var base := pixel * PIXEL_TRI_STRIDE
+	for slot in range(PIXEL_TRI_STRIDE):
+		var triangle := _pixel_tris[base + slot]
+		if triangle < 0:
+			return false
+		if triangle < allowed.size() and allowed[triangle] != 0:
+			return true
+	return false
 
 
 func _uv_outside(uv: Vector2) -> bool:
@@ -342,8 +544,15 @@ func _build_material() -> void:
 	_mask_image = Image.create_from_data(MASK_SIZE, MASK_SIZE, false, Image.FORMAT_RGBA8, _mask_data)
 	mask_texture = ImageTexture.create_from_image(_mask_image)
 	material.set_shader_parameter("groom_mask", mask_texture)
+	var zone_image := Image.create_from_data(MASK_SIZE, MASK_SIZE, false, Image.FORMAT_R8, _zone_map)
+	zone_texture = ImageTexture.create_from_image(zone_image)
+	material.set_shader_parameter("zone_map", zone_texture)
+	material.set_shader_parameter("use_uv2", 1.0 if _groom_uv2 else 0.0)
 	material.set_shader_parameter("dirt_level", current_dirt_level)
 	material.set_shader_parameter("mask_view", 0.0)
+	material.set_shader_parameter("highlight_mask", 0)
+	material.set_shader_parameter("highlight_strength", 0.0)
+	material.set_shader_parameter("highlight_clean_soften", 0.0)
 	mesh_instance.material_override = material
 
 
@@ -372,7 +581,7 @@ func rebuild_picker() -> void:
 			if bone < 0:
 				continue
 			var bone_pose := skeleton.get_bone_global_pose(bone)
-			accumulated += (bone_pose * _bind_inv[bind] * rest) * weight
+			accumulated += (bone_pose * _bind_pose[bind] * rest) * weight
 			total += weight
 		if total > 0.0001:
 			skinned[i] = accumulated / total
@@ -399,6 +608,9 @@ func pick_ray(origin: Vector3, direction: Vector3) -> Dictionary:
 	last_pick_ms = float(Time.get_ticks_usec() - started) / 1000.0
 	if hit.is_empty():
 		return hit
+	# Keep the picker's raw skeleton-local hit so the painter can measure the
+	# brush's world reach against the posed triangles.
+	hit["local_position"] = hit["position"]
 	hit["position"] = skeleton.global_transform * hit["position"]
 	hit["normal"] = (skeleton.global_transform.basis * hit["normal"]).normalized()
 	return hit
@@ -408,9 +620,11 @@ func paint_hit(hit: Dictionary, tool: String) -> Dictionary:
 	if hit.is_empty():
 		return {"ok": false, "reason": "miss"}
 	var zone := int(hit.get("zone", ZONE_NONE))
+	# Hooves are not brushed at all, so every tool has to say so plainly
+	# instead of blaming the face.
+	if zone == ZONE_HOOF:
+		return {"ok": false, "reason": "hoof", "zone": zone}
 	if tool == "hoof":
-		if zone == ZONE_HOOF or zone == ZONE_LEG:
-			return {"ok": false, "reason": "hoof", "zone": zone}
 		return {"ok": false, "reason": "zone", "zone": zone}
 	if not _tool_allows_zone(tool, zone):
 		return {"ok": false, "reason": "zone", "zone": zone}
@@ -418,22 +632,37 @@ func paint_hit(hit: Dictionary, tool: String) -> Dictionary:
 	if tool == "soft" and get_mask_value(uv, "clean") < SOFT_MIN_CLEAN:
 		return {"ok": false, "reason": "dirty", "zone": zone}
 	var uv_per_meter := float(hit.get("uv_per_meter", 100.0))
-	# The coat atlas is split into narrow shells; a strict UV-space circle only
-	# covers the shell under the cursor.  A modest boost lets the stamp reach
-	# the neighbouring shells of the same zone without leaking across the face
-	# or leg boundaries (the zone map still gates every pixel).
-	var radius_uv := brush_world_radius(tool) * uv_per_meter * 2.2
-	var island := int(hit.get("island", -1))
-	var painted_ok := paint_uv(uv, zone, island, tool, radius_uv)
-	return {"ok": painted_ok, "reason": "ok" if painted_ok else "zone", "zone": zone}
+	var radius_world := brush_world_radius(tool)
+	# The coat atlas is split into narrow shells and mirrored left/right, so a
+	# strict UV-space circle only covers the shell under the cursor.  The UV
+	# boost reaches the neighbouring shells of the same zone; the world-space
+	# triangle gate below then keeps the stamp from bleeding onto a far region
+	# that happens to share the atlas (belly -> croup, say), making the visible
+	# ring the true footprint.
+	var radius_uv := radius_world * uv_per_meter * 2.2
+	var allowed := PackedByteArray()
+	if picker != null and hit.has("local_position"):
+		allowed = picker.triangles_within(hit["local_position"], radius_world)
+	var painted_ok := paint_uv(uv, zone, tool, radius_uv, allowed)
+	if painted_ok:
+		return {"ok": true, "reason": "ok", "zone": zone}
+	var reason := "zone"
+	if _last_paint_status == PaintStatus.ALREADY_CLEAN:
+		reason = "clean"
+	elif _last_paint_status == PaintStatus.NO_TARGET:
+		reason = "seam"
+	return {"ok": false, "reason": reason, "zone": zone}
 
 
-## Painting is guarded by the baked groomable alpha and the zone map.  The UV
-## island is deliberately not used as a brush limit: this horse's coat is split
-## into many small UV shells, and restricting a stamp to the shell under the
-## cursor made the brush feel like a pinprick.  Zone + alpha keep the face brush
-## off the body and the body tools off the face without that side effect.
-func paint_uv(uv: Vector2, zone: int, _island: int, tool: String, radius_uv: float) -> bool:
+## Painting is guarded by the baked groomable alpha, the zone map and the
+## world-space triangle set under the brush.  The UV island is deliberately not
+## used as a brush limit: this horse's coat is split into many small UV shells,
+## and restricting a stamp to the shell under the cursor made the brush feel
+## like a pinprick.  Zone + alpha keep the face brush off the body and the body
+## tools off the face; `allowed` (from GroomPicker.triangles_within) keeps a
+## stamp from reaching a far region that shares the same atlas.
+func paint_uv(uv: Vector2, zone: int, tool: String, radius_uv: float, allowed: PackedByteArray = PackedByteArray()) -> bool:
+	_last_paint_status = PaintStatus.NONE
 	if not _tool_allows_zone(tool, zone):
 		return false
 	if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
@@ -447,10 +676,11 @@ func paint_uv(uv: Vector2, zone: int, _island: int, tool: String, radius_uv: flo
 	var min_y := clampi(int(floor(centre_y - radius_px)), 0, MASK_SIZE - 1)
 	var max_y := clampi(int(ceil(centre_y + radius_px)), 0, MASK_SIZE - 1)
 	var did_paint := false
+	var touched := false
 	for py in range(min_y, max_y + 1):
-		var dy := float(py) - float(centre_y)
+		var dy := float(py) - centre_y
 		for px in range(min_x, max_x + 1):
-			var dx := float(px) - float(centre_x)
+			var dx := float(px) - centre_x
 			var distance := sqrt(dx * dx + dy * dy) / radius_px
 			if distance > 1.0:
 				continue
@@ -459,6 +689,9 @@ func paint_uv(uv: Vector2, zone: int, _island: int, tool: String, radius_uv: flo
 				continue
 			if int(_zone_map[pixel]) != zone:
 				continue
+			if not _pixel_tri_allowed(pixel, allowed):
+				continue
+			touched = true
 			var base := pixel * 4
 			var clean := float(_mask_data[base]) / 255.0
 			var polish := float(_mask_data[base + 1]) / 255.0
@@ -472,10 +705,18 @@ func paint_uv(uv: Vector2, zone: int, _island: int, tool: String, radius_uv: flo
 				"dandy", "face":
 					if tool == "face" and zone != ZONE_FACE:
 						continue
-					var gain := falloff * (0.16 + 0.84 * loosen)
+					# Currying loosens the dirt, so a curried patch comes off
+					# far better.  The floor keeps a missed curry pass from
+					# leaving an area permanently stuck at a trace of clean.
+					var gain := falloff * (0.55 + 0.45 * loosen)
+					if tool == "face":
+						# The head has no curry step, so the face brush has to
+						# be able to clean it on its own.
+						gain = falloff
 					var new_clean := maxf(clean, gain)
 					if new_clean > clean + 0.0005:
 						_mask_data[base] = int(round(new_clean * 255.0))
+						_region_clean_changed(pixel, clean, new_clean)
 						did_paint = true
 				"soft":
 					if clean < SOFT_MIN_CLEAN:
@@ -483,18 +724,35 @@ func paint_uv(uv: Vector2, zone: int, _island: int, tool: String, radius_uv: flo
 					var new_polish := maxf(polish, falloff * (0.35 + 0.65 * clean))
 					if new_polish > polish + 0.0005:
 						_mask_data[base + 1] = int(round(new_polish * 255.0))
+						_region_polish_changed(pixel, polish, new_polish)
 						did_paint = true
 	if did_paint:
+		_last_paint_status = PaintStatus.PAINTED
+	elif touched:
+		_last_paint_status = PaintStatus.ALREADY_CLEAN
+	else:
+		_last_paint_status = PaintStatus.NO_TARGET
+	if did_paint:
 		_dirty = true
+
 		last_paint_ms = float(Time.get_ticks_usec() - started) / 1000.0
 		painted.emit()
 	return did_paint
 
 
+## Public read-only wrapper so the session can tint the cursor ring by whether
+## the active tool may paint the zone under the pointer.
+func can_tool_paint(tool: String, zone: int) -> bool:
+	return _tool_allows_zone(tool, zone)
+
+
 func _tool_allows_zone(tool: String, zone: int) -> bool:
 	match tool:
 		"curry":
-			return zone == ZONE_COAT
+			# The legs carry the same dirt as the body, and the dandy brush
+			# works far better on curried coat, so the comb has to reach them
+			# too.  Without this the legs could never be properly cleaned.
+			return zone == ZONE_COAT or zone == ZONE_LEG
 		"dandy":
 			return zone == ZONE_COAT or zone == ZONE_LEG
 		"soft":
@@ -504,6 +762,90 @@ func _tool_allows_zone(tool: String, zone: int) -> bool:
 		"hoof":
 			return zone == ZONE_HOOF
 	return false
+
+
+## Per-area progress.  The HUD shows one row per area and the session turns a
+## finished area into a ding, so the sums are kept live while the mask is
+## painted rather than recomputed from the whole atlas every frame.
+func _region_of_pixel(pixel: int) -> int:
+	if pixel < 0 or pixel >= _region_map.size():
+		return REGION_NONE
+	return int(_region_map[pixel])
+
+
+func _region_clean_changed(pixel: int, old_value: float, new_value: float) -> void:
+	var region := _region_of_pixel(pixel)
+	if region < 0 or region >= Region.COUNT:
+		return
+	_region_clean_sums[region] += new_value - old_value
+	_check_region_complete(region)
+
+
+func _region_polish_changed(pixel: int, old_value: float, new_value: float) -> void:
+	var region := _region_of_pixel(pixel)
+	if region < 0 or region >= Region.COUNT:
+		return
+	_region_polish_sums[region] += new_value - old_value
+
+
+func _check_region_complete(region: int) -> void:
+	if _region_complete[region] != 0:
+		return
+	var total := int(_region_totals[region])
+	if total <= 0:
+		return
+	var ratio := float(_region_clean_sums[region]) / float(total)
+	if ratio < float(REGION_CLEAN_THRESHOLDS[region]):
+		return
+	_region_complete[region] = 1
+	region_completed.emit(region)
+
+
+## Recompute the per-area sums from the mask itself.  Used after a reset or a
+## bulk fill, where the incremental updates do not apply.
+func _recompute_region_sums() -> void:
+	_region_clean_sums.resize(Region.COUNT)
+	_region_clean_sums.fill(0.0)
+	_region_polish_sums.resize(Region.COUNT)
+	_region_polish_sums.fill(0.0)
+	_region_complete.resize(Region.COUNT)
+	_region_complete.fill(0)
+	for region in range(Region.COUNT):
+		var list: PackedInt32Array = _region_pixels[region] if region < _region_pixels.size() else PackedInt32Array()
+		var clean_sum := 0.0
+		var polish_sum := 0.0
+		for pixel in list:
+			clean_sum += float(_mask_data[pixel * 4]) / 255.0
+			polish_sum += float(_mask_data[pixel * 4 + 1]) / 255.0
+		_region_clean_sums[region] = clean_sum
+		_region_polish_sums[region] = polish_sum
+	for region in range(Region.COUNT):
+		_check_region_complete(region)
+
+
+## One entry per anatomical area: how clean it is, how shiny, and whether it
+## has crossed its threshold.
+func region_coverage() -> Array:
+	var out: Array = []
+	for region in range(Region.COUNT):
+		var total := int(_region_totals[region]) if region < _region_totals.size() else 0
+		var polishable := int(_region_polishable[region]) if region < _region_polishable.size() else 0
+		var clean := 0.0
+		var polish := 0.0
+		if total > 0:
+			clean = float(_region_clean_sums[region]) / float(total)
+		if polishable > 0:
+			polish = float(_region_polish_sums[region]) / float(polishable)
+		out.append({
+			"id": region,
+			"name": String(REGION_NAMES[region]),
+			"clean": clean,
+			"polish": polish,
+			"texels": total,
+			"complete": int(_region_complete[region]) != 0,
+			"threshold": float(REGION_CLEAN_THRESHOLDS[region]),
+		})
+	return out
 
 
 func brush_world_radius(tool: String) -> float:
@@ -593,6 +935,7 @@ func reset_mask() -> void:
 		_mask_data[base] = 0
 		_mask_data[base + 1] = 0
 		_mask_data[base + 2] = 0
+	_recompute_region_sums()
 	_dirty = true
 	flush_texture()
 	mask_reset.emit()
@@ -613,16 +956,22 @@ func debug_fill(clean: float, polish: float) -> void:
 		_mask_data[pixel * 4 + 2] = 0
 		if zone == ZONE_COAT or zone == ZONE_LEG:
 			_mask_data[pixel * 4 + 1] = polish_byte
+	_recompute_region_sums()
 	_dirty = true
 	flush_texture()
 
 
 func find_uv_for_zone(zone: int) -> Vector2:
 	for pixel in range(MASK_SIZE * MASK_SIZE):
-		if int(_zone_map[pixel]) == zone:
-			var x := pixel % MASK_SIZE
-			var y := pixel / MASK_SIZE
-			return Vector2((float(x) + 0.5) / MASK_SIZE, (float(y) + 0.5) / MASK_SIZE)
+		if int(_zone_map[pixel]) != zone:
+			continue
+		# Skip texels that are not groomable, so a caller always gets a spot
+		# the brush can actually work on.
+		if _mask_data[pixel * 4 + 3] == 0:
+			continue
+		var x := pixel % MASK_SIZE
+		var y := pixel / MASK_SIZE
+		return Vector2((float(x) + 0.5) / MASK_SIZE, (float(y) + 0.5) / MASK_SIZE)
 	return Vector2(-1, -1)
 
 
@@ -635,6 +984,45 @@ func set_dirt_level(value: float) -> void:
 func set_mask_view(enabled: bool) -> void:
 	if material != null:
 		material.set_shader_parameter("mask_view", 1.0 if enabled else 0.0)
+	if enabled:
+		clear_tool_highlight()
+
+
+## Flash the body areas the given tool can work on.  Hoof picking is handled by
+## the session's mud clumps, so it clears any body glow instead of tinting the
+## hooves.
+func highlight_tool(tool: String, seconds := HIGHLIGHT_DURATION) -> bool:
+	if material == null:
+		return false
+	var mask := 0
+	match tool:
+		"curry", "dandy", "soft":
+			mask = (1 << ZONE_COAT) | (1 << ZONE_LEG)
+		"face":
+			mask = 1 << ZONE_FACE
+		"hoof":
+			mask = 0
+		_:
+			return false
+	material.set_shader_parameter("highlight_color", HIGHLIGHT_COLORS.get(tool, Color.WHITE))
+	material.set_shader_parameter("highlight_mask", mask)
+	material.set_shader_parameter("highlight_clean_soften", 1.0 if tool == "soft" else 0.0)
+	_highlight_duration = maxf(0.1, seconds)
+	_highlight_time = 0.0 if mask == 0 else _highlight_duration
+	material.set_shader_parameter("highlight_strength", 0.0)
+	return true
+
+
+func clear_tool_highlight() -> void:
+	_highlight_time = 0.0
+	if material != null:
+		material.set_shader_parameter("highlight_strength", 0.0)
+
+
+func get_highlight_mask() -> int:
+	if material == null:
+		return 0
+	return int(material.get_shader_parameter("highlight_mask"))
 
 
 func get_zone_counts() -> Dictionary:

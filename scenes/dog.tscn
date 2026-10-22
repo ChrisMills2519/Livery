@@ -1,0 +1,71 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="PackedScene" path="res://Models/chihuahua.glb" id="1_model"]
+[ext_resource type="Script" path="res://scripts/dog.gd" id="2_dog"]
+[ext_resource type="Script" path="res://scripts/dog_animator.gd" id="3_animator"]
+
+[sub_resource type="BoxShape3D" id="BoxShape_dog"]
+size = Vector3(0.16, 0.2, 0.34)
+
+[sub_resource type="CylinderMesh" id="Cylinder_bowl"]
+top_radius = 0.085
+bottom_radius = 0.055
+height = 0.05
+radial_segments = 16
+rings = 2
+
+[sub_resource type="StandardMaterial3D" id="Material_bowl"]
+albedo_color = Color(0.34, 0.17, 0.12, 1)
+roughness = 0.78
+
+[sub_resource type="CylinderMesh" id="Cylinder_food"]
+top_radius = 0.064
+bottom_radius = 0.064
+height = 0.012
+radial_segments = 16
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="Material_food"]
+albedo_color = Color(0.52, 0.34, 0.18, 1)
+roughness = 0.95
+
+[node name="Dog" type="Node3D"]
+
+[node name="Bowl" type="MeshInstance3D" parent="."]
+position = Vector3(1.15, 0.025, 0.6)
+mesh = SubResource("Cylinder_bowl")
+surface_material_override/0 = SubResource("Material_bowl")
+
+[node name="Food" type="MeshInstance3D" parent="."]
+position = Vector3(1.15, 0.045, 0.6)
+mesh = SubResource("Cylinder_food")
+surface_material_override/0 = SubResource("Material_food")
+
+[node name="BowlSpot" type="Marker3D" parent="."]
+position = Vector3(0.72, 0, 0.6)
+
+[node name="Body" type="CharacterBody3D" parent="."]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("2_dog")
+
+[node name="Collision" type="CollisionShape3D" parent="Body"]
+position = Vector3(0, 0.1, 0)
+shape = SubResource("BoxShape_dog")
+
+[node name="Model" parent="Body" instance=ExtResource("1_model")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="Animator" type="Node" parent="Body"]
+script = ExtResource("3_animator")
+
+[node name="PetPrompt" type="Label3D" parent="Body"]
+visible = false
+position = Vector3(0, 0.42, 0)
+pixel_size = 0.004
+billboard = 1
+no_depth_test = true
+text = "Q  ·  PET"
+font_size = 36
+outline_size = 8
+modulate = Color(1, 0.96, 0.82, 1)

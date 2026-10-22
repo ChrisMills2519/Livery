@@ -6,8 +6,9 @@ extends SceneTree
 ##     godot --path . --rendering-driver opengl3 --audio-driver Dummy \
 ##     --resolution 1280x720 --script res://tools/screenshot_grooming.gd
 ##
-## Output: artifacts/grooming_dirty.png, grooming_brushed.png,
-##         grooming_mask.png, grooming_clean.png, grooming_result.png
+## Output: artifacts/grooming_glow.png, grooming_face_glow.png, grooming_dirty.png,
+##         grooming_brushed.png, grooming_mask.png, grooming_clean.png,
+##         grooming_result.png
 
 var _world: Node3D
 var _horse: Node3D
@@ -46,9 +47,44 @@ func _process(_delta: float) -> bool:
 		return false
 	match _stage:
 		0:
-			if _frame < 40:
+			if _frame < 12:
+				return false
+			_save("grooming_glow")
+			_surface.call("clear_tool_highlight")
+			_stage = 8
+			_frame = 0
+		8:
+			if _frame < 20:
 				return false
 			_save("grooming_dirty")
+			# The face brush lights a much smaller area than the body tools,
+			# so it gets its own review shot.
+			_session.call("set_tool", 3)
+			_stage = 9
+			_frame = 0
+		9:
+			if _frame < 4:
+				return false
+			_save("grooming_face_glow")
+			_session.call("set_tool", 1)
+			_stage = 6
+			_frame = 0
+		6:
+			# Park the brush cursor over the barrel so a review shot exists for
+			# the on-horse ring and its valid/invalid tint.  The session's own
+			# per-frame cursor update would overwrite it, so pause it first.
+			if _frame < 4:
+				return false
+			_session.set_process(false)
+			_session.call("_update_cursor", Vector2(640, 380))
+			print("ring visible=", (_session.get("_ring") as Node3D).visible)
+			_stage = 7
+			_frame = 0
+		7:
+			if _frame < 4:
+				return false
+			_save("grooming_cursor")
+			_session.set_process(true)
 			_session.call("set_tool", 4)
 			_stage = 5
 			_frame = 0

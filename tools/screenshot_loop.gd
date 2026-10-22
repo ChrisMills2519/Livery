@@ -58,8 +58,8 @@ func _process(_delta: float) -> bool:
 				return false
 			_shot("round_hud")
 			_course.reset_round()
-			_review_cam.global_position = Vector3(-4.0, 12.0, 9.0)
-			_review_cam.look_at(Vector3(-26.0, 1.0, 0.0), Vector3.UP)
+			_review_cam.global_position = Vector3(10.0, 24.0, 48.0)
+			_review_cam.look_at(Vector3(-32.0, 1.0, 0.0), Vector3.UP)
 			_review_cam.current = true
 			_phase = 3
 			_frame = 0
@@ -76,14 +76,14 @@ func _process(_delta: float) -> bool:
 		4:
 			# Drop the horse over each fence to exercise the clear detection and
 			# produce a real result card.
-			if _frame % 3 == 1 and _clear_index < 3:
+			if _frame % 3 == 1 and _clear_index < _course.get_jump_count():
 				var jump: Dictionary = _course.get("_jumps")[_clear_index]
 				var centre: Vector3 = (jump["aabb"] as AABB).get_center()
 				_horse.global_position = Vector3(centre.x, 1.6, centre.z)
 				_horse.velocity = Vector3(0.0, 2.0, 0.0)
 				_horse.airborne = true
 				_clear_index += 1
-			if _frame < 14:
+			if _frame < 36:
 				return false
 			_shot("round_result")
 			_phase = 5

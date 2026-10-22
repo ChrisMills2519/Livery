@@ -1,7 +1,7 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/horse.gd" id="1_horse"]
-[ext_resource type="PackedScene" path="res://Models/horse_riggedgame_ready_clips.glb" id="2_model"]
+[ext_resource type="PackedScene" path="res://Models/horse2.glb" id="2_model"]
 [ext_resource type="AudioStream" path="res://assets/sounds/horse/grass.mp3" id="3_gallop"]
 [ext_resource type="AudioStream" path="res://assets/sounds/horse/neigh_zebra.ogg" id="4_neigh"]
 [ext_resource type="Script" path="res://scripts/animation_state_machine.gd" id="5_fsm"]
@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" path="res://Models/tack/horse_bridle.glb" id="8_bridle"]
 [ext_resource type="Script" path="res://scripts/stirrup_fit.gd" id="9_stirrup"]
 [ext_resource type="Script" path="res://scripts/groom_surface.gd" id="10_groom"]
+[ext_resource type="Script" path="res://scripts/footprint_emitter.gd" id="11_footprints"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(0.6, 1.4, 2.2)
@@ -22,7 +23,7 @@ shape = SubResource("BoxShape3D_body")
 position = Vector3(0, 0.7, 0)
 
 [node name="Model" parent="." instance=ExtResource("2_model")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0.1698)
 
 [node name="Tack" type="Node3D" parent="."]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
@@ -63,3 +64,8 @@ script = ExtResource("6_jump_pose")
 
 [node name="GroomSurface" type="Node" parent="."]
 script = ExtResource("10_groom")
+
+[node name="Footprints" type="Node" parent="."]
+script = ExtResource("11_footprints")
+print_size = Vector2(0.13, 0.16)
+bone_size_scales = PackedFloat32Array(1.0, 1.0, 0.92, 0.92)

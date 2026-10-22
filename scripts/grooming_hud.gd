@@ -14,11 +14,11 @@ const ACCENT := Color(0.72, 1.0, 0.62, 1.0)
 const WARM := Color(0.98, 0.82, 0.48, 1.0)
 
 const TOOLS := [
-	{"id": "curry", "name": "Curry comb", "key": "1", "desc": "Loosen dirt on the body with small circles."},
-	{"id": "dandy", "name": "Dandy brush", "key": "2", "desc": "Lift the loosened dirt off the coat and legs."},
-	{"id": "soft", "name": "Soft brush", "key": "3", "desc": "Polish a clean coat until it shines."},
-	{"id": "face", "name": "Face brush", "key": "4", "desc": "A gentle brush, just for the face."},
-	{"id": "hoof", "name": "Hoof pick", "key": "5", "desc": "Clear all four hooves."},
+	{"id": "curry", "name": "Curry comb", "key": "1", "desc": "Body and legs — loosen dirt in small circles."},
+	{"id": "dandy", "name": "Dandy brush", "key": "2", "desc": "Body and legs — lift the loosened dirt."},
+	{"id": "soft", "name": "Soft brush", "key": "3", "desc": "Clean coat and legs — polish for shine."},
+	{"id": "face", "name": "Face brush", "key": "4", "desc": "Head only — gentle strokes."},
+	{"id": "hoof", "name": "Hoof pick", "key": "5", "desc": "Muddy hooves — pick all four."},
 ]
 
 var _root: Control
@@ -39,6 +39,11 @@ var _toast_tween: Tween
 var _result_panel: PanelContainer
 var _result_title: Label
 var _result_body: Label
+var _area_panel: PanelContainer
+var _area_box: VBoxContainer
+var _area_names: Array = []
+var _area_values: Array = []
+var _areas_label: Label
 var _selected := 0
 var _mask_active := false
 var _finished := false
@@ -59,6 +64,7 @@ func _build() -> void:
 	_build_top()
 	_build_tools()
 	_build_buttons()
+	_build_areas()
 	_build_hints()
 	_build_legend()
 	_build_toast()
@@ -130,7 +136,7 @@ func _build_tools() -> void:
 		button.text = "%s   %s" % [info["key"], info["name"]]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.focus_mode = Control.FOCUS_NONE
-		button.custom_minimum_size = Vector2(0, 34)
+		button.custom_minimum_size = Vector2(0, 56 if Device.is_touch() else 34)
 		button.add_theme_font_size_override("font_size", 16)
 		button.add_theme_color_override("font_color", TEXT_COLOR)
 		button.add_theme_color_override("font_hover_color", ACCENT)
@@ -150,13 +156,13 @@ func _build_tools() -> void:
 
 func _build_buttons() -> void:
 	_done_button = Button.new()
-	_done_button.text = "DONE   Esc"
+	_done_button.text = Device.pick("DONE   Esc", "DONE")
 	_done_button.focus_mode = Control.FOCUS_NONE
 	_done_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_done_button.offset_left = -178
 	_done_button.offset_right = -24
 	_done_button.offset_top = 16
-	_done_button.offset_bottom = 52
+	_done_button.offset_bottom = 72 if Device.is_touch() else 52
 	_done_button.add_theme_font_size_override("font_size", 15)
 	_done_button.add_theme_color_override("font_color", TEXT_COLOR)
 	_done_button.add_theme_color_override("font_hover_color", ACCENT)
@@ -167,13 +173,13 @@ func _build_buttons() -> void:
 	_root.add_child(_done_button)
 
 	_mask_button = Button.new()
-	_mask_button.text = "MASK VIEW   Tab"
+	_mask_button.text = Device.pick("MASK VIEW   Tab", "MASK VIEW")
 	_mask_button.focus_mode = Control.FOCUS_NONE
 	_mask_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_mask_button.offset_left = -178
 	_mask_button.offset_right = -24
-	_mask_button.offset_top = 58
-	_mask_button.offset_bottom = 92
+	_mask_button.offset_top = 80 if Device.is_touch() else 58
+	_mask_button.offset_bottom = 136 if Device.is_touch() else 92
 	_mask_button.add_theme_font_size_override("font_size", 14)
 	_mask_button.add_theme_color_override("font_color", DIM_COLOR)
 	_mask_button.add_theme_color_override("font_hover_color", ACCENT)
@@ -184,8 +190,76 @@ func _build_buttons() -> void:
 	_root.add_child(_mask_button)
 
 
+## The per-area checklist.  It lives in the free space under the buttons, so
+## the player can see which parts of the horse are done while the glow shows
+## where the current brush works.
+func _build_areas() -> void:
+	_area_panel = PanelContainer.new()
+	_area_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_area_panel.offset_left = -214
+	_area_panel.offset_right = -24
+	_area_panel.offset_top = 100
+	_area_panel.offset_bottom = 300
+	_area_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_area_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.06, 0.09, 0.06, 0.80), Color(0.42, 0.62, 0.38, 0.55)))
+	_root.add_child(_area_panel)
+	_area_box = VBoxContainer.new()
+	_area_box.add_theme_constant_override("separation", 1)
+	_area_panel.add_child(_area_box)
+	_areas_label = _label(_area_box, "Areas  0 / 9", 13, DIM_COLOR)
+
+
+## Rebuild the rows when the number of areas changes, then refresh them.
+func _ensure_area_rows(count: int) -> void:
+	if _area_names.size() == count:
+		return
+	for child in _area_box.get_children():
+		if child == _areas_label:
+			continue
+		child.queue_free()
+	_area_names.clear()
+	_area_values.clear()
+	for i in range(count):
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		_area_box.add_child(row)
+		var name_label := _label(row, "", 13, DIM_COLOR)
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var value_label := _label(row, "", 13, DIM_COLOR)
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_area_names.append(name_label)
+		_area_values.append(value_label)
+
+
+## Refresh the checklist from the session's per-area state.
+func set_regions(states: Array) -> void:
+	if states.is_empty():
+		return
+	_ensure_area_rows(states.size())
+	var done := 0
+	for i in range(states.size()):
+		var entry = states[i]
+		if not (entry is Dictionary):
+			continue
+		var name_label: Label = _area_names[i]
+		var value_label: Label = _area_values[i]
+		name_label.text = String(entry.get("name", ""))
+		if bool(entry.get("complete", false)):
+			done += 1
+			name_label.add_theme_color_override("font_color", ACCENT)
+			value_label.text = "OK"
+			value_label.add_theme_color_override("font_color", ACCENT)
+		else:
+			name_label.add_theme_color_override("font_color", DIM_COLOR)
+			value_label.text = "%d%%" % int(round(float(entry.get("clean", 0.0)) * 100.0))
+			value_label.add_theme_color_override("font_color", DIM_COLOR)
+	if _areas_label != null:
+		_areas_label.text = "Areas  %d / %d" % [done, states.size()]
+
+
 func _build_hints() -> void:
-	var hints := _label(_root, "Left drag  brush   ·   Right drag  orbit   ·   Wheel  zoom   ·   1–5  tools   ·   Tab  mask   ·   Esc  done", 14, DIM_COLOR)
+	var hints := _label(_root, Device.pick("Left drag  brush   ·   Right drag  orbit   ·   Wheel  zoom   ·   1–5  tools (glow = area)   ·   Tab  mask   ·   Esc  done", "Drag brush   ·   Two-finger orbit   ·   Pinch zoom   ·   Tap tool   ·   Done"), 14, DIM_COLOR)
 	hints.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	hints.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	hints.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -264,6 +338,8 @@ func reset_for_session() -> void:
 	_title_label.add_theme_color_override("font_color", ACCENT)
 	_subtitle_label.text = "A calm routine — dirty to gleaming"
 	_toast_label.modulate.a = 0.0
+	if _areas_label != null:
+		_areas_label.text = "Areas  0 / 9"
 
 
 func set_tool(index: int) -> void:
@@ -296,13 +372,13 @@ func set_complete(complete: bool) -> void:
 		return
 	_title_label.text = "GROOMING · COMPLETE" if complete else "GROOMING"
 	_title_label.add_theme_color_override("font_color", WARM if complete else ACCENT)
-	_subtitle_label.text = "Ready when you are — press Esc to finish" if complete else "A calm routine — dirty to gleaming"
+	_subtitle_label.text = Device.pick("Ready when you are — press Esc to finish", "Ready when you are — tap Done to finish") if complete else "A calm routine — dirty to gleaming"
 
 
 func set_mask_active(enabled: bool) -> void:
 	_mask_active = enabled
 	_legend.visible = enabled
-	_mask_button.text = "MASK VIEW   ON" if enabled else "MASK VIEW   Tab"
+	_mask_button.text = "MASK VIEW   ON" if enabled else Device.pick("MASK VIEW   Tab", "MASK VIEW")
 
 
 func show_toast(text: String, seconds := 1.6) -> void:

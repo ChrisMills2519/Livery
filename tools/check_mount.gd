@@ -13,6 +13,7 @@ var _state := 0
 var _state_ms := 0
 var _start_ms := 0
 var _failures: Array[String] = []
+var _turn_yaw := 0.0
 
 
 func _initialize() -> void:
@@ -44,8 +45,17 @@ func _process(_delta: float) -> bool:
 				_state = 2
 				_state_ms = now
 		2:
-			if now - _state_ms >= 900:
+			if now - _state_ms >= 500:
 				_check_mounted("rest")
+				_turn_yaw = _player.rotation.y
+				# Headless cannot capture the mouse, so drive the look helper
+				# directly and let the horse turn in place toward it.
+				_player.call("_look", Vector2(400.0, 0.0))
+				_state = 21
+				_state_ms = now
+		21:
+			if now - _state_ms >= 500:
+				_check_mouse_turn()
 				Input.action_press("move_forward")
 				_state = 3
 				_state_ms = now
@@ -176,6 +186,27 @@ func _check_ride_pose(skel: Skeleton3D, label: String) -> void:
 			_fail("%s: %s points %.1f deg away from the riding pose" % [label, bone_name, angle])
 
 
+func _check_mouse_turn() -> void:
+	var yaw_delta := absf(wrapf(_player.rotation.y - _turn_yaw, -PI, PI))
+	var horse_fwd := -_horse.global_transform.basis.z
+	horse_fwd.y = 0.0
+	var rider_fwd := -_player.global_transform.basis.z
+	rider_fwd.y = 0.0
+	var heading_error := 0.0
+	if horse_fwd.length_squared() > 0.001 and rider_fwd.length_squared() > 0.001:
+		heading_error = rad_to_deg(horse_fwd.normalized().angle_to(rider_fwd.normalized()))
+	var speed := Vector2(_horse.velocity.x, _horse.velocity.z).length()
+	print("mouse turn: player_yaw=%.2f horse_heading_err=%.1f speed=%.2f" % [
+		yaw_delta, heading_error, speed
+	])
+	if yaw_delta < 0.5:
+		_fail("mouse look did not rotate the player (%.2f rad)" % yaw_delta)
+	if heading_error > 15.0:
+		_fail("stationary horse did not turn toward the mouse (%.1f deg off)" % heading_error)
+	if speed > 0.1:
+		_fail("horse turned in place but drifted (%.2f m/s)" % speed)
+
+
 func _check_dismount() -> void:
 	if _player == null or _horse == null:
 		return
@@ -198,6 +229,19 @@ func _check_dismount() -> void:
 		_fail("dismount: player is still inside the horse (%.3f m)" % horizontal)
 	if absf(_player.global_position.y) > 0.5:
 		_fail("dismount: player did not land on the ground (y=%.3f)" % _player.global_position.y)
+	var fsm := _horse.get_node_or_null("AnimStateMachine")
+	if fsm == null:
+		_fail("dismount: horse has no AnimStateMachine")
+		return
+	var horse_anim: String = fsm.player.current_animation if fsm.player != null else ""
+	print("dismount horse: state=%s anim=%s speed=%.2f" % [
+		fsm.current_state, horse_anim,
+		Vector2(_horse.velocity.x, _horse.velocity.z).length()
+	])
+	if fsm.current_state != "idle":
+		_fail("dismount: horse FSM is %s, expected idle" % fsm.current_state)
+	if horse_anim != "Idle":
+		_fail("dismount: horse is playing %s, expected Idle" % horse_anim)
 
 
 func _finish() -> void:

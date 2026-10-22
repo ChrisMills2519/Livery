@@ -65,6 +65,23 @@ func rebuild(skinned_vertices: PackedVector3Array) -> void:
 		_aabbs[t] = AABB(p0, Vector3.ZERO).expand(p1).expand(p2)
 
 
+## Byte mask (length triangle_count) marking every triangle whose posed AABB
+## comes within `radius` of `point` (skeleton-local space).
+##
+## Mirrored UVs and a packed coat atlas mean a UV-space stamp can land on a
+## part of the mesh that is physically far from the cursor.  This hands the
+## painter the set of triangles actually under the brush so it can reject a
+## texel that only belongs to a distant region.
+func triangles_within(point: Vector3, radius: float) -> PackedByteArray:
+	var allowed := PackedByteArray()
+	allowed.resize(triangle_count)
+	allowed.fill(0)
+	for t in range(triangle_count):
+		if _aabbs[t].grow(radius).has_point(point):
+			allowed[t] = 1
+	return allowed
+
+
 func pick(origin: Vector3, direction: Vector3) -> Dictionary:
 	if triangle_count == 0:
 		return {}

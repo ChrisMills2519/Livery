@@ -18,6 +18,12 @@ var best_round_time := 0.0
 var selected_character: PlayerModelProfile = null
 var auto_mount_on_start := false
 
+## Door handoff.  A scene door asks for a world position before the scene
+## change; the player in the new scene reads and clears it once.
+var _pending_spawn_position := Vector3.ZERO
+var _pending_spawn_yaw := 0.0
+var _has_pending_spawn := false
+
 
 func choose_character(profile: PlayerModelProfile, start_mounted := true) -> void:
 	selected_character = profile
@@ -30,6 +36,24 @@ func consume_auto_mount() -> bool:
 	var requested := auto_mount_on_start
 	auto_mount_on_start = false
 	return requested
+
+
+## Places the player at `position` and `yaw_degrees` in the next scene to load.
+func request_player_spawn(position: Vector3, yaw_degrees: float) -> void:
+	_pending_spawn_position = position
+	_pending_spawn_yaw = yaw_degrees
+	_has_pending_spawn = true
+
+
+## Reads and clears the one-shot door spawn.  Empty when no door was used.
+func consume_player_spawn() -> Dictionary:
+	if not _has_pending_spawn:
+		return {}
+	_has_pending_spawn = false
+	return {
+		"position": _pending_spawn_position,
+		"yaw_degrees": _pending_spawn_yaw,
+	}
 
 
 func add_money(amount: int) -> void:

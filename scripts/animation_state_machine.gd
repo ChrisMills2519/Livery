@@ -3,9 +3,8 @@ class_name AnimationStateMachine
 
 ## Drives an AnimationPlayer with named animation clips.
 ##
-## The horse GLB ships one clip per action, split from the original 60 second
-## take by tools/split_horse_animations.py. This node picks the gait clip from
-## the horse's speed and lets AnimationPlayer blend between clips.
+## The horse GLB ships one clip per action.  This node picks the gait clip
+## from the horse's speed and lets AnimationPlayer blend between clips.
 ##
 ## Gaits are picked from real ground speed, and the playback speed is matched to
 ## the clip's own cruise speed so a horse easing through a walk does not look
@@ -15,23 +14,26 @@ class_name AnimationStateMachine
 signal state_changed(from_state: String, to_state: String)
 
 @export_group("Clips")
-@export var idle_animation := "Idle_Look_A"
+@export var idle_animation := "Idle"
 @export var walk_animation := "Walk"
 @export var trot_animation := "Trot"
-@export var canter_animation := "Canter"
-## Optional one-shot. The current horse asset has no jump clip, so the horse's
+@export var canter_animation := "Run"
+## One-shot airborne clip. When present it owns the jump; otherwise the horse's
 ## JumpPose overlay supplies the airborne pose instead.
 @export var air_animation := "Jump"
 
 @export_group("Transition thresholds (metres per second)")
 @export var walk_threshold := 0.25
-@export var trot_threshold := 3.4
-@export var canter_threshold := 5.8
+@export var trot_threshold := 1.85
+@export var canter_threshold := 3.0
 
 @export_group("Gait cruise speeds (metres per second)")
-@export var walk_reference_speed := 2.5
-@export var trot_reference_speed := 4.5
-@export var canter_reference_speed := 7.2
+## Measured from the exported clips (tools/analyze_horse_clips.py): the hoof
+## travels this fast through the body during stance.  Playback is scaled by
+## speed / reference, so these must be the clip's real speed, not the horse's.
+@export var walk_reference_speed := 1.74
+@export var trot_reference_speed := 1.95
+@export var canter_reference_speed := 4.98
 
 @export_group("Playback")
 @export var match_playback_speed := true
@@ -131,6 +133,23 @@ func play_action(action_name: String) -> void:
 	_one_shot = action_name
 	player.speed_scale = 1.0
 	player.play(action_name, blend_time)
+
+
+## Forces the standing idle clip immediately, clearing any one-shot action.
+## Used when the rider dismounts so the horse does not have to coast through
+## every gait before it settles.
+func force_idle() -> void:
+	if player == null or not _anim_names.has("idle"):
+		return
+	_one_shot = ""
+	if airborne:
+		return
+	var from := current_state
+	current_state = "idle"
+	player.speed_scale = 1.0
+	player.play(_anim_names["idle"], blend_time)
+	if from != "idle":
+		state_changed.emit(from, "idle")
 
 
 func is_playing_action() -> bool:

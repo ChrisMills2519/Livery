@@ -261,4 +261,306 @@ All of today’s work is reflected in the fixed import settings, the renamed col
 - Regressions: `CHARACTER SELECT CHECK`, `MOUNT CHECK`, `TACK CHECK`, `RIDE LOOP CHECK`, `FENCE JUMP CHECK` and `CHECK EDITOR LOAD` pass. The character-select handoff check budget was widened from 5.5 s to 9 s because the synchronous main-world load now runs about six seconds on this machine; the assertions (mounted player, cleared fade, seat fit) are unchanged.
 - Limitations: the mask is 256×256 and the UV-shell boost trades exact brush footprint for usable coverage; the shader is intentionally unlit to match the imported horse art; mane/tail are not groomable; there are no gamepad bindings for the grooming camera/tools yet; the 5–6 s world load is still a hitch before the bay is available.
 
+## Stable boarding and a stationary horse
+
+2026-10-19
+
+- The riderless horse no longer trails the player.  `scripts/horse.gd` dropped `follow_distance` and `_follow_player()` for `_stand()`, which decelerates to a stop, so dismounting at speed still settles instead of leaving the horse sliding.  It waits where it is left.
+- To keep the horse retrievable, `scenes/stable.tscn` gained `scripts/stable.gd`: a prompt at the stall door (`HorseStall` at the building front, `UseAnchor` where the player stands) with `E · PUT HORSE AWAY`, `E · BRING HORSE OUT`, `BRING YOUR HORSE TO THE STABLE` when the horse is elsewhere, and `E · DISMOUNT TO USE THE STABLE` while mounted.  The stable uses `_input` and marks the event handled, so the player's own `interact` handler does not also mount or dismount on the same press.
+- `scripts/horse.gd` gained `board()` (hidden, physics and collision off, not mountable) and `release_from_stable(anchor)` (placed at the stall, visible and mountable again).  The player must bring the horse within 12 m of the yard to stable it; bringing it out always works.  `can_mount()` and `begin_grooming()` both refuse a boarded horse.
+- The horse gained `mount_prompt_suppressed`, set by the stable while its interaction is the live one, so the mount prompt and the stable prompt cannot overlap over one key.
+- Fixed the reins floating beside the horse: `Reins` sets `top_level = true`, and Godot's `top_level` preserves the global transform the node had at the call.  That transform was the player's spawn point, so every world-space rein vertex rendered offset by it.  `scripts/reins.gd` now clears the transform to identity after going top-level, and `tools/check_tack.gd` fails if the rein mesh ever carries a transform again.  The reins now visibly run bit to fist.
+- `scripts/hud.gd` reports `Your horse is stabled - press E at the stable door` while the horse is boarded, and the controls line mentions the stable.
+- `tools/check_stable.gd` (`STABLE CHECK: PASS`) covers the no-follow rule, the prompt copy, boarding, the hidden/unmountable stabled state, release at the stall, and the refusal to stable a horse left far away.  `tools/screenshot_stable.gd` renders `artifacts/stable_boarding.png`, `stable_boarded.png` and `stable_released.png`.
+- Regressions: `MOUNT CHECK`, `TACK CHECK`, `RIDE LOOP CHECK`, `FENCE JUMP CHECK`, `GROOMING CHECK`, `CHARACTER SWAP CHECK`, `CHARACTER SELECT CHECK`, `CHECK EDITOR LOAD` all pass.
+- Limitations: the horse is boarded from the stable only (there is no leading mechanic, so it is brought by riding); the stall door has no opening animation; the stable prompt is a floating `Label3D` rather than a 3D sign.
+
+## Leading the horse on foot
+
+2026-10-19
+
+- New `lead` action (`F`) in `project.godot`.  `scripts/player_controller.gd` gained `leading` and `_toggle_lead()`: on foot, `F` takes the rope if the horse is within 3.4 m, `F` again drops it, and mounting with `E` releases the rope first.  The flag clears itself if the horse stops being led (stabled, groomed, or the node disappears).
+- `scripts/horse.gd` gained `leader`, `can_lead()`, `set_leader()`, `clear_leader()` and `_lead()`.  A led horse walks to a shoulder offset beside the handler (`lead_offset` 0.95 m right, 1.15 m behind), stops inside 0.45 m, and turns to face the handler's heading so it is ready to walk on.  Speed scales with the gap up to `trot_speed`, so it keeps pace with a walking handler and closes a gap without breaking into a canter.  `board()` and `begin_grooming()` clear the lead.
+- The horse's prompt is now context sensitive: `E MOUNT / F LEAD`, `F LEAD` when only the rope is in range, or `E MOUNT / F RELEASE` while led.  The stable's prompt suppression still wins near the stall door.
+- `scripts/reins.gd` draws a single lead rope from the hand and bit on the side that needs the shorter line while leading, and hides it again when the lead is dropped.
+- `scripts/hud.gd` mentions `F lead` in the controls line and the on-foot objective.
+- Verification: `tools/check_lead.gd` (`LEAD CHECK: PASS`) covers taking and dropping the lead, the prompt copy, the horse following a walking handler and settling at the shoulder, stopping when the handler stops, the rope being drawn/hidden, the released horse staying put, mounting straight from the lead, and `F` doing nothing in the saddle.  `tools/check_stable.gd` now also covers leading the horse to the door and stabling it dropping the lead.  `tools/screenshot_lead.gd` renders `artifacts/lead_walking.png` and `lead_idle.png`.
+- Regressions: `MOUNT`, `TACK`, `STABLE`, `RIDE LOOP`, `FENCE JUMP`, `GROOMING`, `CHARACTER SWAP`, `CHARACTER SELECT` and `CHECK EDITOR LOAD` all pass.
+- Limitations: the handler's arm does not visibly grip the rope (the rope tracks the animated hand), there is no rope tension or pull-back, and a sprinting handler outruns the led horse.
+
+## Grooming visibility pass
+
+2026-10-19
+
+- The coat barely changed while brushing: `res/shaders/horse_groom.gdshader` mixed dirt only 40% toward a `dirt_color` that was almost the horse's own brown, and clean revealed as a 6% brighten, so a full groom moved the pixels a few percent. `dirt_strength` is now `0.85` with a cooler, darker grime (`0.30, 0.27, 0.21`), dirt darkens the base (`× (1 - 0.22·dirt)`) and uses a third low-frequency noise octave, curry now reads as a damp darkened coat (`mix` toward `colour * vec3(0.72, 0.70, 0.66)`), clean lifts `base * vec3(1.14, 1.09, 1.02)`, and the polished sheen is stronger with a broader fresnel (power 2). `resources/materials/horse_groom.tres` matches the new defaults.
+- The projected brush ring was a thin, coat-coloured torus, so it disappeared against the horse. `scripts/grooming_session.gd` now builds an always-on-top ring (`no_depth_test`, `render_priority 10`) with a translucent footprint disc child (radius `0.1`, so it matches `brush_world_radius` under the ring's scale). `_update_ring` tints both green when the active tool can paint the zone under the pointer and red when it cannot, offset `0.012` along the normal; the per-tool ring tint was removed from `_update_tool_visuals`.
+- `scripts/groom_surface.gd` gained a public `can_tool_paint(tool, zone)` wrapper so the cursor can read the zone rule.
+- Verification: `GROOMING CHECK: PASS`. `tools/screenshot_grooming.gd` gained a `grooming_cursor.png` stage (the session is paused so the ring is not overwritten before capture); re-rendered `grooming_dirty/brushed/clean` now show an unmistakable dirty → clean progression.
+- Limitations: a stronger dirt look means the horse reads as dirty anywhere in the world until groomed (intended, Cleanliness is a stat); the effect strength is still a single global `dirt_level` plus the local mask.
+
+## Grooming paint-bleed fix (Phase 1: world-space gate)
+
+2026-10-19
+
+- The coat UVs are mirrored left/right and the atlas packs belly, flank and croup into one shell, so a UV-space brush stamp bled onto a physically distant part of the horse (rubbing the belly also cleaned the hind). `scripts/groom_picker.gd` gained `triangles_within(point, radius)`, which returns a byte mask of every posed triangle whose AABB is within the brush's world radius of a skeleton-local hit point.
+- `scripts/groom_surface.gd` now bakes `_pixel_tris` during `_rasterise_mask`: up to `PIXEL_TRI_STRIDE` (4) candidate triangle ids per mask texel, covering the mirrored pair plus overlapping shells. `pick_ray` keeps the picker's raw `local_position` on the hit. `paint_hit` builds the allowed-triangle set for the stamp and passes it to `paint_uv`, which now rejects a texel unless at least one of its candidate triangles is under the brush (`_pixel_tri_allowed`). The 2.2× UV radius boost is kept for sparse shells, but the effective footprint is now the world radius, so the visible ring is truthful.
+- The gate removes the belly→hind bleed but cannot separate the mirrored left/right sides (they share texels by construction); that still needs the Phase 2 mesh re-unwrap.
+- Verification: `GROOMING CHECK: PASS`, including a new regression that stamps the same curry brush with and without the gate and asserts the gated set is a proper subset that only drops out-of-brush texels (it fails if the gate is disabled). `tools/screenshot_grooming.gd` re-rendered the dirty/brushed/clean/cursor shots; the coat progression and the ring still read clearly.
+- Limitations: left/right remains bilaterally symmetric until the horse is re-unwrapped; the gate costs one ~2.9k-triangle AABB scan per paint stamp (negligible next to the existing pick).
+
+## Grooming paint-bleed fix (Phase 2: split left/right UVs)
+
+2026-10-19
+
+- The Phase 1 gate could not separate the mirrored left/right coat because both sides share the same texels by construction. The horse model now carries a **second UV set** (`TEXCOORD_1`) built by `tools/add_groom_uv.py`: every triangle is assigned to the left or right side by its face-centroid X, then the side that fits in `[0, 1]` is scaled into `SIDE_SCALE = 0.49` and offset to `LEFT_OFFSET = 0.0` or `RIGHT_OFFSET = 0.51`. Left faces land in `u 0.0068..0.4853` and right faces in `u 0.5168..0.9953` (disjoint), 1457 faces each. `TEXCOORD_0` is untouched, so the coat texture is unchanged.
+- `scripts/groom_surface.gd` prefers `Mesh.ARRAY_TEX_UV2` for the groom mask and falls back to `ARRAY_TEX_UV` (`_groom_uv2`). `res/shaders/horse_groom.gdshader` gained `uniform float use_uv2` and samples the mask at `mix(UV, UV2, use_uv2)`, set from `_build_material`.
+- Two Godot-side traps had to be cleared. First, this machine's `godot --headless --import` (and `--headless --editor --quit`) no longer imports anything at all — the filesystem scan runs but no `.import`/`.scn` is ever produced — so the horse scene has to be built directly. `tools/force_import.gd` loads the GLB with `GLTFDocument`, packs it, and `ResourceSaver.save`s it to the `.import` remap path (plus the `.md5` sidecar). It also re-populates the skin bind names, which `GLTFDocument` leaves empty but the zone classifier needs.
+- Second, the glTF importer with `gltf/embedded_image_handling=1` (Extract) **rewrote the source `.glb`** during a scan and dropped `TEXCOORD_1` when it did. `Models/horse_riggedgame_ready_clips.glb.import` is now set to `gltf/embedded_image_handling=3` (Embed as Uncompressed) so the source is never rewritten.
+- Verification: `GROOMING CHECK: PASS`, including the new regressions that the mask uses the split set (`_groom_uv2`) and that grooming one side leaves the mirrored side unpainted; `MOUNT`, `TACK`, `CHARACTER SELECT` and `CHECK EDITOR LOAD` (`ALL OK`) also pass. `tools/screenshot_grooming.gd` re-rendered the dirty/brushed/mask/clean shots: the near side cleans while the far side stays dirty, with no midline bleed in mask view.
+- Limitations: halving the atlas means each side gets half the texels (the `MASK_SIZE = 256` mask is effectively ~0.48× density per side, so raise it if the brush edge looks coarse); and the broken headless importer means the horse `.scn` must be (re)built with `tools/force_import.gd` after any change to `Models/horse_riggedgame_ready_clips.glb`.
+
+## New 56-bone horse and matching gait speeds
+
+2026-10-20
+
+- Replaced `Models/horse_riggedgame_ready_clips.glb` with `Models/horse2.glb` in `scenes/horse.tscn`. The mesh, `TEXCOORD_0` and embedded coat texture are unchanged; the new model adds a 56-bone skeleton and 14 clips (`Death`, `Eating`, `Head_But`, `Idle`, `Kick`, `Rear`, `Rest_Pose`, `Run`, `Sleep`, `Trot`, `Turn_Left`, `Turn_Right`, `Walk`, `lay_to_idle`). `Model` keeps the existing mirror and gains the baked `+0.1698 m` local-Z offset so the hooves sit where the old mesh did.
+- Built the new `.scn` with the parameterized `tools/force_import.gd` because headless GLB import is still broken on this machine. It rebuilt 56 bones and 56 skin bind names; `Models/horse2.glb.import` uses `gltf/embedded_image_handling=3` so the source GLB is never rewritten and the split groom UV survives.
+- Updated the rig-facing code to the new names: `spine_3` seat with `spine_2` fallback, `head` for the bridle, `front_leg_foot_l/r` and `back_leg_toe_l/r` for hooves. `scripts/animation_state_machine.gd` now maps `Idle/Walk/Trot/Run`, and `scripts/horse.gd` uses the measured natural clip speeds: walk `1.74`, trot `1.95`, run `4.98` m/s. The FSM thresholds are `0.25 / 1.85 / 3.0` and its reference speeds match the clips.
+- No jump pose for now. The physical jump, air time and landing stay, and the gait clip continues in the air; `scripts/horse_jump_pose.gd` has `active := false` until the old Bip01 overlay is remapped onto the new skeleton.
+- Fixed the groom picker’s CPU skinning while validating the new rig. `Skin.get_bind_pose()` already stores the inverse bind matrix (it maps skeleton space back to bind space), so `rebuild_picker()` must apply it directly. The old `.affine_inverse()` produced geometry outside the mesh AABB and made the grooming ray miss the horse; the picker now rebuilds the real silhouette.
+- Grooming zones and hoof handling now recognise the new bone names; `tools/analyze_horse_clips.py` supports both rigs. `check_horse_animations`, `check_tack`, `check_jump_and_loop`, `check_lead` and `check_fence_jump` were updated for the new clip set; `check_lead` gives the slower horse 1.5 s to settle, and `check_fence_jump` sets the horse’s yaw so the test rides straight at the rails instead of drifting around them.
+- Also set the extracted tack textures to lossless (`compress/mode=0`) and reimported them, clearing the nine VRAM-compressed textures that `check_editor_load` flags on this no-VRAM machine.
+- Verification: `HORSE ANIMATION`, `TACK`, `GROOMING`, `MOUNT`, `LEAD`, `STABLE`, `RIDE LOOP`, `FENCE JUMP`, `EDITOR LOAD`, `CHARACTER SWAP`, `CHARACTER SELECT`, `PLAYER MODEL` and `TERRAIN BLEND` all pass. Re-rendered `artifacts/tack_*.png`, `grooming_*.png`, `lead_*.png` and `stable_*.png`; the new horse’s coat, saddle, bridle and reins align correctly.
+- Limitations: the jump overlay is still the disabled Bip01 animation; the old model and `.import` stay in the tree for rollback; and a walking handler can still outpace the led horse, whose lead speed is capped at the natural trot speed.
+
+## Stable dog with needs-driven behaviour
+
+2026-10-20
+
+- Added the chihuahua as a yard resident at `(-3.5, 0, -16.5)` in `scenes/dog.tscn`. The scene holds a decorative bowl and food, a `BowlSpot` marker, a `CharacterBody3D` body, the GLB model (rotated 180° so its eyes face the body's `-Z` forward), the animator and a `Q · PET` prompt. The body is on collision layer 2 / mask 1, so the dog collides with the world but never blocks the player or horse; the bowl and food are visual only.
+- `scripts/dog.gd` is a needs-driven FSM: `IDLE`, `ALERT`, `GREET`, `WANDER`, `FOLLOW`, `RETURN`, `SIT`, `LIE`, `SLEEP`, `EAT`, `PET`, `SHAKE`. Hunger, energy, affection and boredom tick every frame; hunger drives eating, low energy lies the dog down and then sleeps, boredom starts wandering, and the player arriving within 7 m triggers a one-off alert and greet. On foot the dog follows inside 8 m, sits 2.5 s after the player stops, and returns home when the player mounts or the 22 m leash is exceeded. Petting with `Q` within 1.6 m plays `TailWag`, raises affection and clears a little boredom.
+- `scripts/dog_animator.gd` maps the 19 in-place chihuahua clips onto poses and gaits: `Idle`, `Idle_Alert`, `Walk`, `Trot`, `Run`, `Sit`, `Eat`, `Sleep`, `Rest_Pose` loop, while `Lie` and `Shake` are one-shots. Locomotion picks `Walk`/`Trot`/`Run` by speed and scales playback against the 0.9 / 2.2 / 4.8 m/s reference speeds, clamped to 0.75–1.4×.
+- Integration: `scenes/main.tscn` instances the dog, `project.godot` gains the `pet` action on `Q`, and the HUD controls line now lists `Q pet`. `tools/check_editor_load.gd` includes `dog.tscn`.
+- Verification: `tools/check_dog.gd` (`DOG CHECK: PASS`) covers the model height and home, prompt visibility, petting and affection, following and sitting, hunger-driven eating, lying down and sleeping with energy recovery, wandering near home, and the leash return. `EDITOR LOAD`, `MOUNT`, `LEAD`, `STABLE`, `GROOMING`, `RIDE LOOP`, `FENCE JUMP`, `CHARACTER SWAP`, `CHARACTER SELECT`, `PLAYER MODEL`, `TERRAIN BLEND`, `TACK` and `HORSE ANIMATION` all pass after the change.
+- Limitations: needs reset every session (no save), the dog has no commands, fetch or audio yet (the `Bark` and `Howl` clips are unused), and screenshot capture was skipped because the full scene OOMs at 720p on this 2.7 GB machine.
+
+## Grooming finish and chihuahua clip build
+
+2026-10-20
+
+- Grooming: the "horse still looks clean" report was not a dirt-level bug. The mask view showed the brushed band clean and the head and legs dirty, so the state was correct; the dirt colour itself read as pale sandy tan. `dirt_color` is now a darker grime `(0.16, 0.13, 0.10)` in both `res/shaders/horse_groom.gdshader` and `resources/materials/horse_groom.tres`, so dirty legs and head read as dirty in the normal view.
+- Grooming: removed the diagnostic prints from `tools/screenshot_grooming_ui.gd`. `debug_areas.gd` was already gone. The zone map, tool-change glow, the "Areas n / 9" panel and the Rest_Pose freeze/restore are covered by `GROOMING CHECK: PASS`.
+- Import crash path: eight tack textures under `Models/tack/textures/` (Leather030/039 Color, Displacement, NormalGL, Roughness) were back on `compress/mode=2`, and six imports had `detect_3d/compress_to=1`. All are now lossless and `compress_to=0`, per the checklist above.
+- Chihuahua: `tools/build_chihuahua.py` now builds Lie and Sleep from Death frame 35 (`DEATH_LIE_FRAME`), with ground clipping and linear keys on every generated clip. The docstring points at `artifacts/` instead of `/tmp/opencode`. `Models/chihuahua.glb` (19 clips, 49 joints, 7.7 MB) is exported.
+- Verification: `GROOMING CHECK`, `HORSE ANIMATION`, `TACK`, `MOUNT`, `LEAD`, `STABLE`, `RIDE LOOP` and `FENCE JUMP` all pass, and `CHECK EDITOR LOAD` prints `ALL OK`. `CHIHUAHUA ANIMATION CHECK: PASS` (lengths match, loop wrap < 1e-4, 49 bones, 0.225 m height).
+- Limitations: the chihuahua Lie transition (around frame 18) flips the body up and back before it settles, so it reads as a fall more than a lie-down. The build logged measured foot speeds of 0.087 / 0.171 / 0.254 m/s for Walk / Trot / Run, far below the 0.9 / 2.2 / 4.8 m/s references in `dog_animator.gd`, so in-game foot slide is likely. `check_chihuahua_animations.gd` computes `loop_ok` but does not assert it; the looping is set at runtime in `dog_animator.gd`. Full-scene grooming screenshots still OOM on this machine; the lean 960×540 render is the only one that runs.
+
+## Dog interest model and movement state-machine review
+
+2026-10-20
+
+- The dog no longer shadows the player. `scripts/dog.gd` builds an `_interest` value (0 to 1) while the player walks within 8 m and lets it fade otherwise. It follows only above `interest_threshold` (0.6), and standing players never pull it along. A chase ends after `follow_max_time` (14 s) or when interest drops below 0.05, then the dog waits a random 25 to 50 s before it chases again.
+- A dog already following does not greet the player again. The greeting itself happens on about 60% of arrivals (`greet_chance`). After a greeting or a pet the dog sits or goes back to its own business, following only if interest is high.
+- Idle dogs sometimes sit (25%), sniff within `sniff_radius` (2 m) of their spot (30%), or roam the yard (45%), with longer pauses after a sniff.
+- Player speed is measured from position changes (`_measure_player`), so the dog no longer depends on the player's physics velocity.
+- Debug hooks `debug_set_interest` and `debug_set_follow_elapsed` were added for the checks.
+- `tools/check_dog.gd` now proves that a standing player is ignored, a walking player is followed, a chase expires into a cooldown, and the dog does not restart the chase straight away. The stage numbering was extended from 9 to 11.
+- Verification: `DOG CHECK: PASS`, plus `MOUNT`, `LEAD`, `STABLE`, `GROOMING` and `CHECK EDITOR LOAD` (`ALL OK`), all exit 0.
+
+State-machine review (no defects found in the horse or player code):
+- Horse: riderless `_stand`, ridden `_ride` (walk / trot / canter from input and a hold timer), and led `_lead` (walks to a shoulder offset). Gait clips come from `animation_state_machine.gd` by speed, with measured reference speeds (1.74 / 1.95 / 4.98 m/s).
+- Player: mounted (position driven by the horse), leading, and on foot, with idle / walk / run / air / land locomotion.
+- Dog: IDLE, ALERT, GREET, WANDER, FOLLOW, RETURN, SIT, LIE, SLEEP, EAT, PET, SHAKE, driven by needs and by the interest model above.
+- Open: the dog's animator reference speeds (0.9 / 2.2 / 4.8 m/s) are hand-picked, not measured like the horse's; the chihuahua build logged much lower clip speeds, so foot slide is likely in game.
+
+## Dog gait measurement (foot slide, open)
+
+2026-10-20
+
+- Measured the chihuahua gait clips in `artifacts/chihuahua_build.blend` (body frame, foot tips, contact at z < 0.012 m):
+  - Walk (0.97 s cycle): median stance slide 0.15 m/s; stance runs travel about 3 cm.
+  - Trot (0.67 s): median stance slide 0.24 m/s; stance runs travel about 3 cm.
+  - Run (0.47 s): median stance slide 0.39 m/s, from only 5 samples; feet are off the ground for most of the cycle.
+- `dog.gd` moves the dog at walk 1.0, trot 2.8 and run 5.2 m/s. The clips' implied speeds are far lower, so the feet will slide in game. The swings are small (the gait is derived from the walk by scaling about 1.1 to 1.35x), so they read as marching rather than a stride.
+- Fixing this means re-authoring the gaits with larger leg swings and a stride that matches a realistic speed for a 0.34 m dog, then retuning the dog's speeds to match. It needs visual review in the contact sheets, so it is not finished.
+
+- Tried re-authoring by amplifying the leg swing (Trot `amp_legs` 1.08 to 2.6, Run 1.35 to 3.0). Trot and Run feet then left the ground for most of the cycle (contact 5 to 19%), so they hop rather than stride, and the body-frame stance travel barely changed (about 2 to 3 cm). Reverted; the shipped amplitudes stay, and `CHIHUAHUA ANIMATION CHECK` passes on the rebuilt GLB.
+- Next step for this item: re-author Walk, Trot and Run from a stride-based design (pose keys for a real swing and stance phase), not by scaling the existing swing, then set `dog.gd` speeds and `dog_animator.gd` reference speeds from the measured stance travel.
+
+## Stable rebuilt as a five-bay horse stable
+
+2026-10-21
+
+- Replaced the fantasy house in `scenes/stable.tscn` with `Models/horse_stable_animal.glb`, a 3.25 × 3.31 × 7.45 m open-front stable with five bays along its long side. The asset is authored Y-up in centimetres, so it sits at scale 1; it is scaled 1.2 and rotated -90° about Y so the five bays face south into the yard. Footprint is now 8.94 m (X) × 3.9 m (Z) at `(-7, 0, -25)`.
+- The old 9.4 × 4.98 × 6.66 m box collider became an 8.94 × 3.97 × 3.9 m box at y ≈ 1.99. The model's low front wall keeps the player out of the bays without an invisible wall.
+- `HorseStall` moved to `(-7, 0, -21.9)` (just outside the centre bay) and `UseAnchor` to `(-7, 0, -20.3)`, so boarding/release still works and the released horse clears the collider. `scripts/stable.gd` and `tools/check_stable.gd` needed no logic changes.
+- Added `scenes/stable_horse.tscn` + `scripts/stable_horse.gd`, four decorative horses from `horse2.glb` standing in the four outer bays at x ≈ -10.48, -8.74, -5.26 and -3.52, facing the yard. The centre bay is left empty for the player's horse. The script freezes each imported `AnimationPlayer` on a `Rest_Pose` frame, and the horses have no `horse` group or `CharacterBody3D`, so the singleton horse lookups used by the player, stable, grooming, HUD, dog and reins are unaffected.
+- Verification: `STABLE CHECK: PASS`, `CHECK EDITOR LOAD: ALL OK`, and `tools/screenshot_stable.gd` re-rendered `artifacts/stable_boarding.png`, `stable_boarded.png`, `stable_released.png`; `tools/screenshot_scene.gd` re-rendered the yard/overview shots. The four static horses read clearly over the low front wall.
+- Limitations: the static horses are decorative only; several *interactive* horses would need the `get_first_node_in_group("horse")` singletons in `player_controller.gd`, `stable.gd`, `grooming_*.gd`, `hud.gd`, `dog.gd`, `reins.gd` and `riding_course.gd` refactored to target a chosen horse.
+
+## Larger show-jumping arena and an eight-fence course
+
+2026-10-21
+
+- Tripled the arena area from 20 × 40 m to **35 × 70 m** (2,450 m², 3.06×), keeping the east rail at `x = -15` and the existing gate at `(-15, -1.5)` so the stable yard, path and training ground still line up. The arena is now `x = -50 … -15`, `z = -35 … 35`.
+- Extended `tools/build_scenery.gd` to generate `scenes/arena_fence.tscn` from the fence module's measured length. It writes 12 modules per short side and 23 per long side, skips the two east modules at the gate, and builds north/south/west/east collision boxes with the east one split around the gate. West/east modules are yawed 90°. Re-running the tool now regenerates the rail instead of leaving it hand-authored.
+- Re-spaced the course into **eight numbered fences** with 7–9 m clearance from the outer rail: a serpentine loop at `(-22,-1.5)`, `(-31,-12)`, `(-42,-20)`, `(-33,-27)`, `(-23,-22)`, `(-26,3)`, `(-39,12)` and `(-43,26)`. The four cavaletti moved to a trot-pole line at `x = -44.5`; the three marker boxes were repositioned out of the riding lines.
+- Moved the west tree belt from `x ≈ -50…-54` to `x ≈ -56…-61` and the `ArenaEdge` plants to `x ≈ -53…-54`, so nothing stands inside the larger arena.
+- Grew the painted arena layer in `tools/build_ground_control.py` to centre `(-32.5, 0)`, half-size `(17.5, 35)`, and regenerated `terrain_control.png`. The 128 m control map still covers the new west edge.
+- Updated `scripts/riding_course.gd` (`ARENA_MIN/MAX`), `tools/verify_scenery.gd` (arena course now 23 props), `tools/check_jump_and_loop.gd` (expects and clears all eight fences), and the arena cameras in `screenshot_scene.gd`, `screenshot_terrain.gd` and `screenshot_loop.gd`.
+- Verification: `VERIFY SCENERY: PASS` (arena_course 23 props, 573,984 total tris), `TERRAIN BLEND CHECK: PASS`, `RIDE LOOP CHECK: PASS` (8/8 fences, +£204, jumping 4.0), `FENCE JUMP CHECK: PASS`, `CHECK EDITOR LOAD: ALL OK`. `artifacts/arena_course.png` was re-rendered and inspected; the arena is clearly larger, the jumps are clear of the rail, and the gate remains open.
+- Limitation: all eight fences share the same rail orientation (across X); rotating a fence 90° would need the clear-detection check to test the fence's local axes instead of the world AABB.
+
+## Physics knock-down jumps and training area polish
+
+2026-10-21
+
+- Replaced the static monolithic fence obstacles with **modular dynamic physics jump obstacles** (`scenes/jump_obstacle.tscn`, `scripts/jump_obstacle.gd`). Each obstacle features left and right standards (`07_HalfBarrier1.glb` / `09_HalfBarrier2.glb`), official red (right) and white (left) flags, height cups, and a physical `RigidBody3D` striped pole (`13_Pole.glb`).
+- **Dynamic Physics Knockdown**: Poles rest stably on cups (`freeze = true`) until an under-cleared jump or chest impact occurs, which unfreezes the pole, applies kinetic impulse based on the horse's approach velocity, knocks it down to the sand, and triggers an authentic wooden clatter audio effect.
+- **Graduated Course Progression**: The 8 numbered fences now feature progressive height classes:
+  - Fence 1: Intro (0.60m)
+  - Fences 2, 3, 5: Novice (0.85m)
+  - Fences 4, 6, 7: Intermediate (1.05m)
+  - Fence 8: Grand Prix (1.25m)
+- Added an **Interactive Practice Jump** in the schooling area where the player can walk up on foot and press `E` to cycle heights (Intro 0.60m -> Novice 0.85m -> Intermediate 1.05m -> Grand Prix 1.25m) or press `R` to reset knocked poles.
+- **Realistic Horse Jumping & Bascule**:
+  - Re-mapped `scripts/horse_jump_pose.gd` onto the 56-bone skeleton (`horse2.glb`) and re-enabled the procedural jump posture overlay (`active = true`), delivering arched back, tucked front legs, and trailing hind limbs across takeoff, apex, and descent.
+  - Increased `jump_training_bonus` to `0.15` in `scripts/horse.gd` so trained horses jump visibly higher and clear Grand Prix fences with ease.
+- **FEI Faults & Scoring**:
+  - `scripts/riding_course.gd` tracks knockdowns as 4 faults each.
+  - Clear round detection: clearing all fences with 0 faults triggers a "★ CLEAR ROUND! ★" notification and a +£50 bonus purse.
+  - HUD displays live faults counter during rounds and detailed summary on the result card.
+- **Verification**:
+  - `KNOCKDOWN CHECK: PASS` (`tools/check_knockdown.gd` tests initial height, height switching, 4-fault knockdown impulse/audio, reset, and clearance).
+  - `FENCE JUMP CHECK: PASS` (verifies horse is stopped on foot approach and clears when jumping).
+  - `RIDE LOOP CHECK: PASS` (completes full 8-fence course loop and reset).
+  - `HORSE ANIMATION CHECK: PASS` (14 clips validated, FSM idle).
+  - `CHECK EDITOR LOAD: ALL OK` (zero VRAM compression warnings, all scenes and scripts compile).
+
+## Jump obstacle repair: split-asset offsets and real knockdowns
+
+2026-10-21
+
+- Found that the modular jump built from the `show_jumping` split GLBs was assembled in the wrong coordinate space. Each split `.glb` retains its position inside the original Blender layout, so used raw at the obstacle origin they landed metres away from where the scene expected them. The pole was 1.76 m above the cup height, both standards overlapped around x = -3, the white flag sat at x = -6.2, and the cups were empty. The resulting obstacle AABB was 6.6 m wide and centred ~3 m left / 1.6 m behind the node, which also offset the generated collision and fence number.
+- `scenes/jump_obstacle.tscn` now re-centres every split piece on the obstacle origin: standards at x = ±1.5, flags at ±1.5, cups (11/12 Holder) added under `Cups` at ±1.5, and `13_Pole` offset by (+2.97, -1.76) so the physical body at `y = h` really is the cup height. The pole collision is 3.0 × 0.12 × 0.12. Wing colliders moved to ±1.5.
+- The obstacle is now the solid fence: the frozen pole blocks a ground approach, unfreezes and tumbles on impact, and a downed rail can be ridden through. `riding_course._build_jumps()` no longer creates the old invisible 0.9 m box (or a second number label) for physics obstacles.
+- Knock detection only reacts to the `horse` group and ignores a horse whose body is already above the rail; clear detection only fires when the horse is airborne and its root is above the rail. The clear Area is 4 m tall so the horse's body actually passes through it at jump height instead of flying over a rail-height slab.
+- `R` now resets every rail during a round as well as between rounds. Course fences are no longer height-adjustable; only `PracticeJump` has `allow_player_adjust = true`. Knockdown toasts use the correct fence number.
+- Re-centred the four cavaletti (`00_Barrier1` is offset ~3 m in X / 1.4 m in Z) and the three marker boxes in `scenes/arena_course.tscn`.
+- Replaced the `blocky.mp3` gallop sample with a synthesised `assets/sounds/horse/wood_clatter.wav`.
+- Extended `tools/check_knockdown.gd` with geometry assertions (pole centred at cup height, 3 m wide, standards at ±1.5, not player-adjustable) and fixed it to run only once. `tools/check_fence_jump.gd` resets the rail between its ground approach and jump attempt. `tools/check_editor_load.gd` now only flags texture imports for VRAM compression (audio importers use the same key).
+- Verification: `KNOCKDOWN CHECK: PASS`, `FENCE JUMP CHECK: PASS`, `RIDE LOOP CHECK: PASS`, `CHECK EDITOR LOAD: ALL OK`. Re-rendered `artifacts/arena_training_overview.png`, `jump_obstacle_intact.png`, `jump_obstacle_knocked.png` and `practice_jump_prompt.png`; the intact and knocked frames now differ, and the jumps read as proper standards with a striped pole resting on cups.
+- Open: the course is still eight identical verticals plus a cavaletti line and one adjustable practice jump; there is no cross-rail or one-stride combination yet. Flags are small single-sided planes and the cup holders are barely visible at gameplay distance.
+
+## Fences launch on impact and no longer stop the horse dead
+
+2026-10-21
+
+- `scripts/jump_obstacle.gd` now throws a struck rail clear of the horse instead of dropping it at the cups. The launch is the horse's approach direction plus a base shove, with an upward component and an end-over-end tumble; the tunables are exported as `knock_launch_up` (4.2 m/s), `knock_launch_speed_scale` (0.9), `knock_launch_base` (1.6 m/s) and `knock_spin` (8 rad/s). Launch velocity is set directly after unfreezing so it takes effect on the same frame.
+- The flying rail no longer acts as a wall. `knock_down()` adds a collision exception between the pole and the striking horse, and `reset_jump()` removes it and restores the rest transform. The horse therefore rides on through the gap instead of stopping dead; `scripts/horse.gd` adds `apply_fence_impact()` to shed 15% of ride speed on the hit without killing momentum.
+- `tools/check_knockdown.gd` now asserts the pole gains upward and forward velocity and tumbles. `tools/check_fence_jump.gd` now expects the ground approach to knock the rail (4 faults) and carry on past the fence; the jumping clearance half is unchanged.
+- Verification: `KNOCKDOWN CHECK: PASS`, `FENCE JUMP CHECK: PASS` (ground approach z reaches 1.11 past the fence at z=-1.5 with 4 faults; the jumped approach still clears), `RIDE LOOP CHECK: PASS`, `CHECK EDITOR LOAD: ALL OK`. Re-rendered `artifacts/jump_obstacle_knocked.png`; the rail is visibly airborne rather than lying on the sand.
+
+## Training arena course redesign with physical number blocks
+
+2026-10-21
+
+- Re-laid the eight-fence course into a compact loop around `(-21…-42, -22…27)` with progressive heights from Intro to Grand Prix and quarter-turn fences at the corners. The practice jump moved inside the loop to `(-32, 4)`, and the four cavaletti now form a trot-pole line at `x = -34`.
+- Removed the three marker boxes from `ArenaJumps`; the arena course is down to 21 instanced props.
+- `scripts/jump_obstacle.gd` now spawns a physical wooden number block beside every numbered fence, using `No_1_Box` through `No_9_Box` (plus `No_10` as a spare). The blocks are scaled 1.8, recentred from their baked GLB offsets, and grounded at `y = 0`. They sit on the red/right side and face the approach, with no collision body.
+- Floating fence numbers are hidden. The existing `NumberLabel` is now used only to show a green `CLEAR` after the fence is jumped, then hidden again on reset.
+- `scripts/riding_course.gd` excludes the `NumberBlock` subtree from the fence AABB, so the physical marker cannot shift the jump centre or clear detection.
+- `tools/build_scenery.gd` no longer regenerates `arena_course.tscn`; the course is hand-authored. `tools/verify_scenery.gd` expects 21 arena props and skips the jump obstacle's dynamic rail when checking ground contact.
+- `tools/check_jump_and_loop.gd` now asserts every course jump and the practice jump has a grounded number block, floating numbers stay hidden before clearing, and each cleared fence shows `CLEAR`.
+- Verification: `CHECK EDITOR LOAD: ALL OK`, `VERIFY SCENERY: PASS` (arena 21 props), `KNOCKDOWN CHECK: PASS`, `FENCE JUMP CHECK: PASS`, `RIDE LOOP CHECK: PASS`. Re-rendered the arena overview, intact/knocked jump and practice-jump screenshots; the blocks are readable from the approach and sit clear of the standards.
+
+## Touch controls for tablets, with a touch-first rule
+
+2026-10-21
+
+- Added two autoloads. `scripts/device.gd` (`Device`) decides keyboard vs touch: F3 in debug builds, then `GROOM_TOUCH=1/0`, then the touchscreen or mobile feature. Prompt text goes through `Device.pick(keyboard, touch)`, so the keyboard strings are unchanged. `scripts/touch_controls.gd` (`TouchControls`) is a CanvasLayer at layer 30 that tracks every finger itself, because Godot's touch-to-mouse emulation only follows the first finger.
+- Ride: a floating left-thumb stick walks the player and the horse with analog speed. Pushing past 80% of the radius holds `run` and releasing below 70% drops it. A right-half drag adds to the same look path as the mouse, and mounted steering reads the same move input. The bottom-right cluster has a CONTEXT button, JUMP, LEAD and RESET. CONTEXT shows what the nearest interaction will do: `GROOM` > `PET` > `HORSE OUT` / `PUT AWAY` > `RAISE` > `MOUNT` / `DISMOUNT`. Gameplay nodes describe themselves in the `touch_context` group.
+- Keyboard and mouse stay live in touch mode. Pointer lock is skipped when touch is on, so the cursor stays visible.
+- Character select: a swipe spins the turntable, and the hint reads "Swipe turn · tap a rider · tap Ride out".
+- Grooming: one finger paints, two fingers orbit, and spreading them pinches the camera in. Mouse paint and orbit are ignored in touch mode. The tool row, MASK and DONE are 56 px high in touch mode.
+- Project: 1280x720 base viewport, sensor-landscape orientation, and explicit `emulate_mouse_from_touch=true`.
+- Verification: `tools/check_touch.gd` runs 27 headless assertions (prompts, stick, run hysteresis, look, CONTEXT mount, grooming gestures, select swipe, keyboard still live). It passes. `tools/screenshot_touch.gd` renders ride, groom and select views.
+- Not verified on a real tablet: thumb feel, latency, and multitouch with real hardware. Button hit areas and the stick radius are first guesses.
+
+## Web build on Netlify, for testing on the iPad
+
+2026-10-22
+
+- Added a `Web` export preset to `export_presets.cfg`. It is single-threaded, so the host does not need COOP/COEP headers.
+- Added `netlify.toml` with `publish = "build/web"`, `application/wasm` for the engine binary and a one-hour cache on the pack.
+- `Device` now reads `?touch=1` / `?touch=0` from the web build's URL, between the debug F3 toggle and the `GROOM_TOUCH` environment override. `tools/check_touch.gd` covers the parser: `?touch=1` forces touch, `?touch=0` forces keyboard, and anything else is ignored.
+- Deployed to <https://groom-769.netlify.app>. The export is about 250 MB, so the first tablet load is slow.
+- Verification: the live page, script, wasm and pack all answer 200 with the right content types, and the served pack is byte-identical to the local export (head and tail checksums). The engine starts and then reports the missing WebGL2 in this machine's Chromium, which has no GPU, so rendering was not verified here.
+
+## The dog faces the way it walks
+
+2026-10-22
+
+- At heel the dog moves by matching the player's velocity instead of steering at a point, and that branch never set a heading, so it trotted alongside the player while still facing wherever it had been. It now turns toward the travel direction, the same way every other moving state does through `_steer_to`.
+- `tools/check_dog.gd` gained a heel case: the dog starts facing away from the player's path, the player walks past, and the test asserts the dog both keeps up and ends up facing that direction. It reports `dot 0.38` without the fix and passes with it.
+
+## The arena only starts a round when you ask for one
+
+2026-10-22
+
+- `riding_course.gd` no longer starts a round on entry. The old trigger fired on the gate radius and on being anywhere inside the arena rectangle, so riding in to look at the fences began a timed round. Both checks are gone, and the gate's green beam and `SCHOOLING ROUND` sign are removed with them.
+- A round now starts on the first fence cleared: the obstacle's own `jump_cleared` runs `_start_if_idle()` before the fence is counted, so the clock begins at that fence. The practice jump opens a round too but is not one of the eight.
+- Leaving the training area cancels a running round: `reset_round()` with no result, no money and no training, plus a notice. `TRAINING_MIN` / `TRAINING_MAX` hold the bounds.
+- HUD objective while idle reads "Jump a fence to start a round"; the result card says "Clear a fence to go again".
+- `_clear_jump` ignores fences cleared while the result card is up, so a stray jump cannot push the finished round's count past eight.
+- `tools/check_jump_and_loop.gd` covers it: mounted inside the arena does not start a round, clearing fence 1 starts it and counts it, riding outside cancels it with the money unchanged, the practice jump opens a round without counting, and the eight-fence clear, reward and reset still pass.
+
+## A farmhouse to come home to
+
+2026-10-22
+
+- New standalone scene `scenes/farmhouse.tscn`, generated by `tools/build_farmhouse.gd`. Two storeys: sitting room, kitchen, hall, study and boot room downstairs; main bedroom, second bedroom, bathroom, landing and gallery upstairs. Interior footprint 11 x 9 m, 2.6 m ceilings, 0.3 m exterior walls.
+- The plan lives in tables at the top of the generator: `WINDOWS`, `DOORS`, `STAIRS`, the room rectangles and the `PROP` placements. Wall openings, casing, glass, sills and leaves are all derived from the same tables, so a moved window cannot leave a hole in the wrong place.
+- The stair is 15 risers over 3.2 m with a hidden ramp collider, because the player controller has no step-up logic; the visible treads, risers, stringers, handrail and the first-floor balustrade around the stairwell are meshes only.
+- Furniture is Kenney's CC0 Furniture Kit (140 GLBs in `Models/interior/kenney_furniture_kit/`) plus Poly Haven plaster and oak floor textures. Every prop is measured from its own AABB, centred on its footprint and dropped onto the floor, so the kit's offset pivots cannot leave a chair floating. Provenance is in `Models/interior/SOURCE.txt`.
+- The kit's upholstery is a fixed pastel pink; the generator recolours only that surface (so legs and frames keep their wood) to the green, cream and terracotta palette, and does it per instanced model. Those overrides sit on nodes inside the GLB instance, which the packer drops unless the nodes are given to the scene root, so `_own_tree` does that for tinted props.
+- `scripts/interior_spot.gd` makes a sofa or bed usable: an E prompt through `Device.pick`, a CONTEXT offer for touch, `sit_at()` / `stand_up()` on the player, and for beds a dim-and-return rest fade with a `RESTED` toast. There are 11 spots.
+- Lighting is a dusk sky with a low south-west sun and warm pendants in every room; the pendants are meshes so the pool of light on the ceiling has a fixture above it.
+- Verification: `tools/check_farmhouse.gd` walk-tests the shell and the furnishing — floor height under all ten rooms, every doorway open while the wall beside it is solid, every window open to the outside, the stair climbable by holding forward, every room furnished, 11 lamps, sitting and standing on the sofa, a bed rest that dims the screen, and standing back up. It passes.
+- `tools/screenshot_farmhouse.gd` renders eight review views, including orthographic ground and first-floor plans that hide the ceiling above them. Add view names after `--` to render only those.
+- The house is not reachable from the stable yet: there is no door or scene change into it, by request.
+
+## The stairs now go somewhere
+
+2026-10-22
+
+- The old straight flight was built into a 0.95 m slot along the hall's south wall, with its foot 0.45 m from the west wall and its top 0.05 m from the east wall. The controller has no step-up logic, so the only way onto it was the narrow pocket at its foot, and the top opened onto a strip too thin to stand on: the stair could not be entered or left the way a player walks.
+- Replaced with an L-shaped stair in the hall's south-east corner: six risers up along the east wall to a 1 m square quarter landing, then nine risers west along the south wall, finishing flush with the gallery floor in front of the main bedroom door. Fifteen risers of 0.181 m, 28.7 and 39.4 degree pitches, both inside the controller's 45 degree floor limit.
+- The foot now faces north into the hall with 1.3 m of floor in front of it, so it is walked into end-on. Each flight has one solid ramp as its walking surface (the treads are decoration) and the ramp meets floor and landing exactly, so there is no lip at either end. `_floor_with_holes` cuts the L-shaped well through the ceiling and the upper floor.
+- The quarter landing is open on no side that drops: walls behind and to the east, a flight on each other side. Every other edge has a balustrade — raked along each open flight side, level around the well on the gallery — built as shoe, spindles and handrail with an invisible solid barrier behind it, so the joinery is open but the collision is a wall. Checked by walking at the well edges and at the open side of the flight.
+- The front door moved from z = 0 to z = 1.55 on the east wall, because the old position opened straight onto the lower flight. The hall window moved over the stair instead, and the side table and coat rack moved out of the new stair footprint. The study door moved to x = 2.5, which puts it under the high end of the upper flight (2.6 m of headroom) rather than inside the quarter landing; that is the only place the south wall is free of stair.
+- `tools/check_farmhouse.gd` now walks the stair the way a player does: in from the hall, up the lower flight to the turn, west and up onto the landing at (x 1.77, y 2.72), then back down to the hall floor. It also walks at three stairwell edges, at the sofa, and through the study door under the upper flight, and checks the surface height along both flights. It passes.
+- `tools/screenshot_farmhouse.gd` hides the new named slabs by prefix, so the plan views work again, and its hall and landing cameras look at the stair.
+
+## Normal-map detection in the editor log is benign
+
+2026-10-22
+
+- A fresh editor scan auto-detected 14 `_Image_2.png` textures under `Models/split/` as normal maps and 14 corresponding roughness maps. It printed the "Texture detected as used as a normal map/roughness map in 3D" lines and rewrote only `compress/normal_map=0→1` and `roughness/mode=0→1` in their `.import` files; `compress/mode` and `detect_3d/compress_to` stayed `0`. The images really are normal maps (flat `128,128,255`), so the edits are correct.
+- This is not the VRAM crash. The `.ctex` outputs are lossless WebP (585 KB each), not the ~1.3 MB RGTC layout that `mode=2` would produce, and a project-wide scan still finds no texture on `compress/mode=2`.
+- The 14 `ERROR: Attempting to parent and popup a dialog that already has a parent.` lines are the editor's import progress dialog, one per reimported texture. This is the known benign Godot issue #77426; the project has no `Window`/`AcceptDialog`/`.popup*()` usage, and the errors stop once the reimports finish.
+- `tools/check_editor_load.gd` gained a second report, `CHECK NORMAL MAPS STAY LOSSLESS`, which fails if a `compress/normal_map=1` texture is VRAM-compressed or still has `detect_3d/compress_to` enabled. Verified by temporarily planting a file that trips it (it reported the file and exited 1) and then removing it.
+- Verification: `CHECK EDITOR LOAD: ALL OK` (489 `.import` files scanned, both texture sections clean).
+
+## The farmhouse front door opens
+
+2026-10-22
+
+- `scripts/scene_door.gd` is a reusable door link: a proximity `Label3D` prompt, `Device.pick` text, a CONTEXT offer via `touch_context()`, and an E / interact handoff that fades through `SceneFade`. It refuses while the player is mounted, seated, fading or out of reach.
+- `GameState.request_player_spawn(position, yaw_degrees)` / `consume_player_spawn()` carry the landing spot across the scene change; `scripts/player_controller.gd` consumes it in `_ready()`, before physics runs.
+- The fantasy house front door is centred on the +Z facade at world `(36.978, 0, -31.2)`. The yard-side `FrontDoor` lands in the farmhouse hall at `(4.6, 0.05, 1.55)` facing west; the interior `FrontDoorExit` returns to `(36.978, 0.05, -30.9)` facing the house.
+- The decorative house now has a single invisible collision shell, `5.9 x 3.5 x 5.9` at `(36.978, 1.75, -34.307)`. The farmhouse front leaf gets a matching `0.12 x 2.11 x 0.99` collider so the player cannot walk through the closed door from inside.
+- The interior exit is part of `tools/build_farmhouse.gd` and therefore survives a regeneration; `scenes/farmhouse.tscn` was rebuilt.
+- Verification: `tools/check_scene_doors.gd` passes both links, the house shell, the yard prompt, the farmhouse leaf collider and the pending-spawn move/yaw. `tools/check_farmhouse.gd` now also asserts the exit link, and `tools/check_editor_load.gd` loads `scenes/farmhouse.tscn`; all checks pass. A rendered yard view shows the prompt centred over the door.
+
 <!-- end -->

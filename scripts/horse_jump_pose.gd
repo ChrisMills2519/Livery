@@ -2,69 +2,56 @@ extends Node
 
 ## Phase-driven jump animation for the horse.
 ##
-## The rigged horse asset has 20 clips and none of them is a jump (the closest
-## are Rear and Buck), so the airborne pose is authored here instead of in a
-## clip.  While the horse is in the air this node aims the spine, neck, front
-## and hind leg chains at jump-shaped directions and blends that over whatever
-## the AnimationPlayer is doing.  The aiming is done in skeleton space, so it
-## does not depend on the rig's local bone axes.
+## The rigged horse asset has no jump clip, so an airborne pose can be
+## authored here instead.  This overlay was written for the previous Bip01 rig
+## and is disabled while the horse runs on the newer 56-bone skeleton; the
+## physical jump still plays the gait pose in the air.
+##
+## When re-enabling it, remap the bone names below to the active skeleton.
+## The aiming is done in skeleton space, so it does not depend on the rig's
+## local bone axes.
 ##
 ## Directions are expressed as (up, forward) with forward being +Z in the
 ## skeleton's space (the head sits at +Z from the pelvis).
 
 const POSE_TAKEOFF := {
-	"Bip01 Spine_03_21": Vector2(0.98, 0.20),
-	"Bip01 Spine1_04_20": Vector2(0.96, 0.28),
-	"Bip01 Neck_01_19": Vector2(0.10, 0.995),
-	"Bip01 Neck1_05_6": Vector2(0.20, 0.98),
-	"Bip01 Head_06_5": Vector2(0.05, 0.999),
-	"UpperArm": Vector2(-0.72, 0.69),
-	"Forearm": Vector2(-0.92, 0.39),
-	"Hand": Vector2(-0.75, -0.66),
-	"Finger0": Vector2(-0.70, -0.71),
-	"Thigh": Vector2(-0.72, -0.69),
-	"Calf": Vector2(-0.55, -0.84),
-	"HorseLink": Vector2(-0.95, 0.31),
-	"Foot": Vector2(-1.0, 0.10),
-	"Tail": Vector2(0.30, -0.95),
+	"spine_3": Vector2(0.96, 0.28),
+	"spine_4": Vector2(0.92, 0.39),
+	"spine_5": Vector2(0.85, 0.52),
+	"head": Vector2(0.10, 0.99),
+	"front_leg_upper": Vector2(-0.45, 0.89),
+	"front_leg_lower": Vector2(-0.85, -0.52),
+	"back_leg_upper": Vector2(-0.75, -0.66),
+	"back_leg_lower": Vector2(-0.60, -0.80),
+	"tail_1": Vector2(0.35, -0.93),
 }
 
 const POSE_APEX := {
-	"Bip01 Spine_03_21": Vector2(0.92, 0.39),
-	"Bip01 Spine1_04_20": Vector2(0.88, 0.47),
-	"Bip01 Neck_01_19": Vector2(0.55, 0.83),
-	"Bip01 Neck1_05_6": Vector2(0.35, 0.94),
-	"Bip01 Head_06_5": Vector2(0.20, 0.98),
-	"UpperArm": Vector2(-0.35, 0.94),
-	"Forearm": Vector2(0.25, 0.97),
-	"Hand": Vector2(-0.86, -0.51),
-	"Finger0": Vector2(-0.75, -0.66),
-	"Thigh": Vector2(-0.55, 0.84),
-	"Calf": Vector2(-0.20, -0.98),
-	"HorseLink": Vector2(-0.97, 0.24),
-	"Foot": Vector2(-1.0, 0.05),
-	"Tail": Vector2(0.45, -0.89),
+	"spine_3": Vector2(0.70, 0.71),
+	"spine_4": Vector2(0.65, 0.76),
+	"spine_5": Vector2(0.50, 0.86),
+	"head": Vector2(0.30, 0.95),
+	"front_leg_upper": Vector2(0.10, 0.99),
+	"front_leg_lower": Vector2(-0.95, 0.31),
+	"back_leg_upper": Vector2(-0.45, -0.89),
+	"back_leg_lower": Vector2(-0.30, -0.95),
+	"tail_1": Vector2(0.55, -0.83),
 }
 
 const POSE_DESCENT := {
-	"Bip01 Spine_03_21": Vector2(0.97, 0.24),
-	"Bip01 Spine1_04_20": Vector2(0.95, 0.31),
-	"Bip01 Neck_01_19": Vector2(0.68, 0.73),
-	"Bip01 Neck1_05_6": Vector2(0.74, 0.67),
-	"Bip01 Head_06_5": Vector2(0.60, 0.80),
-	"UpperArm": Vector2(-0.85, 0.53),
-	"Forearm": Vector2(-0.95, 0.31),
-	"Hand": Vector2(-0.98, 0.20),
-	"Finger0": Vector2(-0.90, 0.44),
-	"Thigh": Vector2(-0.80, -0.60),
-	"Calf": Vector2(-0.70, -0.71),
-	"HorseLink": Vector2(-0.90, -0.44),
-	"Foot": Vector2(-1.0, 0.0),
-	"Tail": Vector2(0.20, -0.98),
+	"spine_3": Vector2(0.50, 0.86),
+	"spine_4": Vector2(0.40, 0.91),
+	"spine_5": Vector2(0.30, 0.95),
+	"head": Vector2(0.55, 0.83),
+	"front_leg_upper": Vector2(-0.85, 0.52),
+	"front_leg_lower": Vector2(-0.95, 0.31),
+	"back_leg_upper": Vector2(-0.80, -0.60),
+	"back_leg_lower": Vector2(-0.70, -0.71),
+	"tail_1": Vector2(0.20, -0.98),
 }
 
-const FRONT_BONES := ["UpperArm", "Forearm", "Hand", "Finger0"]
-const HIND_BONES := ["Thigh", "Calf", "HorseLink", "Foot"]
+const FRONT_BONES := ["front_leg_upper", "front_leg_lower", "front_leg_ankle", "front_leg_foot"]
+const HIND_BONES := ["back_leg_upper", "back_leg_lower", "back_leg_ankle", "back_leg_foot"]
 
 var active := true
 
@@ -104,21 +91,18 @@ func _build_bone_targets() -> void:
 			})
 
 
-## POSE keys are either a full bone name or a limb suffix such as "Thigh"
-## which expands to the left and right bones.
 func _resolve_bones(key: String) -> Array[int]:
 	var result: Array[int] = []
-	if key.begins_with("Bip01 "):
-		var idx := _skeleton.find_bone(key)
+	if _skeleton == null:
+		return result
+	var direct := _skeleton.find_bone(key)
+	if direct >= 0:
+		result.append(direct)
+		return result
+	for side in ["_l", "_r"]:
+		var idx := _skeleton.find_bone(key + side)
 		if idx >= 0:
 			result.append(idx)
-		return result
-	for side in ["L", "R"]:
-		for i in range(_skeleton.get_bone_count()):
-			var name := _skeleton.get_bone_name(i)
-			if name.begins_with("Bip01 " + side + " ") and name.contains(" " + key + "_"):
-				result.append(i)
-				break
 	return result
 
 

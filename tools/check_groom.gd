@@ -89,6 +89,20 @@ func _run() -> void:
 	_check(_horse.get("tack") != null and not (_horse.get("tack") as Node3D).visible, "tack hidden")
 	_check(_player.global_position.distance_to(groomer_anchor.global_position) < 0.2, "player moved to groomer anchor")
 
+	var anim_player := _find_animation_player(_horse)
+	_check(anim_player != null and anim_player.current_animation == String(_horse.get("groom_pose_clip")), "horse frozen in the square stand clip")
+	_check(anim_player != null and absf(anim_player.get_playing_speed()) < 0.001, "grooming stand is frozen")
+
+	# Switching tools must light the brushable area for that tool.
+	_session.call("set_tool", 1)
+	var groom_material := _surface.get("material") as ShaderMaterial
+	_check(groom_material != null and groom_material.get_shader_parameter("zone_map") != null, "zone map is uploaded")
+	_check(int(_surface.call("get_highlight_mask")) == ((1 << 1) | (1 << 2)), "dandy highlights the body and legs")
+	_session.call("set_tool", 3)
+	_check(int(_surface.call("get_highlight_mask")) == (1 << 3), "face brush highlights only the face")
+	_session.call("set_tool", 0)
+	_check(int(_surface.call("get_highlight_mask")) == ((1 << 1) | (1 << 2)), "curry highlights the body and legs")
+
 	var camera: Camera3D = _session.call("get_camera")
 	var target: Vector3 = _horse.global_position + Vector3(0, 1.05, 0)
 	var hit: Dictionary = _surface.call("pick_ray", camera.global_position, (target - camera.global_position).normalized())
@@ -105,7 +119,36 @@ func _run() -> void:
 	_check(not bool(face_on_body.get("ok", true)) and face_on_body.get("reason", "") == "zone", "face brush rejects the body")
 	var face_uv: Vector2 = _surface.call("find_uv_for_zone", 3)
 	_check(face_uv.x >= 0.0, "face zone has a UV")
-	_check(not bool(_surface.call("paint_uv", face_uv, 3, -1, "dandy", 0.1)), "dandy brush rejects the face")
+	_check(not bool(_surface.call("paint_uv", face_uv, 3, "dandy", 0.1)), "dandy brush rejects the face")
+
+	# The legs carry the same dirt as the body.  The curry comb has to reach
+	# them, and the dandy brush has to be able to lift a leg that was never
+	# curried, otherwise an area can never be finished.
+	var leg_uv: Vector2 = _surface.call("find_uv_for_zone", 2)
+	_check(leg_uv.x >= 0.0, "leg zone has a UV")
+	_check(bool(_surface.call("can_tool_paint", "curry", 2)), "the curry comb reaches the legs")
+	_surface.call("reset_mask")
+	_surface.call("paint_uv", leg_uv, 2, "dandy", 0.08)
+	var leg_uncurried := float(_surface.call("get_mask_value", leg_uv, "clean"))
+	_check(leg_uncurried > 0.5, "the dandy brush lifts an uncurried leg (%.2f)" % leg_uncurried)
+	_surface.call("reset_mask")
+	_surface.call("paint_uv", leg_uv, 2, "curry", 0.08)
+	_surface.call("paint_uv", leg_uv, 2, "dandy", 0.08)
+	var leg_clean := float(_surface.call("get_mask_value", leg_uv, "clean"))
+	_check(leg_clean > 0.8, "curry then dandy cleans a leg (%.2f)" % leg_clean)
+	_surface.call("paint_uv", leg_uv, 2, "soft", 0.08)
+	var leg_polish := float(_surface.call("get_mask_value", leg_uv, "polish"))
+	_check(leg_polish > 0.4, "the soft brush polishes a leg (%.2f)" % leg_polish)
+
+	# The head has no curry step, so the face brush has to clean it on its own.
+	_surface.call("reset_mask")
+	_surface.call("paint_uv", face_uv, 3, "face", 0.05)
+	var face_clean := float(_surface.call("get_mask_value", face_uv, "clean"))
+	_check(face_clean > 0.8, "the face brush cleans the head on its own (%.2f)" % face_clean)
+
+	# Hooves are never brushed, so every tool has to say so plainly.
+	var on_hoof: Dictionary = _surface.call("paint_hit", {"zone": 4, "uv": Vector2(0.5, 0.5)}, "dandy")
+	_check(not bool(on_hoof.get("ok", true)) and on_hoof.get("reason", "") == "hoof", "a brush on a hoof says so")
 
 	var curry: Dictionary = _surface.call("paint_hit", hit, "curry")
 	_check(bool(curry.get("ok", false)), "curry paints the coat")
@@ -119,12 +162,91 @@ func _run() -> void:
 	var coverage_after: Dictionary = _surface.call("coverage")
 	_check(float(coverage_after.get("clean", 0.0)) > 0.0, "coverage rises after brushing")
 
+	# The world-space gate must remove the UV-adjacent / world-far bleed while
+	# keeping the near footprint.  Stamp the same curry brush with and without
+	# the gate: the gated set must be a proper subset that only drops texels
+	# whose triangles are all outside the brush.
+	var picker = _surface.get("picker")
+	var hit_local: Vector3 = hit.get("local_position", Vector3.ZERO)
+	var curry_radius := float(_surface.call("brush_world_radius", "curry"))
+	var radius_uv := curry_radius * float(hit.get("uv_per_meter", 1.0)) * 2.2
+	var allowed: PackedByteArray = picker.call("triangles_within", hit_local, curry_radius)
+	_check(allowed.size() == int(picker.get("triangle_count")), "gate set covers every triangle")
+	var hit_triangle := int(hit.get("triangle", -1))
+	_check(hit_triangle >= 0 and allowed[hit_triangle] != 0, "the hit triangle is under the brush")
+	var allowed_count := 0
+	for value in allowed:
+		if value != 0:
+			allowed_count += 1
+	_check(allowed_count > 0 and allowed_count < allowed.size(), "the brush gate is local, not global")
+	_surface.call("reset_mask")
+	_surface.call("paint_uv", hit["uv"], 1, "curry", radius_uv)
+	var ungated: PackedByteArray = _surface.get("_mask_data").duplicate()
+	_surface.call("reset_mask")
+	_surface.call("paint_uv", hit["uv"], 1, "curry", radius_uv, allowed)
+	var gated: PackedByteArray = _surface.get("_mask_data").duplicate()
+	var pixel_tris: PackedInt32Array = _surface.get("_pixel_tris")
+	var ungated_only := 0
+	var gated_only := 0
+	var shared := 0
+	var leaked := 0
+	for pixel in range(gated.size() / 4):
+		var was_ungated := ungated[pixel * 4 + 2] > 0
+		var was_gated := gated[pixel * 4 + 2] > 0
+		if was_ungated and was_gated:
+			shared += 1
+		elif was_ungated and not was_gated:
+			ungated_only += 1
+			if _texel_in_brush(pixel, pixel_tris, allowed):
+				leaked += 1
+		elif was_gated and not was_ungated:
+			gated_only += 1
+	_check(ungated_only > 0, "an ungated stamp bleeds onto UV-adjacent texels")
+	_check(shared > 0, "a gated stamp still paints the near coat")
+	_check(gated_only == 0, "the gate never paints beyond the ungated stamp")
+	_check(leaked == 0, "every texel the gate drops is outside the brush")
+	# Restore the brushed coat the later steps expect.
+	_surface.call("reset_mask")
+	_surface.call("paint_hit", hit, "curry")
+	_surface.call("paint_hit", hit, "dandy")
+	_surface.call("paint_hit", hit, "soft")
+
+	# The groom mask must use the split UV set, or brushing one side also
+	# cleans the mirrored side.  Paint a flank triangle and prove the mirrored
+	# triangle (same rest position on the other side) stays untouched.
+	_check(bool(_surface.get("_groom_uv2")), "groom mask uses the split UV set")
+	var rest: PackedVector3Array = _surface.get("_rest_vertices")
+	var mesh_indices: PackedInt32Array = _surface.get("_indices")
+	var groom_uvs: PackedVector2Array = _surface.get("_uvs")
+	var hit_tri := int(hit.get("triangle", -1))
+	var mirror_tri := -1
+	if hit_tri >= 0:
+		var centroid := (rest[mesh_indices[hit_tri * 3]] + rest[mesh_indices[hit_tri * 3 + 1]] + rest[mesh_indices[hit_tri * 3 + 2]]) / 3.0
+		var mirrored := Vector3(-centroid.x, centroid.y, centroid.z)
+		var best_distance := 0.003
+		for t in range(mesh_indices.size() / 3):
+			if t == hit_tri:
+				continue
+			var c := (rest[mesh_indices[t * 3]] + rest[mesh_indices[t * 3 + 1]] + rest[mesh_indices[t * 3 + 2]]) / 3.0
+			var d := c.distance_to(mirrored)
+			if d < best_distance:
+				best_distance = d
+				mirror_tri = t
+	_check(mirror_tri >= 0, "hit triangle has a left/right mirror")
+	if mirror_tri >= 0:
+		var mirror_uv := (groom_uvs[mesh_indices[mirror_tri * 3]] + groom_uvs[mesh_indices[mirror_tri * 3 + 1]] + groom_uvs[mesh_indices[mirror_tri * 3 + 2]]) / 3.0
+		_surface.call("reset_mask")
+		_surface.call("paint_hit", hit, "curry")
+		_check(float(_surface.call("get_mask_value", hit["uv"], "loosen")) > 0.5, "near side paints")
+		_check(float(_surface.call("get_mask_value", mirror_uv, "loosen")) == 0.0, "mirrored side stays unpainted")
+
 	# Mask view is a display mode only; it must not alter the mask.
 	var clean_before_mask: float = float(_surface.call("get_mask_value", hit["uv"], "clean"))
 	_session.call("_on_mask_toggled", true)
 	await process_frame
 	var material := _surface.get("material") as ShaderMaterial
 	_check(material != null and float(material.get_shader_parameter("mask_view")) > 0.5, "mask view enabled")
+	_check(float(material.get_shader_parameter("highlight_strength")) == 0.0, "mask view clears the tool glow")
 	var brush := _session.get("_brush") as Node3D
 	_check(brush != null and not brush.visible, "brush hidden in mask view")
 	_session.call("_on_mask_toggled", false)
@@ -166,6 +288,18 @@ func _run() -> void:
 	var title := _groom_hud.get("_title_label") as Label
 	_check(title != null and title.text == "GROOMING · COMPLETE", "HUD announces complete")
 
+	# Every area of the horse is tracked and reported separately.
+	var regions = _surface.call("region_coverage")
+	_check(regions is Array and (regions as Array).size() == 9, "nine areas are tracked")
+	if regions is Array:
+		for entry in regions:
+			if not (entry is Dictionary):
+				continue
+			_check(int(entry.get("texels", 0)) > 0, "area %s has texels" % String(entry.get("name", "?")))
+			_check(bool(entry.get("complete", false)), "area %s is complete" % String(entry.get("name", "?")))
+	var areas_label := _groom_hud.get("_areas_label") as Label
+	_check(areas_label != null and areas_label.text == "Areas  9 / 9", "HUD lists every area as done")
+
 	_session.call("finish_grooming")
 	var result: Dictionary = _session.call("get_result")
 	_check(bool(result.get("complete", false)), "finish reports complete")
@@ -179,6 +313,7 @@ func _run() -> void:
 	await process_frame
 	_check(not bool(_session.get("active")), "session inactive after exit")
 	_check(not bool(_horse.get("grooming")), "horse leaves the grooming pose")
+	_check(anim_player != null and anim_player.is_playing(), "animation resumes after grooming")
 	_check(bool(_player.get("controls_enabled")), "player controls restored")
 	_check(_player_model != null and _player_model.visible, "player model restored")
 	_check(_normal_hud != null and _normal_hud.visible, "gameplay HUD restored")
@@ -216,6 +351,29 @@ func _send_groom() -> void:
 
 func _bar_hud() -> CanvasLayer:
 	return get_first_node_in_group("gameplay_hud") as CanvasLayer
+
+
+func _find_animation_player(n: Node) -> AnimationPlayer:
+	if n is AnimationPlayer:
+		return n
+	for c in n.get_children():
+		var found := _find_animation_player(c)
+		if found != null:
+			return found
+	return null
+
+
+## Mirrors GroomSurface._pixel_tri_allowed for the regression: true when at
+## least one triangle mapped onto `pixel` is inside the brush's world reach.
+func _texel_in_brush(pixel: int, pixel_tris: PackedInt32Array, allowed: PackedByteArray) -> bool:
+	var base := pixel * 4
+	for slot in range(4):
+		var triangle := pixel_tris[base + slot]
+		if triangle < 0:
+			return false
+		if triangle < allowed.size() and allowed[triangle] != 0:
+			return true
+	return false
 
 
 func _check(condition: bool, message: String) -> void:

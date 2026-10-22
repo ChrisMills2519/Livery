@@ -13,9 +13,9 @@ extends SceneTree
 const SHOTS := [
 	{"file": "overview", "pos": Vector3(88, 58, 96), "look": Vector3(0, 0, -14)},
 	{"file": "stable_yard", "pos": Vector3(24, 11, 18), "look": Vector3(0, 1, -22)},
-	{"file": "arena_course", "pos": Vector3(-4, 12, 32), "look": Vector3(-25, 1, 0)},
+	{"file": "arena_course", "pos": Vector3(10, 24, 58), "look": Vector3(-32, 1, 0)},
 	{"file": "player_view", "pos": Vector3(0, 1.7, 8), "look": Vector3(0, 1.1, -20)},
-	{"file": "jump_closeup", "pos": Vector3(-18.5, 2.2, -7), "look": Vector3(-25.5, 0.9, -12)},
+	{"file": "jump_closeup", "pos": Vector3(-13.5, 2.4, 4.5), "look": Vector3(-22.0, 0.9, -1.5)},
 ]
 
 var _frame := 0

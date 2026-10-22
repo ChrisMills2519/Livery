@@ -23,8 +23,11 @@ var _player: CharacterBody3D
 
 func _ready() -> void:
 	# The mesh vertices are rebuilt in world space, so the node must not
-	# inherit the player's transform.
+	# inherit the player's transform.  top_level preserves the global
+	# transform it had at the call, which is the player's spawn point, so
+	# clear that too or the reins render offset from the horse.
 	top_level = true
+	global_transform = Transform3D.IDENTITY
 	process_priority = 60
 	_player = get_parent() as CharacterBody3D
 	_horse = get_tree().get_first_node_in_group("horse") as Node3D
@@ -48,15 +51,33 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _player == null or _horse == null:
 		return
-	if not _player.mounted or not _horse.has_method("get_bit_anchor"):
+	var mounted: bool = _player.mounted
+	var leading: bool = _player.get("leading") == true
+	if (not mounted and not leading) or not _horse.has_method("get_bit_anchor"):
 		_mesh.visible = false
 		return
 	_mesh.visible = true
 	_immediate.clear_surfaces()
 	_immediate.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _material)
-	_add_rein(_horse.get_bit_anchor("L"), _player.get_hand_anchor("Left"))
-	_add_rein(_horse.get_bit_anchor("R"), _player.get_hand_anchor("Right"))
+	if mounted:
+		_add_rein(_horse.get_bit_anchor("L"), _player.get_hand_anchor("Left"))
+		_add_rein(_horse.get_bit_anchor("R"), _player.get_hand_anchor("Right"))
+	else:
+		_add_lead_rope()
 	_immediate.surface_end()
+
+
+## On foot the handler holds one rope.  Use the side whose hand and bit are
+## closest, so the leather does not have to cross the horse's neck.
+func _add_lead_rope() -> void:
+	var bit_left: Vector3 = _horse.get_bit_anchor("L")
+	var bit_right: Vector3 = _horse.get_bit_anchor("R")
+	var hand_left: Vector3 = _player.get_hand_anchor("Left")
+	var hand_right: Vector3 = _player.get_hand_anchor("Right")
+	if bit_right.distance_to(hand_right) < bit_left.distance_to(hand_left):
+		_add_rein(bit_right, hand_right)
+	else:
+		_add_rein(bit_left, hand_left)
 
 
 func _add_rein(bit: Vector3, hand: Vector3) -> void:

@@ -16,7 +16,7 @@ const TOOL_COLORS := {
 	"face": Color(0.90, 0.78, 0.90, 1.0),
 	"hoof": Color(0.72, 0.76, 0.78, 1.0),
 }
-const HOOF_BONES := ["L Finger0", "R Finger0", "L Toe0", "R Toe0"]
+const HOOF_BONES := ["front_leg_foot_l", "front_leg_foot_r", "back_leg_toe_l", "back_leg_toe_r"]
 const COMPLETE_CLEAN := 0.90
 const COMPLETE_POLISH := 0.55
 
@@ -33,10 +33,14 @@ var _normal_hud: CanvasLayer
 var _camera: Camera3D
 var _brush: Node3D
 var _brush_head_material: StandardMaterial3D
+var _clump_material: StandardMaterial3D
+var _hoof_glow_time := 0.0
 var _brush_rest := Vector3(0.34, -0.23, -0.82)
 var _ring: MeshInstance3D
 var _ring_material: StandardMaterial3D
+var _ring_fill_material: StandardMaterial3D
 var _dust: CPUParticles3D
+var _ding: AudioStreamPlayer
 var _fade_layer: CanvasLayer
 var _fade: ColorRect
 var _fade_tween: Tween
@@ -88,6 +92,7 @@ func _build_nodes() -> void:
 	_build_brush()
 	_build_ring()
 	_build_dust()
+	_build_ding()
 
 	_hud = GroomingHUD.new()
 	add_child(_hud)
@@ -156,23 +161,50 @@ func _build_brush() -> void:
 
 
 func _build_ring() -> void:
+	# The cursor has to stay readable on a mid-brown coat, so the ring is an
+	# always-on-top, high-contrast rim with a translucent footprint disc under
+	# it.  A child disc on the ring shares its surface-aligned transform, so
+	# hiding the ring hides the whole cursor.
 	_ring = MeshInstance3D.new()
 	_ring.name = "BrushRing"
 	var torus := TorusMesh.new()
-	torus.inner_radius = 0.095
-	torus.outer_radius = 0.108
+	torus.inner_radius = 0.088
+	torus.outer_radius = 0.115
 	torus.rings = 32
-	torus.ring_segments = 6
+	torus.ring_segments = 8
 	_ring.mesh = torus
 	_ring_material = StandardMaterial3D.new()
 	_ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_ring_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_ring_material.albedo_color = Color(0.86, 0.46, 0.30, 0.9)
+	_ring_material.no_depth_test = true
+	_ring_material.render_priority = 10
+	_ring_material.albedo_color = Color(0.45, 1.0, 0.5, 0.95)
 	_ring.material_override = _ring_material
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_ring.visible = false
 	add_child(_ring)
+
+	var fill := MeshInstance3D.new()
+	fill.name = "BrushFill"
+	var disc := CylinderMesh.new()
+	# Radius 0.1 means the disc comes out exactly brush_world_radius wide once
+	# the ring's radius/0.1 scale is applied.
+	disc.top_radius = 0.1
+	disc.bottom_radius = 0.1
+	disc.height = 0.002
+	disc.radial_segments = 24
+	fill.mesh = disc
+	_ring_fill_material = StandardMaterial3D.new()
+	_ring_fill_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ring_fill_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_ring_fill_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_ring_fill_material.no_depth_test = true
+	_ring_fill_material.render_priority = 9
+	_ring_fill_material.albedo_color = Color(0.45, 1.0, 0.5, 0.16)
+	fill.material_override = _ring_fill_material
+	fill.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ring.add_child(fill)
 
 
 func _build_dust() -> void:
@@ -204,6 +236,15 @@ func _build_dust() -> void:
 	add_child(_dust)
 
 
+## The ding that plays when an area of the horse is finished.
+func _build_ding() -> void:
+	_ding = AudioStreamPlayer.new()
+	_ding.name = "Ding"
+	_ding.stream = load("res://assets/sounds/ui/click1.ogg")
+	_ding.volume_db = -5.0
+	add_child(_ding)
+
+
 ## Enter the bay.  The bay supplies both anchors so a test or a future second
 ## yard can reuse the same session without editing transform constants.
 func enter(horse_anchor: Transform3D, groomer_anchor: Transform3D) -> bool:
@@ -220,6 +261,8 @@ func enter(horse_anchor: Transform3D, groomer_anchor: Transform3D) -> bool:
 	_surface = _horse.get("groom_surface")
 	if _surface == null:
 		return false
+	if not _surface.is_connected("region_completed", _on_region_completed):
+		_surface.connect("region_completed", _on_region_completed)
 	if not bool(_horse.call("begin_grooming", horse_anchor)):
 		return false
 
@@ -256,6 +299,7 @@ func enter(horse_anchor: Transform3D, groomer_anchor: Transform3D) -> bool:
 	_build_hoof_clumps()
 	_hud.reset_for_session()
 	_hud.visible = true
+	TouchControls.set_mode("groom")
 	_hud.set_tool(0)
 	_hud.set_mask_active(false)
 	_hud.set_progress(0.0, 0.0, _count_hooves())
@@ -279,7 +323,9 @@ func enter(horse_anchor: Transform3D, groomer_anchor: Transform3D) -> bool:
 	_brush.visible = true
 	_ring.visible = false
 	_dust.emitting = false
+	_hoof_glow_time = 0.0
 	_update_tool_visuals()
+	_flash_tool_area()
 
 	_camera.current = true
 	_update_camera()
@@ -304,6 +350,7 @@ func exit_session() -> void:
 	_orbiting = false
 	_ring.visible = false
 	_brush.visible = false
+	_clear_tool_glow()
 	_fade_to(1.0, 0.20)
 	await get_tree().create_timer(0.22).timeout
 
@@ -326,6 +373,7 @@ func exit_session() -> void:
 	if course != null:
 		course.visible = _saved_course_visible
 	Input.mouse_mode = _saved_mouse_mode
+	TouchControls.set_mode("ride")
 	_hud.visible = false
 	if _horse != null:
 		_horse.call("end_grooming")
@@ -345,15 +393,34 @@ func _process(delta: float) -> void:
 	_update_camera()
 	_hint_cooldown = maxf(0.0, _hint_cooldown - delta)
 	if not _finished:
-		if _painting and not _hud.is_pointer_over_ui():
+		if Device.is_touch():
+			_update_touch_gestures()
+		elif _painting and not _hud.is_pointer_over_ui():
 			_paint_at_screen(get_viewport().get_mouse_position())
 		elif not _painting:
 			_update_cursor(get_viewport().get_mouse_position())
 	_update_brush(delta)
+	_update_hoof_glow(delta)
 	_progress_accum += delta
 	if _progress_accum > 0.18:
 		_progress_accum = 0.0
 		_update_progress()
+
+
+## Touch grooming: one finger paints, two fingers orbit and pinch.  The
+## TouchControls layer tracks the fingers, so this only applies their results.
+func _update_touch_gestures() -> void:
+	if TouchControls.consume_paint_started():
+		_has_last_paint = false
+	if not _finished and TouchControls.is_painting() and not _hud.is_pointer_over_ui():
+		_paint_at_screen(TouchControls.paint_position())
+	var orbit := TouchControls.consume_orbit()
+	if orbit != Vector2.ZERO:
+		_yaw -= orbit.x * 0.006
+		_pitch = clampf(_pitch + orbit.y * 0.004, -0.05, 0.75)
+	var pinch := TouchControls.consume_pinch()
+	if not is_equal_approx(pinch, 1.0):
+		_distance = clampf(_distance * pinch, 2.6, 6.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -386,6 +453,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					finish_grooming()
 				return
 	if _finished:
+		return
+	if Device.is_touch() and event is InputEventMouse:
 		return
 	if event is InputEventMouseButton:
 		match event.button_index:
@@ -423,6 +492,8 @@ func _set_tool(index: int) -> void:
 	if _hud != null:
 		_hud.set_tool(index)
 	_update_tool_visuals()
+	if changed and active and not _finished:
+		_flash_tool_area()
 	if changed and active and _tool_id() == "hoof":
 		_hud.show_toast("Pick each muddy hoof — four in all.", 1.8)
 
@@ -434,15 +505,48 @@ func _tool_id() -> String:
 func _update_tool_visuals() -> void:
 	if _brush_head_material != null:
 		_brush_head_material.albedo_color = TOOL_COLORS[_tool_id()].darkened(0.18)
-	if _ring_material != null:
-		var c: Color = TOOL_COLORS[_tool_id()]
-		_ring_material.albedo_color = Color(c.r, c.g, c.b, 0.9)
+	# The cursor ring colour is owned by _update_ring, which tints it by whether
+	# the active tool can paint the zone under the pointer.
 	# The mud clumps only matter to the hoof pick.  Showing them all the time
 	# made the bay look like the horse had dropped four stones on the mat.
 	for i in range(_hoof_clumps.size()):
 		var clump = _hoof_clumps[i]
 		if clump != null and is_instance_valid(clump):
 			clump.visible = _tool_id() == "hoof" and not bool(_hooves[i])
+
+
+## Show the new tool's working area every time it changes.  Body tools tint
+## their valid zones through the coat shader; the hoof pick pulses the mud
+## clumps instead, so already-cleaned hooves never light up.
+func _flash_tool_area() -> void:
+	if _surface == null:
+		return
+	if _tool_id() == "hoof":
+		_surface.call("clear_tool_highlight")
+		_hoof_glow_time = 2.2
+	else:
+		_hoof_glow_time = 0.0
+		_surface.call("highlight_tool", _tool_id())
+
+
+func _clear_tool_glow() -> void:
+	_hoof_glow_time = 0.0
+	if _clump_material != null:
+		_clump_material.emission_energy_multiplier = 0.0
+	if _surface != null:
+		_surface.call("clear_tool_highlight")
+
+
+func _update_hoof_glow(delta: float) -> void:
+	if _clump_material == null:
+		return
+	if _tool_id() != "hoof" or _finished or _hoof_glow_time <= 0.0:
+		_clump_material.emission_energy_multiplier = 0.0
+		return
+	_hoof_glow_time = maxf(0.0, _hoof_glow_time - delta)
+	var fade := clampf(_hoof_glow_time / 0.55, 0.0, 1.0)
+	var pulse := 0.72 + 0.28 * sin(Time.get_ticks_msec() * 0.009)
+	_clump_material.emission_energy_multiplier = 1.5 * fade * pulse
 
 
 func _update_camera() -> void:
@@ -513,8 +617,17 @@ func _update_ring(hit: Dictionary) -> void:
 		radius = _surface.call("brush_world_radius", _tool_id())
 	var scale := maxf(0.25, radius / 0.1)
 	var basis := Basis(x, y, z).scaled(Vector3.ONE * scale)
-	var position: Vector3 = hit.get("position", Vector3.ZERO) + normal * 0.006
+	var position: Vector3 = hit.get("position", Vector3.ZERO) + normal * 0.012
 	_ring.global_transform = Transform3D(basis, position)
+	var zone := int(hit.get("zone", 0))
+	var valid := true
+	if _surface != null and _surface.has_method("can_tool_paint"):
+		valid = bool(_surface.call("can_tool_paint", _tool_id(), zone))
+	var colour := Color(0.45, 1.0, 0.5, 0.95) if valid else Color(1.0, 0.36, 0.30, 0.95)
+	if _ring_material != null:
+		_ring_material.albedo_color = colour
+	if _ring_fill_material != null:
+		_ring_fill_material.albedo_color = Color(colour.r, colour.g, colour.b, 0.16)
 	_ring.visible = true
 
 
@@ -626,7 +739,7 @@ func _count_hooves() -> int:
 	return count
 
 
-func _show_hint(reason: String, _zone: int) -> void:
+func _show_hint(reason: String, zone: int) -> void:
 	if _hud == null or _hint_cooldown > 0.0:
 		return
 	_hint_cooldown = 1.35
@@ -636,19 +749,29 @@ func _show_hint(reason: String, _zone: int) -> void:
 		"dirty":
 			text = "Brush the dirt away first — the soft brush only polishes clean coat."
 		"hoof":
-			text = "Aim the hoof pick at a muddy hoof."
+			text = "Hooves are picked with the hoof pick (5), not a brush."
+		"clean":
+			text = "That patch is already clean — use the soft brush for shine."
+		"seam":
+			text = "Try a slightly different spot on that area."
 		"zone":
-			match tool:
-				"curry":
-					text = "The curry comb is for the body; use a brush on the legs and face."
-				"dandy":
-					text = "Keep the dandy brush off the face."
-				"soft":
-					text = "The soft brush polishes the coat and legs; the face needs the face brush."
-				"face":
-					text = "The face brush only touches the face."
-				"hoof":
-					text = "Aim the hoof pick at a muddy hoof."
+			# Say what the area actually is, not what the last tool guessed.
+			if zone == 3:
+				text = "That's the head — the face brush (4) is for the face."
+			elif zone == 4:
+				text = "Hooves are picked with the hoof pick (5), not a brush."
+			else:
+				match tool:
+					"curry":
+						text = "The curry comb is for the body and legs; the head needs the face brush."
+					"dandy":
+						text = "The dandy brush is for the body and legs; the head needs the face brush."
+					"soft":
+						text = "The soft brush polishes the body and legs; the head needs the face brush."
+					"face":
+						text = "The face brush only touches the head."
+					"hoof":
+						text = "Aim the hoof pick at a muddy hoof."
 	_hud.show_toast(text, 1.7)
 
 
@@ -661,11 +784,35 @@ func _update_progress() -> void:
 		_polish = float(cov.get("polish", 0.0))
 	var hooves := _count_hooves()
 	_hud.set_progress(_clean, _polish, hooves)
+	_hud.set_regions(_region_states())
 	var complete := _is_complete()
 	_hud.set_complete(complete)
 	if complete and not _complete_announced:
 		_complete_announced = true
-		_hud.show_toast("Grooming complete — press Esc to finish.", 3.0)
+		_hud.show_toast(Device.pick("Grooming complete — press Esc to finish.", "Grooming complete — tap Done to finish."), 3.0)
+
+
+## The per-area progress the HUD lists, so the player can see which parts of
+## the horse are done and which are still to do.
+func _region_states() -> Array:
+	if _surface == null:
+		return []
+	var states = _surface.call("region_coverage")
+	if states is Array:
+		return states
+	return []
+
+
+## One area has crossed its threshold: ding it and name it.
+func _on_region_completed(region: int) -> void:
+	if not active or _hud == null:
+		return
+	if _ding != null:
+		_ding.play()
+	for entry in _region_states():
+		if entry is Dictionary and int(entry.get("id", -1)) == region:
+			_hud.show_toast("%s — clean" % String(entry.get("name", "Area")), 1.6)
+			return
 
 
 func _is_complete() -> bool:
@@ -689,6 +836,7 @@ func finish_grooming() -> void:
 	_ring.visible = false
 	_brush.visible = false
 	_mask_active = false
+	_clear_tool_glow()
 	if _surface != null:
 		_surface.call("set_mask_view", false)
 	_hud.set_mask_active(false)
@@ -711,8 +859,14 @@ func _on_mask_toggled(enabled: bool) -> void:
 		_hud.set_mask_active(enabled)
 	if _brush != null:
 		_brush.visible = not enabled and not _finished
-	if enabled and _ring != null:
-		_ring.visible = false
+	if enabled:
+		_hoof_glow_time = 0.0
+		if _clump_material != null:
+			_clump_material.emission_energy_multiplier = 0.0
+		if _ring != null:
+			_ring.visible = false
+	elif active and not _finished:
+		_flash_tool_area()
 
 
 func _emit_dust(position: Vector3) -> void:
@@ -751,9 +905,12 @@ func _build_hoof_clumps() -> void:
 		return
 	var skeleton := skeletons[0] as Skeleton3D
 	skeleton.force_update_all_bone_transforms()
-	var mud := StandardMaterial3D.new()
-	mud.albedo_color = Color(0.30, 0.22, 0.14, 1.0)
-	mud.roughness = 1.0
+	_clump_material = StandardMaterial3D.new()
+	_clump_material.albedo_color = Color(0.30, 0.22, 0.14, 1.0)
+	_clump_material.roughness = 1.0
+	_clump_material.emission_enabled = true
+	_clump_material.emission = Color(1.0, 0.45, 0.18, 1.0)
+	_clump_material.emission_energy_multiplier = 0.0
 	for i in range(4):
 		var bone := _find_bone_containing(skeleton, HOOF_BONES[i])
 		if bone < 0:
@@ -768,7 +925,7 @@ func _build_hoof_clumps() -> void:
 		sphere.radial_segments = 8
 		sphere.rings = 4
 		clump.mesh = sphere
-		clump.material_override = mud
+		clump.material_override = _clump_material
 		clump.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(clump)
 		clump.global_position = position + Vector3(0, 0.055, 0)
@@ -788,6 +945,8 @@ func _clear_hoof_clumps() -> void:
 		if clump != null and is_instance_valid(clump):
 			clump.queue_free()
 	_hoof_clumps.clear()
+	_clump_material = null
+	_hoof_glow_time = 0.0
 
 
 ## Helpers used by the headless checks and review screenshots.

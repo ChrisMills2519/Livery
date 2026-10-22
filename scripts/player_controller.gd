@@ -62,6 +62,12 @@ const STATE_TO_CLIP := {
 @onready var ride_pose: Node = $RidePose
 
 var mounted := false
+## True while the player is on foot holding the horse's lead rope.
+var leading := false
+## True while the player is sitting on a seat or lying on a bed.  The body is
+## parked on the spot, collision and model are off, and the camera looks out
+## from eye_height along the spot's facing.
+var seated := false
 
 var _step_timer := 0.0
 var _land_timer := 0.0
@@ -77,14 +83,20 @@ var _was_on_floor := true
 
 func _ready() -> void:
 	add_to_group("player")
+	add_to_group("touch_context")
 	# The horse sits before the player in main.tscn, but make the order explicit:
 	# the player's seat alignment must read the horse's pose after the horse has
 	# moved and updated its saddle socket.
 	process_physics_priority = 10
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	TouchControls.set_mode("ride")
+	_capture_mouse()
+	# The window may not have focus yet when _ready runs after a scene change;
+	# re-assert the capture once the new scene has drawn its first frame.
+	call_deferred("_capture_mouse")
 	footsteps.volume_db = -8.0
 	_camera_pivot_base = camera_pivot.position
 	_camera_base = camera.position
+	_apply_pending_spawn()
 	_select_requested_profile()
 	_apply_character_profile()
 	_resolve_rig()
@@ -93,6 +105,17 @@ func _ready() -> void:
 	_play_state("idle", true)
 	if GameState.consume_auto_mount():
 		_begin_mounted_start.call_deferred()
+
+
+## A scene door leaves a spawn behind before changing scenes.  Move there on
+## the first frame the player exists in the new scene, before physics runs.
+func _apply_pending_spawn() -> void:
+	var spawn := GameState.consume_player_spawn()
+	if spawn.is_empty():
+		return
+	global_position = spawn["position"]
+	rotation.y = deg_to_rad(float(spawn["yaw_degrees"]))
+	velocity = Vector3.ZERO
 
 
 ## Dev/testing hook: GROOM_CHARACTER=liv launches the scene with Liv.  The
@@ -118,6 +141,7 @@ func _begin_mounted_start() -> void:
 	var horse := get_tree().get_first_node_in_group("horse") as Node3D
 	if horse == null:
 		controls_enabled = true
+		_capture_mouse()
 		return
 	controls_enabled = false
 	var side := horse.global_transform.basis.x.normalized()
@@ -132,6 +156,9 @@ func _begin_mounted_start() -> void:
 		await get_tree().physics_frame
 		try_mount()
 	controls_enabled = true
+	# The long synchronous world load can leave the cursor visible, which makes
+	# every mouse-motion event fall through the mouse-look gate below.
+	_capture_mouse()
 
 
 ## Instances the profile's GLB in the Model slot, replacing whatever model the
@@ -183,6 +210,11 @@ func _resolve_rig() -> void:
 		_hips_bone = _skeleton.find_bone("Hips")
 	_model_base_yaw = model.rotation.y if model != null else 0.0
 	_rebind_animation_paths()
+	# The footprint emitter watches the same skeleton, so it has to re-resolve its
+	# bones whenever a profile swaps the body (Chris 52 bones, Liv 65).
+	var footprints := get_node_or_null("Footprints")
+	if footprints != null and footprints.has_method("rebind"):
+		footprints.call("rebind")
 
 
 ## The shared humanoid library addresses %GeneralSkeleton.  Unique-name
@@ -228,6 +260,13 @@ func _cycle_character() -> void:
 
 
 func _process(delta: float) -> void:
+	if (controls_enabled or seated) and TouchControls.is_active():
+		var look_delta := TouchControls.consume_look()
+		if look_delta != Vector2.ZERO:
+			_look(look_delta)
+	# The seated camera is set by sit_at(); the blend below must not pull it back.
+	if seated:
+		return
 	var pivot_target := _camera_pivot_base
 	var camera_target := _camera_base
 	var jump_target := 0.0
@@ -250,11 +289,15 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not controls_enabled:
+	if not controls_enabled and not seated:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotate_y(-event.relative.x * mouse_sensitivity)
-		camera_pivot.rotation.x = clamp(camera_pivot.rotation.x - event.relative.y * mouse_sensitivity, -1.2, 0.4)
+		_look(event.relative)
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		# Clicking the game window after a focus change should take the mouse
+		# back; otherwise the camera is dead even though WASD still works.
+		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+			_capture_mouse()
 	elif event.is_action_pressed("ui_cancel"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
 	elif event.is_action_pressed("interact"):
@@ -262,8 +305,95 @@ func _unhandled_input(event: InputEvent) -> void:
 			dismount()
 		else:
 			try_mount()
+	elif event.is_action_pressed("lead"):
+		_toggle_lead()
 	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F2 and OS.is_debug_build():
 		_cycle_character()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_IN and controls_enabled:
+		_capture_mouse()
+
+
+func _capture_mouse() -> void:
+	# A touch screen needs the pointer to stay visible; capturing it would hide
+	# the emulated taps the HUD buttons rely on.
+	if Device.is_touch():
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _look(relative: Vector2) -> void:
+	rotate_y(-relative.x * mouse_sensitivity)
+	camera_pivot.rotation.x = clamp(
+		camera_pivot.rotation.x - relative.y * mouse_sensitivity, -1.2, 0.4
+	)
+
+
+## Takes or drops the lead rope.  Mounting and leading are exclusive: taking
+## the saddle releases the rope, and the rope can only be picked up on foot.
+func _toggle_lead() -> void:
+	if mounted:
+		return
+	var horse := get_tree().get_first_node_in_group("horse") as Node3D
+	if horse == null:
+		return
+	if leading:
+		if horse.has_method("clear_leader"):
+			horse.clear_leader()
+		leading = false
+		return
+	if horse.has_method("set_leader") and horse.has_method("can_lead") and horse.can_lead(self):
+		horse.set_leader(self)
+		leading = horse.get("leader") == self
+
+
+## What the touch CONTEXT button does while the player is in the saddle.  The
+## horse offers MOUNT on foot; this offers DISMOUNT.
+func touch_context() -> Dictionary:
+	if mounted:
+		return {"action": "interact", "label": "DISMOUNT", "priority": 1}
+	return {}
+
+
+## Sits the player on a spot.  The body itself is not moved: the seat's
+## transform is used for the eye, which keeps the seat script in charge of
+## whether the spot is a chair, a sofa or a bed.
+func sit_at(seat: Transform3D, eye_height: float, pitch_degrees: float) -> void:
+	if seated or mounted:
+		return
+	seated = true
+	controls_enabled = false
+	velocity = Vector3.ZERO
+	$Collision.set_deferred("disabled", true)
+	footsteps.stop()
+	if model != null:
+		model.visible = false
+	# The body follows the seat so the camera pivot can stay a child of it.
+	global_position = seat.origin
+	rotation.y = seat.basis.get_euler().y
+	camera_pivot.position = Vector3(0.0, eye_height, 0.0)
+	camera_pivot.rotation.x = deg_to_rad(pitch_degrees)
+	camera.position = Vector3.ZERO
+
+
+## Stands the player back up at `where`, keeping the seat's facing.
+func stand_up(where: Vector3, yaw: float) -> void:
+	if not seated:
+		return
+	seated = false
+	global_position = where
+	rotation.y = yaw
+	camera_pivot.position = _camera_pivot_base
+	camera.position = _camera_base
+	camera_pivot.rotation.x = 0.0
+	if model != null:
+		model.visible = true
+	$Collision.set_deferred("disabled", false)
+	controls_enabled = true
+	velocity = Vector3.ZERO
 
 
 func try_mount() -> void:
@@ -272,6 +402,9 @@ func try_mount() -> void:
 	var horse := get_tree().get_first_node_in_group("horse") as Node3D
 	if horse == null or not horse.has_method("can_mount") or not horse.can_mount(self):
 		return
+	if horse.has_method("clear_leader"):
+		horse.clear_leader()
+	leading = false
 	mounted = true
 	horse.set_rider(self)
 	$Collision.disabled = true
@@ -350,6 +483,9 @@ func _align_to_seat(horse: Node3D) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if seated:
+		velocity = Vector3.ZERO
+		return
 	if mounted:
 		# Position is driven by the horse while riding.  Align the pelvis to
 		# the saddle, not the feet, so the rider sits instead of standing on
@@ -360,6 +496,13 @@ func _physics_process(delta: float) -> void:
 		footsteps.stop()
 		velocity = Vector3.ZERO
 		return
+
+	# The rope can be taken away by the stable (stabling) or by a grooming
+	# session, so stop leading the moment the horse lets go.
+	if leading:
+		var led_horse := get_tree().get_first_node_in_group("horse") as Node3D
+		if led_horse == null or led_horse.get("leader") == null:
+			leading = false
 
 	if is_on_floor():
 		if not _was_on_floor:
@@ -373,10 +516,11 @@ func _physics_process(delta: float) -> void:
 
 	var input := Vector2.ZERO
 	if controls_enabled:
-		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+		input = TouchControls.get_move_input()
 	var dir := transform.basis * Vector3(input.x, 0, input.y)
 	var running := controls_enabled and Input.is_action_pressed("run")
-	var speed := run_speed if running else walk_speed
+	# A light touch on the stick walks slower; keys and full pushes are unchanged.
+	var speed := (run_speed if running else walk_speed) * clampf(input.length(), 0.0, 1.0)
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	move_and_slide()

@@ -9,14 +9,16 @@
 [ext_resource type="PackedScene" path="res://scenes/arena_fence.tscn" id="7_arena"]
 [ext_resource type="PackedScene" path="res://scenes/arena_course.tscn" id="8_course"]
 [ext_resource type="PackedScene" path="res://scenes/grooming_bay.tscn" id="9_bay"]
-[ext_resource type="Script" path="res://scripts/riding_course.gd" id="11_course"]
-[ext_resource type="Script" path="res://scripts/hud.gd" id="12_hud"]
+[ext_resource type="PackedScene" path="res://scenes/dog.tscn" id="10_dog"]
+[ext_resource type="Script" uid="uid://cn7rq87wc818v" path="res://scripts/riding_course.gd" id="11_course"]
+[ext_resource type="Script" uid="uid://baj0c1jknt6lx" path="res://scripts/hud.gd" id="12_hud"]
+[ext_resource type="Script" uid="uid://dmpx6r7ilnyjq" path="res://scripts/footprint_trail.gd" id="13_footprints"]
+[ext_resource type="PackedScene" uid="uid://gbsbio30jtet" path="res://Models/medieval_village/fantasy_house_341c9305.glb" id="14_a8y0u"]
+[ext_resource type="Script" path="res://scripts/scene_door.gd" id="15_door"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tuyoq"]
 sky_top_color = Color(0.23, 0.42, 0.72, 1)
 sky_horizon_color = Color(0.72, 0.81, 0.88, 1)
-sky_curve = 0.15
-sky_energy_multiplier = 1.0
 ground_bottom_color = Color(0.18, 0.2, 0.16, 1)
 ground_horizon_color = Color(0.55, 0.6, 0.52, 1)
 ground_curve = 0.03
@@ -28,21 +30,21 @@ sky_material = SubResource("ProceduralSkyMaterial_tuyoq")
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 2
-background_energy_multiplier = 1.0
 sky = SubResource("Sky_qlg0r")
 ambient_light_source = 3
-ambient_light_sky_contribution = 1.0
 ambient_light_energy = 0.55
 reflected_light_source = 2
 tonemap_mode = 3
-tonemap_exposure = 1.0
 tonemap_white = 6.0
 adjustment_enabled = true
-adjustment_saturation = 1.05
 adjustment_contrast = 1.03
+adjustment_saturation = 1.05
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
 size = Vector3(200, 0.2, 200)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_house"]
+size = Vector3(5.9, 3.5, 5.9)
 
 [node name="Main" type="Node3D" unique_id=862945312]
 
@@ -65,10 +67,16 @@ shape = SubResource("BoxShape3D_ground")
 
 [node name="Terrain" parent="." unique_id=92666194 instance=ExtResource("5_terrain")]
 
+[node name="Footprints" type="Node3D" parent="." unique_id=92666195]
+script = ExtResource("13_footprints")
+
 [node name="Stable" parent="." unique_id=880955720 instance=ExtResource("6_stable")]
 
 [node name="GroomingBay" parent="." unique_id=880955721 instance=ExtResource("9_bay")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -12.5)
+
+[node name="Dog" parent="." unique_id=1805603142 instance=ExtResource("10_dog")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5, 0, -16.5)
 
 [node name="ArenaFence" parent="." unique_id=1932956482 instance=ExtResource("7_arena")]
 
@@ -83,8 +91,29 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -12.5)
 [node name="Player" parent="." unique_id=2005174848 instance=ExtResource("1_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6)
 
-[node name="RidingCourse" type="Node3D" parent="."]
+[node name="RidingCourse" type="Node3D" parent="." unique_id=1683930780]
 script = ExtResource("11_course")
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=766344348]
 script = ExtResource("12_hud")
+
+[node name="Root Scene" parent="." unique_id=1004281829 instance=ExtResource("14_a8y0u")]
+transform = Transform3D(3.5039918, 0, 0, 0, 3.5039918, 0, 0, 0, 3.5039918, 36.978477, 0.00010458737, -34.306915)
+
+[node name="HouseCollision" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36.978477, 1.75, -34.306915)
+
+[node name="Collision" type="CollisionShape3D" parent="HouseCollision"]
+shape = SubResource("BoxShape3D_house")
+
+[node name="FrontDoor" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36.978477, 0, -31.2)
+script = ExtResource("15_door")
+target_scene = "res://scenes/farmhouse.tscn"
+prompt_label = "ENTER"
+prompt_height = 2.55
+reach = 2.8
+spawn_position = Vector3(4.6, 0.05, 1.55)
+spawn_yaw_degrees = 90.0
+
+[editable path="Root Scene"]

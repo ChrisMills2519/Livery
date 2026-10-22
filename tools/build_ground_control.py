@@ -30,7 +30,7 @@ OUTPUT = PROJECT / "assets" / "textures" / "ground" / "terrain_control.png"
 
 SIZE = 2048
 # World XZ rectangle covered by the texture.  The play area spans
-# x -35..55 and z -30..20, so this leaves plenty of grass margin.
+# x -50..55 and z -35..35, so this leaves plenty of grass margin.
 CENTER = (10.0, -5.0)
 EXTENT = 128.0
 
@@ -40,7 +40,7 @@ LAYERS = {
     "yard": ((0.0, -22.0), (12.0, 8.0), 2.0, 2.4),
     "path": ((0.0, -6.5), (2.0, 13.0), 1.6, 0.9),
     "training": ((35.0, 0.0), (20.0, 15.0), 3.0, 1.8),
-    "arena": ((-25.0, 0.0), (10.0, 20.0), 2.5, 1.3),
+    "arena": ((-32.5, 0.0), (17.5, 35.0), 2.5, 1.3),
 }
 
 
@@ -155,7 +155,7 @@ def main() -> None:
         "yard": (0.0, -22.0),
         "path": (0.0, -6.5),
         "training": (35.0, 0.0),
-        "arena": (-25.0, 0.0),
+        "arena": (-32.5, 0.0),
         "grass": (70.0, 40.0),
         "yard edge": (0.0, -13.0),
         "gate": (-15.0, -1.5),

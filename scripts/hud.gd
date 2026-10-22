@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+signal logo_pressed
+
 ## Minimal gameplay HUD for the schooling-round loop.
 ##
 ## Everything is built in code so the scene file stays small.  The HUD only
@@ -9,6 +11,7 @@ extends CanvasLayer
 const TEXT_COLOR := Color(0.96, 0.97, 0.92, 1.0)
 const DIM_COLOR := Color(0.78, 0.82, 0.74, 1.0)
 const ACCENT := Color(0.72, 1.0, 0.62, 1.0)
+const LiveryLogoButton := preload("res://scripts/livery_logo_button.gd")
 
 var _course: Node
 var _horse: Node3D
@@ -24,11 +27,13 @@ var _toast_label: Label
 var _result_panel: PanelContainer
 var _result_title: Label
 var _result_body: Label
+var _controls_hint: Label
 var _toast_tween: Tween
 
 
 func _ready() -> void:
 	add_to_group("gameplay_hud")
+	Device.mode_changed.connect(func(_on: bool) -> void: _apply_input_hints())
 	layer = 10
 	_build_ui()
 	call_deferred("_bind")
@@ -106,14 +111,36 @@ func _build_ui() -> void:
 	_result_panel.add_child(result_box)
 	_result_title = _label(result_box, "ROUND COMPLETE", 30, ACCENT)
 	_result_body = _label(result_box, "", 20, TEXT_COLOR)
-	var hint := _label(result_box, "Ride back through the arena gate to go again", 15, DIM_COLOR)
+	var hint := _label(result_box, "Clear a fence to go again", 15, DIM_COLOR)
 	hint.name = "Hint"
 
-	var controls := _label(root, "WASD move   ·   Shift trot / canter   ·   Space jump   ·   E mount / dismount", 15, DIM_COLOR)
+	var logo := LiveryLogoButton.new()
+	logo.name = "LiveryLogoButton"
+	root.add_child(logo)
+	logo.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	logo.offset_left = -24.0 - LiveryLogoButton.BASE_SIZE.x
+	logo.offset_right = -24.0
+	logo.offset_top = 18.0
+	logo.offset_bottom = 18.0 + LiveryLogoButton.BASE_SIZE.y
+	logo.logo_pressed.connect(_on_logo_pressed)
+
+	var controls := _label(root, "", 15, DIM_COLOR)
+	_controls_hint = controls
+	_apply_input_hints()
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	controls.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	controls.offset_left = 24
 	controls.offset_bottom = -18
+
+
+## Keyboard and touch control summaries.  Keyboard text is unchanged.
+func _apply_input_hints() -> void:
+	if _controls_hint == null:
+		return
+	_controls_hint.text = Device.pick(
+		"WASD move   ·   Shift trot / canter   ·   Space jump   ·   E mount / interact   ·   R reset rails   ·   F lead   ·   Q pet",
+		"Left stick move   ·   Push far to trot / canter   ·   Right drag look   ·   CONTEXT act   ·   JUMP   ·   LEAD   ·   RESET"
+	)
 
 
 func _label(parent: Node, text: String, size: int, color: Color) -> Label:
@@ -156,22 +183,22 @@ func _update_objective() -> void:
 			_objective_label.text = "Round complete"
 		_:
 			if mounted:
-				var meters := 0.0
-				if _horse != null:
-					meters = Vector2(
-						_horse.global_position.x - _course.gate_position.x,
-						_horse.global_position.z - _course.gate_position.z
-					).length()
-				_objective_label.text = "Ride west through the arena gate  (%.0f m)" % meters
+				_objective_label.text = "Jump a fence to start a round"
+			elif _horse != null and _horse.get("boarded") == true:
+				_objective_label.text = "Your horse is stabled - press E at the stable door"
 			else:
-				_objective_label.text = "Walk to your horse and press E to mount"
+				_objective_label.text = Device.pick("Walk to your horse and press E to mount or F to lead", "Walk to your horse, then tap CONTEXT to mount or LEAD to take the rope")
 
 
 func _update_course_text() -> void:
 	match _course.state:
 		"running":
 			_timer_label.text = "%.1fs" % _course.elapsed
-			_progress_label.text = "Fences cleared  %d / %d" % [_course.cleared_count, _course.get_jump_count()]
+			var f: int = _course.get("faults") if _course.get("faults") != null else 0
+			if f > 0:
+				_progress_label.text = "Fences  %d / %d   ·   Faults: %d" % [_course.cleared_count, _course.get_jump_count(), f]
+			else:
+				_progress_label.text = "Fences  %d / %d   ·   0 Faults (Clear)" % [_course.cleared_count, _course.get_jump_count()]
 			_timer_label.visible = true
 			_progress_label.visible = true
 		"finished":
@@ -180,6 +207,10 @@ func _update_course_text() -> void:
 		_:
 			_timer_label.visible = false
 			_progress_label.visible = false
+
+
+func _on_logo_pressed() -> void:
+	logo_pressed.emit()
 
 
 func _on_round_started() -> void:
@@ -198,18 +229,29 @@ func _on_round_finished(result: Dictionary) -> void:
 	_toast_label.modulate.a = 0.0
 	_toast_label.text = ""
 	var cleared: int = result.get("clears", 0)
-	var total: int = result.get("total", 3)
+	var total: int = result.get("total", 8)
 	var seconds: float = result.get("seconds", 0.0)
 	var reward: int = result.get("reward", 0)
 	var timed_out: bool = result.get("timed_out", false)
-	_result_title.text = "TIME UP" if timed_out else "ROUND COMPLETE"
-	if cleared >= total and not timed_out:
-		_result_title.text = "CLEAR ROUND!" if result.get("new_best", false) == false else "NEW BEST TIME!"
-	_result_body.text = "%d / %d fences\nTime  %.1fs\nReward  +£%d\nJumping training  +%d" % [
-		cleared, total, seconds, reward, 3 if cleared >= total else cleared
+	var faults: int = result.get("faults", 0)
+	var is_clear_round: bool = result.get("clear_round", false)
+
+	if timed_out:
+		_result_title.text = "TIME UP"
+	elif is_clear_round:
+		_result_title.text = "★ CLEAR ROUND! ★"
+	elif cleared >= total:
+		_result_title.text = "ROUND COMPLETE"
+	else:
+		_result_title.text = "ROUND FINISHED"
+
+	_result_body.text = "%d / %d fences   ·   %d faults\nTime  %.1fs\nReward  +£%d\nJumping training  +%d" % [
+		cleared, total, faults, seconds, reward, 4 if is_clear_round else (3 if cleared >= total else cleared)
 	]
+	if is_clear_round:
+		_result_body.text += "\nFlawless clear round bonus awarded!"
 	if result.get("new_best", false):
-		_result_body.text += "\nNew personal best!"
+		_result_body.text += "\nNew personal best time!"
 	_result_panel.visible = true
 
 

@@ -1,3 +1,27 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local response dumps
+_respdump/
+
+# Blender working files
+*.blend
+*.blend1
+
+# Exported builds (see netlify.toml)
+build/
+
+# Netlify CLI state, including the linked site id
+.netlify/
+
+# Review renders and other throwaway artifacts
+artifacts/
+
+# Temporary debug renders and shaders
+artifacts/_dbg_*
+res/shaders/_fp_probe.*
