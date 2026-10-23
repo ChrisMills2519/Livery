@@ -15,6 +15,8 @@ extends Node3D
 @export var prompt_height := 2.60
 ## How close the player has to be, measured on the ground plane.
 @export var reach := 2.60
+## Reach used by the aim path, measured from the player's body.
+@export var body_reach := 1.6
 ## Where the player stands in the target scene.
 @export var spawn_position := Vector3.ZERO
 ## Facing in the target scene, in degrees.
@@ -29,6 +31,7 @@ var _tick := 0.0
 
 func _ready() -> void:
 	add_to_group("touch_context")
+	add_to_group("interactable")
 	_build_prompt()
 	call_deferred("_bind")
 
@@ -61,6 +64,20 @@ func _process(delta: float) -> void:
 
 
 ## CONTEXT offer at the door, for touch players.
+## Aim path: the prompt is driven by the player's aim, not by proximity alone.
+func show_prompt(show: bool) -> void:
+	if _prompt != null and show:
+		_prompt.visible = true
+
+
+## Aim-path use: the player's interact on this door enters it.
+func use() -> bool:
+	if _entering or not _refresh():
+		return false
+	_enter()
+	return true
+
+
 func touch_context() -> Dictionary:
 	if _can_use:
 		return {"action": "interact", "label": prompt_label, "priority": 5}

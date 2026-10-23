@@ -8,10 +8,10 @@ extends SceneTree
 ##
 ## The shell (floors, walls with real window and door openings, ceilings,
 ## stairs, trim) comes from the plan below.  Furniture is instanced from
-## Kenney's CC0 Furniture Kit in Models/interior/kenney_furniture_kit/ and
-## placed from the PROP table.  Every prop is measured, centred on its
-## footprint and dropped onto its floor, so the kit's baked pivots cannot
-## leave a chair floating.
+## Kenney's CC0 Furniture Kit, Quaternius's CC0 House Interior pack, Kenney's
+## CC0 Food Kit and Shapespark's CC0 textiles, and placed from the PROP table.
+## Every prop is measured, centred on its footprint and dropped onto its floor,
+## so the kit's baked pivots cannot leave a chair floating.
 ##
 ## Windows and doors are declared once in WINDOWS / DOORS: the wall openings
 ## and the frames, glass and leaves are both derived from those tables, so they
@@ -19,28 +19,39 @@ extends SceneTree
 ##
 ## Re-running overwrites scenes/farmhouse.tscn.  Edit the tables here rather
 ## than the generated scene if you want the change to survive.
+##
+## The house is three times the floor area of the original 11 x 9 m plan:
+## 19.06 x 15.58 m clear, with 3.0 m ground ceilings and 2.88 m upstairs.
 
 const OUT := "res://scenes/farmhouse.tscn"
 const KIT := "res://Models/interior/kenney_furniture_kit/"
+const QUAT := "res://Models/interior/quaternius/"
+const FOOD := "res://Models/interior/kenney_food_kit/"
+const TEXTILE := "res://Models/interior/shapespark_textiles/"
+const PROPS := "res://Models/props/"
 const TEX_FLOOR := "res://Models/interior/textures/wood_floor_diff_1k.jpg"
 const TEX_WALL := "res://Models/interior/textures/painted_plaster_wall_diff_1k.jpg"
 const PLAYER := "res://scenes/player.tscn"
 const SPOT := "res://scripts/interior_spot.gd"
 const DOOR := "res://scripts/scene_door.gd"
+const DOG := "res://scenes/dog.tscn"
 ## Outside spawn in main.tscn, just in front of the fantasy house's front door.
 const HOUSE_DOOR_SPAWN := Vector3(36.978477, 0.05, -30.9)
 const HOUSE_DOOR_SPAWN_YAW := 180.0
 
 # Plan.  Room rectangles below are the clear space between wall faces.
-const X0 := -5.5
-const X1 := 5.5
-const Z0 := -4.5
-const Z1 := 4.5
-const GROUND_CEIL := 2.60
-const GROUND_SLAB := 2.66
-const UPPER_FLOOR := 2.72
-const UPPER_CEIL := 5.06
-const UPPER_TOP := 5.12
+const X0 := -9.53
+const X1 := 9.53
+const Z0 := -7.79
+const Z1 := 7.79
+const HALL_X := 2.43
+const STUDY_Z := -3.81
+const BOOT_Z := 3.81
+const GROUND_CEIL := 3.00
+const GROUND_SLAB := 3.06
+const UPPER_FLOOR := 3.12
+const UPPER_CEIL := 6.00
+const UPPER_TOP := 6.06
 const WALL_T := 0.30
 const PART_T := 0.12
 const FLOOR_T := 0.30
@@ -50,63 +61,80 @@ const FLOOR_T := 0.30
 # turns west along the south wall and finishes on the gallery floor in front of
 # the bedroom doors.  The foot faces north into the hall, so it is walked into
 # end-on; the top opens onto real floor rather than the wall.
-const STAIR_WIDTH := 1.00
-const STAIR_RISERS := 15
+const STAIR_WIDTH := 1.20
+const STAIR_RISERS := 17
 const RISER := UPPER_FLOOR / float(STAIR_RISERS)
-const STAIR_X0 := 4.35
-const STAIR_X1 := 5.35
+const STAIR_X0 := 8.18
+const STAIR_X1 := 9.38
 const STAIR_CX := (STAIR_X0 + STAIR_X1) * 0.5
-const LOWER_Z_BOTTOM := 0.85
-const LOWER_Z_TOP := -1.14
-const LOWER_RISERS := 6
+const LOWER_Z_BOTTOM := 0.60
+const LOWER_Z_TOP := -2.55
+const LOWER_RISERS := 7
 const LANDING_TOP := RISER * float(LOWER_RISERS)
-const UPPER_Z0 := -2.14
-const UPPER_Z1 := -1.14
+const UPPER_Z0 := -3.75
+const UPPER_Z1 := -2.55
 const STAIR_Z_MID := (UPPER_Z0 + UPPER_Z1) * 0.5
-const UPPER_X_START := 4.35
-const UPPER_X_END := 2.36
-const UPPER_RISERS := 9
-const STAIR_GUARD_HEIGHT := 0.96
+const UPPER_X_START := 8.18
+const UPPER_X_END := 4.58
+const UPPER_RISERS := 10
+const STAIR_GUARD_HEIGHT := 1.00
 
 const GROUND_SILL := 0.95
-const GROUND_HEAD := 2.10
+const GROUND_HEAD := 2.55
 const UPPER_SILL := UPPER_FLOOR + 0.95
+const UPPER_HEAD := UPPER_FLOOR + 2.40
 
 # Each entry: name, axis the wall runs along, the plane it sits in, the centre
 # along that axis, plus the opening.  "base" is the floor the window serves.
 const WINDOWS := [
-	{"name": "SittingSouthA", "axis": "x", "plane": Z0, "centre": -3.95, "width": 1.25, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
-	{"name": "SittingSouthB", "axis": "x", "plane": Z0, "centre": -1.35, "width": 1.25, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
-	{"name": "StudySouth", "axis": "x", "plane": Z0, "centre": 4.15, "width": 1.20, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
-	{"name": "KitchenNorth", "axis": "x", "plane": Z1, "centre": -4.35, "width": 1.25, "sill": GROUND_SILL + 0.15, "head": GROUND_HEAD, "base": 0.0},
-	{"name": "SittingWest", "axis": "z", "plane": X0, "centre": -1.05, "width": 1.05, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
-	{"name": "KitchenWest", "axis": "z", "plane": X0, "centre": 2.65, "width": 1.05, "sill": GROUND_SILL + 0.10, "head": GROUND_HEAD, "base": 0.0},
-	{"name": "StudyEast", "axis": "z", "plane": X1, "centre": -3.50, "width": 0.90, "sill": GROUND_SILL + 0.20, "head": GROUND_HEAD, "base": 0.0},
-	{"name": "HallEast", "axis": "z", "plane": X1, "centre": 0.10, "width": 0.95, "sill": GROUND_SILL + 0.25, "head": GROUND_HEAD, "base": 0.0},
-	{"name": "BootEast", "axis": "z", "plane": X1, "centre": 3.30, "width": 0.85, "sill": GROUND_SILL + 0.25, "head": GROUND_HEAD, "base": 0.0},
-	{"name": "MainBedSouthA", "axis": "x", "plane": Z0, "centre": -3.85, "width": 1.15, "sill": UPPER_SILL, "head": UPPER_FLOOR + 1.95, "base": UPPER_FLOOR},
-	{"name": "MainBedSouthB", "axis": "x", "plane": Z0, "centre": -1.25, "width": 1.15, "sill": UPPER_SILL, "head": UPPER_FLOOR + 1.95, "base": UPPER_FLOOR},
-	{"name": "LandingSouth", "axis": "x", "plane": Z0, "centre": 4.15, "width": 1.15, "sill": UPPER_SILL, "head": UPPER_FLOOR + 1.95, "base": UPPER_FLOOR},
-	{"name": "SecondBedNorth", "axis": "x", "plane": Z1, "centre": -3.90, "width": 1.15, "sill": UPPER_SILL, "head": UPPER_FLOOR + 1.95, "base": UPPER_FLOOR},
-	{"name": "BathNorth", "axis": "x", "plane": Z1, "centre": 4.35, "width": 0.85, "sill": UPPER_FLOOR + 1.15, "head": UPPER_FLOOR + 1.85, "base": UPPER_FLOOR},
-	{"name": "MainBedWest", "axis": "z", "plane": X0, "centre": -1.20, "width": 1.05, "sill": UPPER_SILL, "head": UPPER_FLOOR + 1.95, "base": UPPER_FLOOR},
-	{"name": "SecondBedWest", "axis": "z", "plane": X0, "centre": 2.40, "width": 1.05, "sill": UPPER_SILL, "head": UPPER_FLOOR + 1.95, "base": UPPER_FLOOR},
-	{"name": "GalleryEast", "axis": "z", "plane": X1, "centre": 0.90, "width": 1.00, "sill": UPPER_SILL, "head": UPPER_FLOOR + 1.95, "base": UPPER_FLOOR},
-	{"name": "LandingEast", "axis": "z", "plane": X1, "centre": -3.40, "width": 0.95, "sill": UPPER_SILL, "head": UPPER_FLOOR + 1.95, "base": UPPER_FLOOR},
+	{"name": "SittingSouthA", "axis": "x", "plane": Z0, "centre": -7.60, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "SittingSouthB", "axis": "x", "plane": Z0, "centre": -4.90, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "SittingSouthC", "axis": "x", "plane": Z0, "centre": -2.20, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "StudySouthA", "axis": "x", "plane": Z0, "centre": 5.20, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "StudySouthB", "axis": "x", "plane": Z0, "centre": 7.80, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "KitchenNorthA", "axis": "x", "plane": Z1, "centre": -7.60, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "KitchenNorthB", "axis": "x", "plane": Z1, "centre": -4.90, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "KitchenNorthC", "axis": "x", "plane": Z1, "centre": -2.20, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "BootNorth", "axis": "x", "plane": Z1, "centre": 7.60, "width": 1.40, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "SittingWestA", "axis": "z", "plane": X0, "centre": -6.50, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "SittingWestB", "axis": "z", "plane": X0, "centre": -1.20, "width": 1.50, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "KitchenWestA", "axis": "z", "plane": X0, "centre": 2.50, "width": 1.40, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "KitchenWestB", "axis": "z", "plane": X0, "centre": 5.50, "width": 1.40, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "StudyEast", "axis": "z", "plane": X1, "centre": -5.80, "width": 1.40, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "HallStairEast", "axis": "z", "plane": X1, "centre": -1.00, "width": 1.10, "sill": 1.75, "head": 2.75, "base": 0.0},
+	{"name": "BootEast", "axis": "z", "plane": X1, "centre": 5.20, "width": 1.40, "sill": GROUND_SILL, "head": GROUND_HEAD, "base": 0.0},
+	{"name": "MainBedSouthA", "axis": "x", "plane": Z0, "centre": -7.60, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "MainBedSouthB", "axis": "x", "plane": Z0, "centre": -4.90, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "MainBedSouthC", "axis": "x", "plane": Z0, "centre": -2.20, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "LandingSouth", "axis": "x", "plane": Z0, "centre": 7.00, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "SecondBedNorthA", "axis": "x", "plane": Z1, "centre": -7.60, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "SecondBedNorthB", "axis": "x", "plane": Z1, "centre": -4.90, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "SecondBedNorthC", "axis": "x", "plane": Z1, "centre": -2.20, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "BathNorthA", "axis": "x", "plane": Z1, "centre": 6.00, "width": 1.20, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "BathNorthB", "axis": "x", "plane": Z1, "centre": 8.20, "width": 1.20, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "MainBedWestA", "axis": "z", "plane": X0, "centre": -6.50, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "MainBedWestB", "axis": "z", "plane": X0, "centre": -1.20, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "SecondBedWestA", "axis": "z", "plane": X0, "centre": 2.50, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "SecondBedWestB", "axis": "z", "plane": X0, "centre": 5.50, "width": 1.50, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "LandingEast", "axis": "z", "plane": X1, "centre": -5.80, "width": 1.40, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "GalleryEast", "axis": "z", "plane": X1, "centre": 1.50, "width": 1.30, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
+	{"name": "BathEast", "axis": "z", "plane": X1, "centre": 5.20, "width": 1.20, "sill": UPPER_SILL, "head": UPPER_HEAD, "base": UPPER_FLOOR},
 ]
 
-# Doors and openings.  "leaf" true adds a closed exterior door.
+# Doors and openings.  "leaf" true adds a closed exterior door.  Every interior
+# opening is a wide cased opening with no leaf, so the house can be walked
+# through without opening anything.
 const DOORS := [
-	{"name": "SittingHall", "axis": "z", "plane": 1.4, "centre": -0.60, "width": 0.95, "head": 2.05, "base": 0.0, "leaf": false},
-	{"name": "KitchenHall", "axis": "z", "plane": 1.4, "centre": 1.00, "width": 0.95, "head": 2.05, "base": 0.0, "leaf": false},
-	{"name": "SittingKitchen", "axis": "x", "plane": 0.0, "centre": -2.20, "width": 1.45, "head": 2.30, "base": 0.0, "leaf": false},
-	{"name": "StudyHall", "axis": "x", "plane": -2.2, "centre": 2.50, "width": 0.95, "head": 2.05, "base": 0.0, "leaf": false},
-	{"name": "BootHall", "axis": "x", "plane": 2.2, "centre": 4.20, "width": 0.95, "head": 2.05, "base": 0.0, "leaf": false},
-	{"name": "MainBed", "axis": "z", "plane": 1.4, "centre": -1.30, "width": 0.95, "head": UPPER_FLOOR + 2.05, "base": UPPER_FLOOR, "leaf": false},
-	{"name": "SecondBed", "axis": "z", "plane": 1.4, "centre": 0.60, "width": 0.95, "head": UPPER_FLOOR + 2.05, "base": UPPER_FLOOR, "leaf": false},
-	{"name": "Bath", "axis": "x", "plane": 2.2, "centre": 4.20, "width": 0.90, "head": UPPER_FLOOR + 2.05, "base": UPPER_FLOOR, "leaf": false},
-	{"name": "FrontDoor", "axis": "z", "plane": X1, "centre": 1.55, "width": 1.05, "head": 2.15, "base": 0.0, "leaf": true},
-	{"name": "BackDoor", "axis": "x", "plane": Z1, "centre": 3.10, "width": 0.95, "head": 2.10, "base": 0.0, "leaf": true},
+	{"name": "SittingHall", "axis": "z", "plane": HALL_X, "centre": -1.60, "width": 1.80, "head": 2.55, "base": 0.0, "leaf": false},
+	{"name": "KitchenHall", "axis": "z", "plane": HALL_X, "centre": 1.60, "width": 1.80, "head": 2.55, "base": 0.0, "leaf": false},
+	{"name": "SittingKitchen", "axis": "x", "plane": 0.0, "centre": -3.80, "width": 2.40, "head": 2.60, "base": 0.0, "leaf": false},
+	{"name": "StudyHall", "axis": "x", "plane": STUDY_Z, "centre": 3.40, "width": 1.80, "head": 2.55, "base": 0.0, "leaf": false},
+	{"name": "BootHall", "axis": "x", "plane": BOOT_Z, "centre": 4.00, "width": 1.80, "head": 2.55, "base": 0.0, "leaf": false},
+	{"name": "MainBed", "axis": "z", "plane": HALL_X, "centre": -1.60, "width": 1.80, "head": UPPER_FLOOR + 2.35, "base": UPPER_FLOOR, "leaf": false},
+	{"name": "SecondBed", "axis": "z", "plane": HALL_X, "centre": 1.60, "width": 1.80, "head": UPPER_FLOOR + 2.35, "base": UPPER_FLOOR, "leaf": false},
+	{"name": "Bath", "axis": "x", "plane": BOOT_Z, "centre": 4.00, "width": 1.40, "head": UPPER_FLOOR + 2.35, "base": UPPER_FLOOR, "leaf": false},
+	{"name": "FrontDoor", "axis": "z", "plane": X1, "centre": 2.68, "width": 1.30, "head": 2.55, "base": 0.0, "leaf": true},
+	{"name": "BackDoor", "axis": "x", "plane": Z1, "centre": 5.40, "width": 1.20, "head": 2.50, "base": 0.0, "leaf": true},
 ]
 
 # The kit's upholstery colour.  Everything the PROP table marks as "fabric"
@@ -116,6 +144,8 @@ const KIT_FABRIC := Color(0.9747, 0.6399, 0.6202)
 const FABRIC_GREEN := Color(0.40, 0.45, 0.36)
 const FABRIC_CREAM := Color(0.88, 0.85, 0.78)
 const FABRIC_TERRACOTTA := Color(0.53, 0.35, 0.28)
+const FABRIC_MUSTARD := Color(0.62, 0.47, 0.25)
+const FABRIC_BLUE := Color(0.33, 0.41, 0.46)
 
 var _root: Node3D
 var _shell: Node3D
@@ -125,6 +155,7 @@ var _spots: Node3D
 var _lighting: Node3D
 var _materials := {}
 var _kit := {}
+var _trim_index := 0
 
 
 func _initialize() -> void:
@@ -143,14 +174,26 @@ func _initialize() -> void:
 	_build_walls()
 	_build_openings()
 	_build_stairs()
+	_build_beams()
 	_build_fireplace()
 	_build_furniture()
 	_build_seats()
 	_build_lighting()
 	_build_player()
+	_build_dog()
 	_build_exit_door()
 
 	_root.set_meta("rooms", _rooms())
+	# Publish the opening plan so the checks test the openings that were actually
+	# built, rather than a second hand-copied table that can drift.
+	_root.set_meta("windows", WINDOWS)
+	_root.set_meta("doors", DOORS)
+	# The player reads this profile when it spawns: a shorter, higher boom for
+	# interiors, while the yard keeps the full outdoor camera.
+	_root.add_to_group("interior")
+	_root.set_meta("camera_max_boom", 2.35)
+	_root.set_meta("camera_pivot_height", 1.62)
+	_root.set_meta("camera_shoulder", 0.22)
 	_own(_root)
 
 	var packed := PackedScene.new()
@@ -238,6 +281,10 @@ func _wood_trim() -> StandardMaterial3D:
 	return _plain("trim", Color(0.46, 0.31, 0.20), 0.6)
 
 
+func _trim_paint() -> StandardMaterial3D:
+	return _plain("trim_paint", Color(0.86, 0.83, 0.76), 0.75)
+
+
 func _worktop() -> StandardMaterial3D:
 	return _plain("worktop", Color(0.28, 0.26, 0.24), 0.45)
 
@@ -254,7 +301,7 @@ func _glass() -> StandardMaterial3D:
 	if _materials.has("glass"):
 		return _materials["glass"]
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.72, 0.82, 0.88, 0.20)
+	mat.albedo_color = Color(0.66, 0.74, 0.78, 0.92)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.08
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -314,6 +361,18 @@ func _build_floors() -> void:
 	# A boarded edge around both openings, so the slab ends read as joinery.
 	_hole_trim("CeilingTrim", _stair_holes(), GROUND_CEIL - 0.01, 0.06, _wood_trim())
 	_hole_trim("FloorTrim", _stair_holes(), UPPER_FLOOR - 0.045, 0.07, _wood_trim())
+
+
+## Old oak beams across the two big ground rooms and both bedrooms.  They are
+## above head height and carry no collision; they are the farmhouse's strongest
+## character detail from the walk-through camera.
+func _build_beams() -> void:
+	for z in [-6.0, -3.8, -1.6]:
+		_mesh_box(_shell, "BeamSitting", Vector3((X0 + HALL_X) * 0.5, GROUND_CEIL - 0.12, z), Vector3(HALL_X - X0, 0.20, 0.18), _dark_wood())
+		_mesh_box(_shell, "BeamMainBed", Vector3((X0 + HALL_X) * 0.5, UPPER_CEIL - 0.12, z), Vector3(HALL_X - X0, 0.20, 0.18), _dark_wood())
+	for z in [1.6, 3.8, 6.0]:
+		_mesh_box(_shell, "BeamKitchen", Vector3((X0 + HALL_X) * 0.5, GROUND_CEIL - 0.12, z), Vector3(HALL_X - X0, 0.20, 0.18), _dark_wood())
+		_mesh_box(_shell, "BeamSecondBed", Vector3((X0 + HALL_X) * 0.5, UPPER_CEIL - 0.12, z), Vector3(HALL_X - X0, 0.20, 0.18), _dark_wood())
 
 
 func _hole_trim(node_name: String, holes: Array, y: float, thick: float, mat: Material) -> void:
@@ -414,16 +473,16 @@ func _build_walls() -> void:
 	_wall("WallEastUpper", Vector2(X1, Z0 - ext * 0.5), Vector2(X1, Z1 + ext * 0.5), UPPER_FLOOR, UPPER_CEIL - UPPER_FLOOR, ext)
 
 	# Ground floor partitions.
-	_wall("PartHallWest", Vector2(1.4, Z0), Vector2(1.4, Z1), 0.0, GROUND_CEIL, part)
-	_wall("PartSittingKitchen", Vector2(X0, 0.0), Vector2(1.4, 0.0), 0.0, GROUND_CEIL, part)
-	_wall("PartStudy", Vector2(1.4, -2.2), Vector2(X1, -2.2), 0.0, GROUND_CEIL, part)
-	_wall("PartBoot", Vector2(1.4, 2.2), Vector2(X1, 2.2), 0.0, GROUND_CEIL, part)
+	_wall("PartHallWest", Vector2(HALL_X, Z0), Vector2(HALL_X, Z1), 0.0, GROUND_CEIL, part)
+	_wall("PartSittingKitchen", Vector2(X0, 0.0), Vector2(HALL_X, 0.0), 0.0, GROUND_CEIL, part)
+	_wall("PartStudy", Vector2(HALL_X, STUDY_Z), Vector2(X1, STUDY_Z), 0.0, GROUND_CEIL, part)
+	_wall("PartBoot", Vector2(HALL_X, BOOT_Z), Vector2(X1, BOOT_Z), 0.0, GROUND_CEIL, part)
 
 	# First floor: the east side is one open landing around the stairwell, so
 	# only the bedroom wall and the bathroom wall are needed.
-	_wall("PartBedroomsUpper", Vector2(1.4, Z0), Vector2(1.4, Z1), UPPER_FLOOR, UPPER_CEIL - UPPER_FLOOR, part)
-	_wall("PartBedroomsDivide", Vector2(X0, 0.0), Vector2(1.4, 0.0), UPPER_FLOOR, UPPER_CEIL - UPPER_FLOOR, part)
-	_wall("PartBathUpper", Vector2(1.4, 2.2), Vector2(X1, 2.2), UPPER_FLOOR, UPPER_CEIL - UPPER_FLOOR, part)
+	_wall("PartBedroomsUpper", Vector2(HALL_X, Z0), Vector2(HALL_X, Z1), UPPER_FLOOR, UPPER_CEIL - UPPER_FLOOR, part)
+	_wall("PartBedroomsDivide", Vector2(X0, 0.0), Vector2(HALL_X, 0.0), UPPER_FLOOR, UPPER_CEIL - UPPER_FLOOR, part)
+	_wall("PartBathUpper", Vector2(HALL_X, BOOT_Z), Vector2(X1, BOOT_Z), UPPER_FLOOR, UPPER_CEIL - UPPER_FLOOR, part)
 
 
 func _wall(node_name: String, a: Vector2, b: Vector2, base_y: float, height: float, thickness: float) -> void:
@@ -455,6 +514,50 @@ func _wall(node_name: String, a: Vector2, b: Vector2, base_y: float, height: flo
 		cursor = maxf(cursor, span_end)
 	if cursor < length - 0.001:
 		_wall_box(body, a, dir, cursor, length, base_y, base_y + height, thickness)
+	_skirting_for(a, b, base_y, thickness)
+
+
+## A painted skirting board on both faces of a wall, interrupted only by
+## doorways (windows sit above it).  It is the detail that makes the huge rooms
+## read as rooms rather than boxes.
+func _skirting_for(a: Vector2, b: Vector2, base_y: float, thickness: float) -> void:
+	var delta := b - a
+	var length := delta.length()
+	if length < 0.10:
+		return
+	var dir := delta / length
+	var axis := "x" if absf(dir.x) > 0.5 else "z"
+	var plane := a.y if axis == "x" else a.x
+	var from := a.x if axis == "x" else a.y
+	var to := b.x if axis == "x" else b.y
+	var low := minf(from, to)
+	var marks := _openings_for(axis, plane, base_y, from, to)
+	marks.sort_custom(func(x, y): return x["at"] < y["at"])
+	var gaps: Array = []
+	for mark in marks:
+		if float(mark["bottom"]) <= 0.01:
+			gaps.append(Vector2(float(mark["at"]) - float(mark["width"]) * 0.5, float(mark["at"]) + float(mark["width"]) * 0.5))
+	var segments: Array = []
+	var cursor := 0.0
+	for gap in gaps:
+		if gap.x > cursor + 0.02:
+			segments.append(Vector2(cursor, gap.x))
+		cursor = maxf(cursor, gap.y)
+	if cursor < length - 0.02:
+		segments.append(Vector2(cursor, length))
+
+	var half := thickness * 0.5 + 0.018
+	for segment in segments:
+		var run: float = segment.y - segment.x
+		if run < 0.02:
+			continue
+		var along: float = (segment.x + segment.y) * 0.5
+		for side in [-1.0, 1.0]:
+			var offset: float = half * float(side)
+			var centre := Vector3(low + along, base_y + 0.08, plane + offset) if axis == "x" else Vector3(plane + offset, base_y + 0.08, low + along)
+			var size := Vector3(run, 0.16, 0.035) if axis == "x" else Vector3(0.035, 0.16, run)
+			_mesh_box(_shell, "Skirting%04d" % _trim_index, centre, size, _trim_paint())
+			_trim_index += 1
 
 
 func _wall_box(body: StaticBody3D, a: Vector2, dir: Vector2, span_start: float, span_end: float, y0: float, y1: float, thickness: float) -> void:
@@ -527,17 +630,22 @@ func _door_casing(door: Dictionary) -> void:
 	var width: float = door["width"]
 	var head: float = door["head"]
 	var base: float = door["base"]
-	var trim := 0.08
+	var trim := 0.12
+	var depth := WALL_T if bool(door["leaf"]) else PART_T
 	var node_name := "Door" + String(door["name"])
 
 	for side in [-1.0, 1.0]:
 		var offset: float = width * 0.5 * float(side)
 		var pos := Vector3(centre.x + offset, base + (head - base) * 0.5, centre.z) if along_x else Vector3(centre.x, base + (head - base) * 0.5, centre.z + offset)
-		var size := Vector3(trim, head - base, PART_T + 0.03) if along_x else Vector3(PART_T + 0.03, head - base, trim)
+		var size := Vector3(trim, head - base, depth + 0.04) if along_x else Vector3(depth + 0.04, head - base, trim)
 		_mesh_box(_shell, node_name + "Jamb", pos, size, _wood_trim())
 
-	var head_size := Vector3(width + trim * 2.0, trim, PART_T + 0.03) if along_x else Vector3(PART_T + 0.03, trim, width + trim * 2.0)
+	var head_size := Vector3(width + trim * 2.0, trim, depth + 0.04) if along_x else Vector3(depth + 0.04, trim, width + trim * 2.0)
 	_mesh_box(_shell, node_name + "Head", Vector3(centre.x, head + trim * 0.5, centre.z), head_size, _wood_trim())
+	# A threshold board, so a cased opening reads as a finished doorway rather
+	# than a hole in the plaster.
+	var sill_size := Vector3(width, 0.03, depth + 0.06) if along_x else Vector3(depth + 0.06, 0.03, width)
+	_mesh_box(_shell, node_name + "Threshold", Vector3(centre.x, base + 0.015, centre.z), sill_size, _wood_trim())
 
 
 func _door_leaf(door: Dictionary) -> void:
@@ -586,20 +694,22 @@ func _build_stairs() -> void:
 	_walk_ramp(body, Vector3(STAIR_CX, 0.0, LOWER_Z_BOTTOM), Vector3(STAIR_CX, LANDING_TOP, LOWER_Z_TOP), STAIR_WIDTH)
 	_walk_ramp(body, Vector3(UPPER_X_START, LANDING_TOP, STAIR_Z_MID), Vector3(UPPER_X_END, UPPER_FLOOR, STAIR_Z_MID), STAIR_WIDTH)
 
-	# Guards, each with its own collision: the open side of each flight, the
-	# landing, and the three edges of the well on the gallery floor.  The fourth
-	# edge is the top step, which has to stay open.
+	# Guards, each with its own collision: the open side of each flight and the
+	# three edges of the well on the gallery floor.  The fourth edge is the top
+	# step, which has to stay open.
 	# The quarter landing needs no rail: walls on two sides, the lower flight
 	# on the third and the upper flight on the fourth.
 	_guard_raked(body, Vector3(STAIR_X0 + 0.05, 0.0, LOWER_Z_BOTTOM), Vector3(STAIR_X0 + 0.05, LANDING_TOP, LOWER_Z_TOP))
-	_guard_raked(body, Vector3(UPPER_X_START, LANDING_TOP, UPPER_Z1 - 0.06), Vector3(3.35, 1.91, UPPER_Z1 - 0.06))
+	# The raked rail runs down the open side of the upper flight from the top;
+	# the gallery edge above it has its own level balustrade.
+	_guard_raked(body, Vector3(UPPER_X_START, LANDING_TOP, UPPER_Z1 - 0.06), Vector3(6.00, 2.40, UPPER_Z1 - 0.06))
 	_guard_level(body, Vector3(UPPER_X_END, UPPER_FLOOR, UPPER_Z1 + 0.06), Vector3(UPPER_X_START, UPPER_FLOOR, UPPER_Z1 + 0.06))
-	_guard_level(body, Vector3(STAIR_X0, UPPER_FLOOR, UPPER_Z1 + 0.06), Vector3(STAIR_X0, UPPER_FLOOR, 0.36))
-	_guard_level(body, Vector3(STAIR_X0, UPPER_FLOOR, 0.36), Vector3(STAIR_X1, UPPER_FLOOR, 0.36))
+	_guard_level(body, Vector3(STAIR_X0, UPPER_FLOOR, UPPER_Z1 + 0.06), Vector3(STAIR_X0, UPPER_FLOOR, LOWER_Z_BOTTOM + 0.05))
+	_guard_level(body, Vector3(STAIR_X0, UPPER_FLOOR, LOWER_Z_BOTTOM + 0.05), Vector3(STAIR_X1, UPPER_FLOOR, LOWER_Z_BOTTOM + 0.05))
 
 	_newel(Vector3(STAIR_X0 + 0.05, 0.0, LOWER_Z_BOTTOM))
 	_newel(Vector3(UPPER_X_END, UPPER_FLOOR, UPPER_Z1 + 0.06))
-	_newel(Vector3(STAIR_X0, UPPER_FLOOR, 0.36))
+	_newel(Vector3(STAIR_X0, UPPER_FLOOR, LOWER_Z_BOTTOM + 0.05))
 
 
 func _add_mesh_box(node_name: String, centre: Vector3, size: Vector3, mat: Material, basis := Basis.IDENTITY) -> MeshInstance3D:
@@ -698,34 +808,104 @@ func _newel(pos: Vector3, height := STAIR_GUARD_HEIGHT + 0.10) -> void:
 # --- fireplace --------------------------------------------------------------
 
 func _build_fireplace() -> void:
-	var centre_z := -2.2
-	var breast_depth := 0.42
-	var breast_w := 2.10
+	var centre_z := -3.80
+	var breast_depth := 0.55
+	var breast_w := 2.80
 	var breast_centre := Vector3(X0 + breast_depth * 0.5, GROUND_CEIL * 0.5, centre_z)
 	_mesh_box(_shell, "ChimneyBreast", breast_centre, Vector3(breast_depth, GROUND_CEIL, breast_w), _stone())
 	_collide_box(breast_centre, Vector3(breast_depth, GROUND_CEIL, breast_w))
 
 	# A dark firebox with stone jambs and a lintel around it, rather than a
 	# flat panel across the breast.
-	_mesh_box(_shell, "FireRecess", Vector3(X0 + breast_depth + 0.01, 0.50, centre_z), Vector3(0.08, 1.00, 1.05), _plain("soot", Color(0.05, 0.045, 0.04), 1.0))
+	_mesh_box(_shell, "FireRecess", Vector3(X0 + breast_depth + 0.01, 0.58, centre_z), Vector3(0.10, 1.16, 1.35), _plain("soot", Color(0.05, 0.045, 0.04), 1.0))
 	for side in [-1.0, 1.0]:
-		_mesh_box(_shell, "FireJamb", Vector3(X0 + breast_depth + 0.05, 0.55, centre_z + 0.63 * float(side)), Vector3(0.10, 1.10, 0.22), _stone())
-	_mesh_box(_shell, "FireLintel", Vector3(X0 + breast_depth + 0.05, 1.08, centre_z), Vector3(0.10, 0.16, 1.48), _stone())
-	_mesh_box(_shell, "Mantel", Vector3(X0 + breast_depth + 0.12, 1.22, centre_z), Vector3(0.30, 0.09, 2.10), _wood_trim())
-	_mesh_box(_shell, "Hearth", Vector3(X0 + breast_depth + 0.30, 0.03, centre_z), Vector3(0.60, 0.06, 2.20), _stone())
-	_mesh_box(_shell, "Embers", Vector3(X0 + breast_depth + 0.01, 0.10, centre_z), Vector3(0.07, 0.16, 0.80), _embers())
-	_mesh_box(_shell, "LogBasket", Vector3(X0 + breast_depth + 0.45, 0.16, centre_z - 1.35), Vector3(0.42, 0.32, 0.42), _wood_trim())
+		_mesh_box(_shell, "FireJamb", Vector3(X0 + breast_depth + 0.06, 0.64, centre_z + 0.80 * float(side)), Vector3(0.12, 1.28, 0.26), _stone())
+	_mesh_box(_shell, "FireLintel", Vector3(X0 + breast_depth + 0.06, 1.27, centre_z), Vector3(0.12, 0.18, 1.82), _stone())
+	_mesh_box(_shell, "Mantel", Vector3(X0 + breast_depth + 0.14, 1.43, centre_z), Vector3(0.36, 0.10, 2.70), _wood_trim())
+	_mesh_box(_shell, "Hearth", Vector3(X0 + breast_depth + 0.36, 0.035, centre_z), Vector3(0.72, 0.07, 2.90), _stone())
+	_mesh_box(_shell, "Embers", Vector3(X0 + breast_depth + 0.02, 0.12, centre_z), Vector3(0.09, 0.18, 1.00), _embers())
+	_mesh_box(_shell, "LogBasket", Vector3(X0 + breast_depth + 0.55, 0.19, centre_z - 1.75), Vector3(0.50, 0.38, 0.50), _wood_trim())
 
 
 # --- furniture --------------------------------------------------------------
 
-## opts: name, scale, collide (default true), mode ("floor" or "wall").
+## A window entry from the plan, by name.
+func _window(name: String) -> Dictionary:
+	for window in WINDOWS:
+		if String(window["name"]) == name:
+			return window
+	push_error("no window named " + name)
+	return {}
+
+
+## Floor-length curtains and a rod for one planned window.  The panel models
+## are Shapespark's CC0 textiles, tinted to the farmhouse linen palette.
+func _curtains_for(name: String) -> void:
+	var window := _window(name)
+	if window.is_empty():
+		return
+	var along_x := String(window["axis"]) == "x"
+	var plane: float = window["plane"]
+	var centre: float = window["centre"]
+	var width: float = window["width"]
+	var inside := 1.0 if (plane < 0.0 or (along_x and plane == Z0)) else -1.0
+	if along_x:
+		inside = 1.0 if plane == Z0 else -1.0
+	else:
+		inside = 1.0 if plane == X0 else -1.0
+	var offset := width * 0.5 + 0.16
+	for side in [-1.0, 1.0]:
+		var pos: Vector3
+		var yaw := 0.0
+		if along_x:
+			pos = Vector3(centre + offset * float(side), 0.02, plane + inside * 0.20)
+			yaw = 90.0
+		else:
+			pos = Vector3(plane + inside * 0.20, 0.02, centre + offset * float(side))
+			yaw = 0.0
+		_prop("Curtain", pos, yaw, {
+			"path": TEXTILE + "Textile_curtain_02.glb",
+			"scale": 0.80,
+			"mode": "wall",
+			"collide": false,
+			"tint": Color(1.0, 0.94, 0.84),
+		})
+	# Rod and finials.
+	var rod_y := 2.86
+	if along_x:
+		_mesh_box(_furniture, "CurtainRod", Vector3(centre, rod_y, plane + inside * 0.22), Vector3(width + 2.0, 0.05, 0.05), _dark_wood())
+	else:
+		_mesh_box(_furniture, "CurtainRod", Vector3(plane + inside * 0.22, rod_y, centre), Vector3(0.05, 0.05, width + 2.0), _dark_wood())
+
+
+var _picture_index := 0
+
+
+## A framed picture hung on a wall.  The frame, mat and canvas are simple
+## boxes, so the art adds colour without another texture download.
+func _picture(centre: Vector3, along_x: bool, width: float, height: float, frame_colour: Color, canvas_colour: Color) -> void:
+	var normal := Vector3.RIGHT if centre.x < 0.0 else Vector3.LEFT
+	if not along_x:
+		normal = Vector3.BACK if centre.z < 0.0 else Vector3.FORWARD
+	var frame_size := Vector3(0.06, height, width) if along_x else Vector3(width, height, 0.06)
+	var mat_size := Vector3(0.025, height - 0.10, width - 0.10) if along_x else Vector3(width - 0.10, height - 0.10, 0.025)
+	var canvas_size := Vector3(0.015, height - 0.20, width - 0.20) if along_x else Vector3(width - 0.20, height - 0.20, 0.015)
+	var frame := _mesh_box(_furniture, "Picture%d" % _picture_index, centre, frame_size, _plain("frame_%d" % _picture_index, frame_colour, 0.65))
+	_mesh_box(_furniture, "PictureMat%d" % _picture_index, centre + normal * 0.035, mat_size, _plain("mat", Color(0.90, 0.87, 0.79), 0.9))
+	_mesh_box(_furniture, "PictureCanvas%d" % _picture_index, centre + normal * 0.052, canvas_size, _plain("canvas_%d" % _picture_index, canvas_colour, 0.85))
+	_picture_index += 1
+
+
+## opts: name, scale, collide (default true), mode ("floor" or "wall"),
+## path (a full res:// path to a downloaded model), tint (a colour multiplied
+## over the model's own materials).
 func _prop(file: String, pos: Vector3, yaw_deg: float, opts := {}) -> Node3D:
-	if not _kit.has(file):
-		_kit[file] = load(KIT + file + ".glb") as PackedScene
-	var packed: PackedScene = _kit[file]
+	var path := String(opts.get("path", KIT + file + ".glb"))
+	if not _kit.has(path):
+		_kit[path] = load(path) as PackedScene
+	var packed: PackedScene = _kit[path]
 	if packed == null:
-		push_error("missing kit model " + file)
+		push_error("missing model " + path)
 		return null
 	var wrapper := Node3D.new()
 	wrapper.name = String(opts.get("name", file))
@@ -745,6 +925,9 @@ func _prop(file: String, pos: Vector3, yaw_deg: float, opts := {}) -> Node3D:
 		# Surface overrides live on nodes inside the instanced GLB.  Those nodes
 		# belong to the GLB's own scene, so the packer would drop the overrides;
 		# handing them to the farmhouse root saves them with the scene.
+		_own_tree(model)
+	if opts.has("tint"):
+		_tint_model(model, opts["tint"])
 		_own_tree(model)
 	wrapper.position = pos
 	wrapper.rotation.y = deg_to_rad(yaw_deg)
@@ -797,6 +980,26 @@ func _same_colour(a: Color, b: Color) -> bool:
 	return absf(a.r - b.r) < 0.02 and absf(a.g - b.g) < 0.02 and absf(a.b - b.b) < 0.02
 
 
+## Multiplies a downloaded model's own base colours, so its linen, wool or
+## painted wood can join the farmhouse palette without losing its texture.
+func _tint_model(node: Node, colour: Color) -> int:
+	var changed := 0
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh != null:
+			for i in range(mesh_instance.mesh.get_surface_count()):
+				var material := mesh_instance.get_active_material(i)
+				if not (material is BaseMaterial3D):
+					continue
+				var copy := (material as BaseMaterial3D).duplicate() as BaseMaterial3D
+				copy.albedo_color = copy.albedo_color * colour
+				mesh_instance.set_surface_override_material(i, copy)
+				changed += 1
+	for child in node.get_children():
+		changed += _tint_model(child, colour)
+	return changed
+
+
 func _model_aabb(node: Node, xform := Transform3D.IDENTITY) -> AABB:
 	var result := AABB()
 	var any := false
@@ -817,100 +1020,282 @@ func _model_aabb(node: Node, xform := Transform3D.IDENTITY) -> AABB:
 
 
 func _build_furniture() -> void:
-	# The kit is modelled at roughly half life size, so most pieces are scaled
-	# up here; the tall items (fridge, bathtub) are overridden per prop.
+	# The Kenney kit is modelled at roughly half life size, so most pieces are
+	# scaled up here; the tall and unusually proportioned pieces (fridge,
+	# bathtub, toilet) carry their own scales.  Every prop is still measured and
+	# centred by _prop, so none of them float.
 	var S := 2.0
 
-	# --- sitting room: the fire on the west wall, seating facing it ---
-	_prop("rugRectangle", Vector3(-3.3, 0.0, -2.2), 0.0, {"scale": 1.4, "collide": false, "fabric": FABRIC_TERRACOTTA})
-	_prop("loungeSofa", Vector3(-1.85, 0.0, -2.2), 90.0, {"scale": S, "fabric": FABRIC_GREEN})
-	_prop("loungeChair", Vector3(-4.05, 0.0, -0.65), 120.0, {"scale": S, "fabric": FABRIC_GREEN})
-	_prop("loungeChair", Vector3(-4.05, 0.0, -3.75), 60.0, {"scale": S, "fabric": FABRIC_GREEN})
-	_prop("tableCoffee", Vector3(-3.35, 0.0, -2.2), 0.0, {"scale": S})
-	_prop("bookcaseClosedWide", Vector3(-4.55, 0.0, -0.32), 180.0, {"scale": S})
-	_prop("sideTableDrawers", Vector3(-0.80, 0.0, -3.70), 0.0, {"scale": S})
-	_prop("lampRoundTable", Vector3(-0.80, 0.78, -3.70), 0.0, {"mode": "wall", "collide": false, "scale": S})
-	_prop("lampRoundFloor", Vector3(-0.75, 0.0, -2.60), 0.0, {"scale": S})
-	_prop("pottedPlant", Vector3(0.70, 0.0, -0.55), 0.0, {"scale": S})
+	# --- sitting room: fire on the west wall, a conversation group in front ---
+	_prop("rugMain", Vector3(-5.30, 0.015, -3.80), 0.0, {"path": TEXTILE + "Textile_rug_01.glb", "scale": 2.35, "collide": false, "tint": Color(1.0, 0.93, 0.84)})
+	_prop("loungeSofa", Vector3(-3.75, 0.0, -3.80), 90.0, {"scale": S, "fabric": FABRIC_GREEN})
+	_prop("loungeChair", Vector3(-6.80, 0.0, -5.55), -90.0, {"scale": S, "fabric": FABRIC_GREEN})
+	_prop("loungeChair", Vector3(-6.80, 0.0, -2.05), -90.0, {"scale": S, "fabric": FABRIC_GREEN})
+	_prop("tableCoffee", Vector3(-5.25, 0.0, -3.80), 0.0, {"scale": 2.2})
+	_prop("bookcaseClosedWide", Vector3(-0.20, 0.0, -0.28), 180.0, {"scale": 2.2})
+	_prop("bookcaseClosedWide", Vector3(1.55, 0.0, -0.28), 180.0, {"scale": 2.2})
+	_prop("sideTable", Vector3(-3.10, 0.0, -5.55), 90.0, {"scale": S})
+	_prop("sideTable", Vector3(-3.10, 0.0, -2.05), 90.0, {"scale": S})
+	_prop("lampRoundTable", Vector3(-3.10, 0.78, -5.55), 0.0, {"mode": "wall", "collide": false, "scale": S})
+	_prop("lampRoundTable", Vector3(-3.10, 0.78, -2.05), 0.0, {"mode": "wall", "collide": false, "scale": S})
+	_prop("lampRoundFloor", Vector3(-8.55, 0.0, -0.55), 0.0, {"scale": 1.8})
+	# A second, quieter seating nook in the north-east corner.
+	_prop("rugNook", Vector3(0.50, 0.016, -6.15), 0.0, {"path": KIT + "rugRound.glb", "scale": 2.0, "collide": false, "tint": FABRIC_TERRACOTTA})
+	_prop("loungeChair", Vector3(-1.05, 0.0, -6.55), 165.0, {"scale": 1.9, "fabric": FABRIC_MUSTARD})
+	_prop("loungeChair", Vector3(1.55, 0.0, -6.55), 195.0, {"scale": 1.9, "fabric": FABRIC_MUSTARD})
+	_prop("sideTable", Vector3(0.30, 0.0, -6.55), 0.0, {"scale": 1.7})
+	_prop("lampRoundFloor", Vector3(2.10, 0.0, -7.05), 0.0, {"scale": 1.8})
+	_prop("bookcaseOpen", Vector3(2.18, 0.0, -4.55), 270.0, {"scale": 2.2})
+	_prop("Houseplant6", Vector3(-8.85, 0.0, -0.70), 0.0, {"path": QUAT + "Houseplant_6.glb", "scale": 1.15})
+	_prop("Houseplant3", Vector3(1.85, 0.0, -7.15), 0.0, {"path": QUAT + "Houseplant_3.glb", "scale": 1.25})
+	# A window seat under the middle south window.
+	_mesh_box(_furniture, "WindowSeat", Vector3(-2.20, 0.23, -7.48), Vector3(2.30, 0.46, 0.52), _wood_trim())
+	_collide_box(Vector3(-2.20, 0.23, -7.48), Vector3(2.30, 0.46, 0.52))
+	_mesh_box(_furniture, "WindowSeatCushion", Vector3(-2.20, 0.51, -7.46), Vector3(2.18, 0.12, 0.50), _plain("cushion_mustard", FABRIC_MUSTARD, 0.9))
+	_picture(Vector3(2.24, 1.85, -6.20), true, 0.95, 0.72, Color(0.42, 0.51, 0.48), Color(0.82, 0.74, 0.58))
+	_picture(Vector3(-8.92, 2.18, -3.80), true, 1.55, 0.95, Color(0.55, 0.40, 0.30), Color(0.86, 0.79, 0.64))
+	_picture(Vector3(-4.90, 1.90, -7.63), false, 1.05, 0.75, Color(0.34, 0.40, 0.46), Color(0.88, 0.82, 0.68))
+	_picture(Vector3(0.60, 1.90, -7.63), false, 0.90, 0.68, Color(0.50, 0.45, 0.30), Color(0.83, 0.78, 0.66))
+	# Curtains on the windows the eye lands on.
+	_curtains_for("SittingSouthA")
+	_curtains_for("SittingSouthB")
+	_curtains_for("SittingSouthC")
+	_curtains_for("SittingWestA")
+	_curtains_for("SittingWestB")
+	# Soft things: cushions and a throw on the sofa.
+	_prop("SofaPillowA", Vector3(-3.72, 0.48, -4.65), 90.0, {"path": TEXTILE + "Textile_pillow_01.glb", "scale": 1.15, "mode": "wall", "collide": false, "tint": Color(1.0, 0.92, 0.82)})
+	_prop("SofaPillowB", Vector3(-3.72, 0.48, -3.80), 90.0, {"path": TEXTILE + "Textile_pillow_02.glb", "scale": 1.05, "mode": "wall", "collide": false, "tint": Color(1.0, 0.94, 0.86)})
+	_prop("SofaThrow", Vector3(-3.58, 0.50, -2.80), 90.0, {"path": TEXTILE + "Textile_blanket_01.glb", "scale": 1.0, "mode": "wall", "collide": false, "tint": Color(1.0, 0.90, 0.80)})
+	_prop("CoffeeBooks", Vector3(-5.15, 0.51, -3.85), 20.0, {"path": KIT + "books.glb", "scale": 1.6, "mode": "wall", "collide": false})
+	_prop("HeapLogs", Vector3(-8.45, 0.0, -6.85), 0.0, {"path": PROPS + "yard/firewood_stack.glb", "scale": 1.0})
+	# A games corner on the open east side, so the enlarged room has somewhere
+	# to sit that is not the fireplace group.
+	_prop("SittingGamesRug", Vector3(0.80, 0.014, -3.70), 0.0, {"path": KIT + "rugRectangle.glb", "scale": 2.4, "collide": false, "tint": FABRIC_BLUE})
+	_prop("SittingGamesTable", Vector3(0.80, 0.0, -3.70), 0.0, {"path": KIT + "table.glb", "scale": 1.75})
+	_prop("SittingGamesChairA", Vector3(-0.05, 0.0, -3.05), 315.0, {"path": KIT + "loungeChair.glb", "scale": 1.7, "fabric": FABRIC_BLUE})
+	_prop("SittingGamesChairB", Vector3(1.65, 0.0, -4.35), 135.0, {"path": KIT + "loungeChair.glb", "scale": 1.7, "fabric": FABRIC_BLUE})
+	_prop("SittingConsole", Vector3(2.16, 0.0, -3.00), 270.0, {"path": KIT + "sideTable.glb", "scale": 1.8})
+	_prop("SittingConsoleLamp", Vector3(2.16, 0.72, -3.00), 0.0, {"path": KIT + "lampRoundTable.glb", "mode": "wall", "collide": false, "scale": 1.7})
+	_prop("SittingPlantEast", Vector3(2.10, 0.0, -0.90), 0.0, {"path": QUAT + "Houseplant_1.glb", "scale": 1.1})
+	_picture(Vector3(2.24, 1.85, -3.00), true, 1.05, 0.72, Color(0.44, 0.50, 0.40), Color(0.87, 0.81, 0.68))
 
-	# --- kitchen: a run of units along the west wall under one worktop ---
-	_prop("kitchenCabinet", Vector3(-5.15, 0.0, 0.85), 90.0, {"scale": S})
-	_prop("kitchenCabinetDrawer", Vector3(-5.15, 0.0, 1.55), 90.0, {"scale": S})
-	_prop("kitchenStove", Vector3(-5.15, 0.0, 2.40), 90.0, {"scale": S})
-	_prop("kitchenCabinet", Vector3(-5.15, 0.0, 3.20), 90.0, {"scale": S})
-	_prop("kitchenSink", Vector3(-4.30, 0.0, 4.10), 0.0, {"scale": S})
-	_prop("kitchenFridge", Vector3(-5.18, 0.0, 0.20), 90.0, {"scale": 1.15})
-	_mesh_box(_furniture, "Worktop", Vector3(-5.20, 0.92, 2.05), Vector3(0.64, 0.08, 3.30), _worktop())
-	_collide_box(Vector3(-5.20, 0.92, 2.05), Vector3(0.64, 0.08, 3.30))
-	_prop("kitchenCabinetUpper", Vector3(-5.18, 1.85, 1.20), 90.0, {"mode": "wall", "collide": false, "scale": S})
-	_prop("kitchenCabinetUpper", Vector3(-5.18, 1.85, 2.00), 90.0, {"mode": "wall", "collide": false, "scale": S})
-	_prop("kitchenCabinetUpperDouble", Vector3(-5.18, 1.85, 3.20), 90.0, {"mode": "wall", "collide": false, "scale": S})
-	_prop("kitchenCoffeeMachine", Vector3(-4.95, 0.96, 1.05), 90.0, {"mode": "wall", "collide": false, "scale": S})
-	_prop("toaster", Vector3(-4.95, 0.96, 1.70), 90.0, {"mode": "wall", "collide": false, "scale": S})
-	_prop("table", Vector3(-2.45, 0.0, 2.20), 0.0, {"scale": S})
-	_prop("chair", Vector3(-3.35, 0.0, 2.20), 90.0, {"scale": S})
-	_prop("chair", Vector3(-1.55, 0.0, 2.20), 270.0, {"scale": S})
-	_prop("chair", Vector3(-2.45, 0.0, 3.10), 180.0, {"scale": S})
-	_prop("chair", Vector3(-2.45, 0.0, 1.30), 0.0, {"scale": S})
-	_prop("plantSmall2", Vector3(-4.50, 1.20, 4.30), 0.0, {"mode": "wall", "collide": false, "scale": S})
+	# --- kitchen: a long run on the west wall, island and a dining end ---
+	for i in range(7):
+		var row := ["kitchenCabinet", "kitchenCabinetDrawer", "kitchenCabinet", "kitchenCabinet", "kitchenStove", "kitchenCabinetDrawer", "kitchenCabinet"]
+		_prop(row[i], Vector3(-9.12, 0.0, 0.85 + 0.86 * float(i)), 90.0, {"scale": S})
+	_prop("kitchenFridge", Vector3(-9.12, 0.0, 6.55), 90.0, {"scale": 1.15})
+	_mesh_box(_furniture, "Worktop", Vector3(-9.10, 0.92, 3.20), Vector3(0.66, 0.10, 5.55), _worktop())
+	_collide_box(Vector3(-9.10, 0.92, 3.20), Vector3(0.66, 0.10, 5.55))
+	_prop("kitchenSink", Vector3(-8.92, 0.0, 2.50), 90.0, {"scale": S})
+	_prop("kitchenCabinetUpper", Vector3(-9.15, 2.55, 1.40), 90.0, {"mode": "wall", "collide": false, "scale": S})
+	_prop("kitchenCabinetUpper", Vector3(-9.15, 2.55, 2.20), 90.0, {"mode": "wall", "collide": false, "scale": S})
+	_prop("kitchenCabinetUpperDouble", Vector3(-9.15, 2.55, 3.40), 90.0, {"mode": "wall", "collide": false, "scale": S})
+	_prop("kitchenCabinetUpper", Vector3(-9.15, 2.55, 4.55), 90.0, {"mode": "wall", "collide": false, "scale": S})
+	_prop("kitchenCoffeeMachine", Vector3(-8.85, 0.97, 1.15), 90.0, {"mode": "wall", "collide": false, "scale": S})
+	_prop("toaster", Vector3(-8.85, 0.97, 1.85), 90.0, {"mode": "wall", "collide": false, "scale": S})
+	# Island and stools.
+	_mesh_box(_furniture, "IslandBase", Vector3(-5.80, 0.45, 3.40), Vector3(2.70, 0.90, 1.05), _dark_wood())
+	_collide_box(Vector3(-5.80, 0.45, 3.40), Vector3(2.70, 0.90, 1.05))
+	_mesh_box(_furniture, "IslandTop", Vector3(-5.80, 0.95, 3.40), Vector3(2.90, 0.10, 1.22), _worktop())
+	_collide_box(Vector3(-5.80, 0.95, 3.40), Vector3(2.90, 0.10, 1.22))
+	_prop("stoolBar", Vector3(-4.10, 0.0, 2.95), 270.0, {"scale": S})
+	_prop("stoolBar", Vector3(-4.10, 0.0, 3.55), 270.0, {"scale": S})
+	_prop("stoolBar", Vector3(-4.10, 0.0, 4.15), 270.0, {"scale": S})
+	# The farmhouse table, set for six.
+	_prop("DiningTable", Vector3(-2.30, 0.0, 5.90), 0.0, {"path": KIT + "table.glb", "scale": 2.6, "fabric": FABRIC_TERRACOTTA})
+	_prop("DiningCloth", Vector3(-2.30, 0.86, 5.90), 0.0, {"path": KIT + "tableCloth.glb", "scale": 2.6, "mode": "wall", "collide": false, "tint": Color(1.0, 0.96, 0.88)})
+	for x in [-2.95, -2.30, -1.65]:
+		_prop("chair", Vector3(x, 0.0, 4.95), 0.0, {"scale": S})
+		_prop("chair", Vector3(x, 0.0, 6.85), 180.0, {"scale": S})
+	_prop("chair", Vector3(-3.60, 0.0, 5.90), 90.0, {"scale": S})
+	_prop("chair", Vector3(-1.00, 0.0, 5.90), 270.0, {"scale": S})
+	# Table setting: warm, used, not a showroom.
+	for x in [-2.95, -2.30, -1.65]:
+		for z in [5.48, 6.32]:
+			_prop("Plate", Vector3(x, 0.875, z), 0.0, {"path": FOOD + "plate-dinner.glb", "mode": "wall", "collide": false, "scale": 1.0})
+			_prop("Utensil", Vector3(x + 0.28, 0.875, z), 0.0, {"path": FOOD + "utensil-fork.glb", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("Teapot", Vector3(-2.30, 0.875, 5.90), 0.0, {"path": FOOD + "bottle-oil.glb", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("BreadBoard", Vector3(-2.30, 0.875, 5.90), 0.0, {"path": FOOD + "cutting-board-round.glb", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("Bread", Vector3(-2.30, 0.90, 5.90), 25.0, {"path": FOOD + "bread.glb", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("FruitBowl", Vector3(-6.10, 1.00, 3.40), 0.0, {"path": FOOD + "bowl.glb", "mode": "wall", "collide": false, "scale": 1.0})
+	for offset in [Vector3(-0.12, 0.06, 0.0), Vector3(0.10, 0.06, 0.05), Vector3(0.0, 0.06, -0.12)]:
+		_prop("Apple", Vector3(-6.10, 1.04, 3.40) + offset, 0.0, {"path": FOOD + "apple.glb", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("KitchenDresser", Vector3(2.10, 0.0, 5.55), 270.0, {"path": KIT + "cabinetTelevision.glb", "scale": 2.4})
+	_prop("KitchenDresserLow", Vector3(2.10, 0.0, 6.75), 270.0, {"path": KIT + "cabinetTelevisionDoors.glb", "scale": 2.2})
+	_prop("AppleBasket", Vector3(1.05, 0.0, 6.55), 0.0, {"path": PROPS + "yard/apple_basket.glb", "scale": 1.0})
+	_prop("DresserPlates", Vector3(2.10, 1.26, 5.35), 270.0, {"path": FOOD + "plate-deep.glb", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("DresserPlatesB", Vector3(2.10, 1.27, 5.70), 270.0, {"path": FOOD + "plate-deep.glb", "mode": "wall", "collide": false, "scale": 0.9})
+	# A little round breakfast table in the north-west corner.
+	_prop("BreakfastTable", Vector3(-7.70, 0.0, 6.45), 0.0, {"path": KIT + "table.glb", "scale": 1.75, "fabric": FABRIC_TERRACOTTA})
+	_prop("BreakfastChairA", Vector3(-8.55, 0.0, 6.45), 90.0, {"path": KIT + "chair.glb", "scale": 1.75})
+	_prop("BreakfastChairB", Vector3(-6.85, 0.0, 6.45), 270.0, {"path": KIT + "chair.glb", "scale": 1.75})
+	# A window seat between the dining table and the breakfast nook, and a pantry
+	# on the long east wall, so the middle of the kitchen is not bare floor.
+	_mesh_box(_furniture, "KitchenWindowSeat", Vector3(-4.90, 0.23, 7.46), Vector3(2.10, 0.46, 0.52), _wood_trim())
+	_collide_box(Vector3(-4.90, 0.23, 7.46), Vector3(2.10, 0.46, 0.52))
+	_mesh_box(_furniture, "KitchenWindowSeatCushion", Vector3(-4.90, 0.51, 7.44), Vector3(1.98, 0.12, 0.50), _plain("cushion_blue", FABRIC_BLUE, 0.9))
+	_prop("KitchenLarder", Vector3(2.14, 0.0, 3.00), 270.0, {"path": KIT + "bookcaseClosedWide.glb", "scale": 2.2})
+	_prop("KitchenChair", Vector3(0.95, 0.0, 6.65), 250.0, {"path": KIT + "loungeChair.glb", "scale": 1.9, "fabric": FABRIC_GREEN})
+	_prop("KitchenChairTable", Vector3(1.85, 0.0, 6.65), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.6})
+	_prop("KitchenPlant", Vector3(1.90, 0.0, 3.95), 0.0, {"path": QUAT + "Houseplant_5.glb", "scale": 1.2})
+	_prop("KitchenRunner", Vector3(-3.00, 0.014, 4.55), 0.0, {"path": KIT + "rugRectangle.glb", "scale": 2.2, "collide": false, "tint": FABRIC_BLUE})
+	_prop("HerbPot", Vector3(-8.90, 1.00, 5.45), 0.0, {"path": QUAT + "Houseplant_2.glb", "scale": 1.4, "mode": "wall", "collide": false})
+	_prop("Houseplant5", Vector3(1.85, 0.0, 0.55), 0.0, {"path": QUAT + "Houseplant_5.glb", "scale": 1.4})
+	_picture(Vector3(2.24, 1.95, 3.40), true, 1.15, 0.78, Color(0.42, 0.49, 0.38), Color(0.86, 0.80, 0.66))
+	_curtains_for("KitchenNorthA")
+	_curtains_for("KitchenNorthB")
 
 	# --- study ---
-	_prop("desk", Vector3(4.15, 0.0, -3.90), 180.0, {"scale": 1.6})
-	_prop("chairDesk", Vector3(4.15, 0.0, -3.05), 0.0, {"scale": 1.3})
-	_prop("laptop", Vector3(4.10, 0.92, -3.90), 180.0, {"mode": "wall", "collide": false, "scale": 1.6})
-	_prop("bookcaseOpen", Vector3(1.72, 0.0, -3.10), 90.0, {"scale": S})
-	_prop("bookcaseOpenLow", Vector3(1.72, 0.0, -4.05), 90.0, {"scale": S})
-	_prop("rugSquare", Vector3(3.6, 0.0, -3.3), 0.0, {"collide": false, "scale": 1.4})
-	_prop("lampSquareTable", Vector3(4.90, 0.92, -4.10), 0.0, {"mode": "wall", "collide": false, "scale": 1.4})
+	_prop("desk", Vector3(6.20, 0.0, -7.05), 180.0, {"scale": 2.0})
+	_prop("chairDesk", Vector3(6.20, 0.0, -6.25), 0.0, {"scale": 1.4})
+	_prop("laptop", Vector3(6.15, 1.20, -7.05), 180.0, {"mode": "wall", "collide": false, "scale": 2.0})
+	_prop("bookcaseOpen", Vector3(5.60, 0.0, -4.35), 0.0, {"scale": 2.4})
+	_prop("bookcaseOpenLow", Vector3(7.80, 0.0, -4.35), 0.0, {"scale": 2.4})
+	_prop("bookcaseClosed", Vector3(2.72, 0.0, -5.20), 90.0, {"scale": 2.4})
+	_prop("rugSquare", Vector3(5.70, 0.015, -5.50), 0.0, {"collide": false, "scale": 2.8, "fabric": FABRIC_TERRACOTTA})
+	_prop("lampSquareTable", Vector3(7.65, 1.20, -7.05), 0.0, {"mode": "wall", "collide": false, "scale": 1.6})
+	_prop("loungeChair", Vector3(4.05, 0.0, -5.30), 55.0, {"scale": 1.9, "fabric": FABRIC_GREEN})
+	_prop("sideTable", Vector3(3.60, 0.0, -6.10), 0.0, {"scale": 1.7})
+	_prop("Houseplant1", Vector3(8.90, 0.0, -7.10), 0.0, {"path": QUAT + "Houseplant_1.glb", "scale": 1.1})
+	_prop("StudyDeskLamp", Vector3(7.15, 1.20, -7.05), 0.0, {"path": KIT + "lampSquareTable.glb", "mode": "wall", "collide": false, "scale": 1.4})
+	_prop("StudyPlant", Vector3(8.95, 0.0, -3.95), 0.0, {"path": QUAT + "Houseplant_5.glb", "scale": 1.2})
+	_prop("StudyReadingChair", Vector3(3.25, 0.0, -6.85), 25.0, {"path": KIT + "loungeChair.glb", "scale": 1.8, "fabric": FABRIC_MUSTARD})
+	_picture(Vector3(6.50, 1.95, -7.63), false, 0.95, 0.68, Color(0.38, 0.45, 0.50), Color(0.87, 0.80, 0.64))
+	_curtains_for("StudySouthA")
+	_curtains_for("StudySouthB")
+	_curtains_for("StudyEast")
 
 	# --- boot room ---
-	_prop("bench", Vector3(2.35, 0.0, 4.05), 180.0, {"scale": 1.6})
-	_prop("coatRackStanding", Vector3(1.90, 0.0, 2.70), 0.0, {"scale": S})
-	_prop("rugDoormat", Vector3(3.10, 0.0, 4.05), 0.0, {"collide": false, "scale": 1.6})
-	_prop("trashcan", Vector3(5.05, 0.0, 2.55), 0.0, {"scale": S})
+	_prop("bench", Vector3(3.30, 0.0, 7.32), 0.0, {"scale": 2.5})
+	_prop("coatRackStanding", Vector3(2.88, 0.0, 6.25), 0.0, {"scale": 2.2})
+	_prop("Cupboard", Vector3(9.04, 0.0, 6.35), 270.0, {"path": KIT + "bookcaseClosedWide.glb", "scale": 2.4})
+	_prop("rugDoormat", Vector3(5.40, 0.02, 7.15), 0.0, {"collide": false, "scale": 2.2})
+	_prop("MilkChurn", Vector3(8.92, 0.0, 4.45), 0.0, {"path": PROPS + "yard/milk_churn.glb", "scale": 1.0})
+	_prop("BootCrate", Vector3(8.55, 0.0, 7.18), 15.0, {"path": PROPS + "yard/crate.glb", "scale": 0.9})
+	_prop("Broom", Vector3(2.92, 0.0, 4.60), 20.0, {"path": PROPS + "stable/broom.glb", "scale": 1.0})
+	_prop("Houseplant8", Vector3(2.80, 0.0, 7.35), 0.0, {"path": QUAT + "Houseplant_8.glb", "scale": 0.9})
+	_prop("BootPlant", Vector3(8.90, 0.0, 3.95), 0.0, {"path": QUAT + "Houseplant_5.glb", "scale": 1.1})
+	_picture(Vector3(3.30, 1.65, 7.60), false, 0.95, 0.72, Color(0.50, 0.42, 0.30), Color(0.85, 0.80, 0.68))
+	_picture(Vector3(2.24, 1.85, 5.20), true, 0.80, 0.60, Color(0.50, 0.42, 0.30), Color(0.85, 0.80, 0.68))
+	_curtains_for("BootNorth")
 
 	# --- hall ---
-	_prop("rugDoormat", Vector3(4.60, 0.0, 1.55), 0.0, {"collide": false, "scale": 1.6})
-	# North of the stair foot: the old spot is now the quarter landing.
-	_prop("sideTable", Vector3(3.55, 0.0, 1.85), 180.0, {"scale": S})
-	_prop("lampRoundTable", Vector3(3.55, 0.78, 1.85), 0.0, {"mode": "wall", "collide": false, "scale": S})
-	_prop("coatRack", Vector3(2.90, 1.55, 2.08), 180.0, {"mode": "wall", "collide": false, "scale": 1.6})
-	_prop("plantSmall1", Vector3(1.85, 0.0, 1.90), 0.0, {"scale": S})
+	_prop("HallRunner", Vector3(5.00, 0.015, 0.30), 90.0, {"path": KIT + "rugRectangle.glb", "scale": 2.2, "collide": false, "fabric": FABRIC_TERRACOTTA})
+	_prop("sideTable", Vector3(2.78, 0.0, 0.00), 90.0, {"scale": 2.0})
+	_prop("lampRoundTable", Vector3(2.78, 0.76, 0.00), 0.0, {"mode": "wall", "collide": false, "scale": S})
+	_prop("coatRack", Vector3(2.56, 1.95, 3.15), 90.0, {"mode": "wall", "collide": false, "scale": 1.8})
+	_prop("bench", Vector3(2.78, 0.0, 3.15), 90.0, {"scale": 2.2})
+	_prop("rugDoormat", Vector3(9.08, 0.02, 2.68), 90.0, {"collide": false, "scale": 2.2})
+	_prop("Houseplant7", Vector3(7.20, 0.0, 1.00), 0.0, {"path": QUAT + "Houseplant_7.glb", "scale": 1.05})
+	_prop("HallConsole", Vector3(6.60, 0.0, -3.35), 0.0, {"path": KIT + "sideTable.glb", "scale": 2.0})
+	_prop("HallConsoleLamp", Vector3(6.60, 0.76, -3.35), 0.0, {"path": KIT + "lampRoundTable.glb", "mode": "wall", "collide": false, "scale": 1.8})
+	_picture(Vector3(6.60, 1.85, -3.62), false, 1.15, 0.78, Color(0.47, 0.42, 0.31), Color(0.88, 0.82, 0.68))
+	_prop("StairMat", Vector3(8.78, 1.29, -3.15), 0.0, {"path": KIT + "rugRectangle.glb", "scale": 0.65, "mode": "wall", "collide": false, "tint": FABRIC_TERRACOTTA})
+	_picture(Vector3(2.24, 1.95, -0.10), true, 1.05, 0.75, Color(0.47, 0.42, 0.31), Color(0.88, 0.82, 0.68))
 
 	# --- main bedroom ---
-	_prop("bedDouble", Vector3(-4.10, UPPER_FLOOR, -2.10), 270.0, {"scale": Vector3(1.2, 1.0, 1.6), "fabric": FABRIC_CREAM})
-	_prop("bookcaseClosed", Vector3(-2.45, UPPER_FLOOR, -0.32), 180.0, {"scale": S})
-	_prop("cabinetBedDrawer", Vector3(-5.15, UPPER_FLOOR, -0.85), 270.0, {"scale": S})
-	_prop("cabinetBedDrawer", Vector3(-5.15, UPPER_FLOOR, -3.35), 270.0, {"scale": S})
-	_prop("rugRectangle", Vector3(-2.40, UPPER_FLOOR, -2.30), 0.0, {"scale": 1.2, "collide": false, "fabric": FABRIC_TERRACOTTA})
-	_prop("benchCushion", Vector3(-1.80, UPPER_FLOOR, -2.10), 90.0, {"scale": S, "fabric": FABRIC_GREEN})
-	_prop("lampRoundTable", Vector3(-5.10, UPPER_FLOOR + 0.80, -0.85), 0.0, {"mode": "wall", "collide": false, "scale": S})
+	_prop("bedDouble", Vector3(-7.85, UPPER_FLOOR, -3.80), 270.0, {"scale": 2.0, "fabric": FABRIC_CREAM})
+	_prop("MainBedRug", Vector3(-6.30, UPPER_FLOOR + 0.015, -3.80), 0.0, {"path": TEXTILE + "Textile_rug_02.glb", "scale": 2.6, "collide": false, "tint": Color(1.0, 0.91, 0.82)})
+	_prop("Nightstand", Vector3(-8.90, UPPER_FLOOR, -5.75), 270.0, {"path": KIT + "cabinetBedDrawer.glb", "scale": S})
+	_prop("NightstandB", Vector3(-8.90, UPPER_FLOOR, -1.85), 270.0, {"path": KIT + "cabinetBedDrawer.glb", "scale": S})
+	_prop("BedLampA", Vector3(-8.90, UPPER_FLOOR + 0.78, -5.75), 0.0, {"path": KIT + "lampRoundTable.glb", "mode": "wall", "collide": false, "scale": S})
+	_prop("BedLampB", Vector3(-8.90, UPPER_FLOOR + 0.78, -1.85), 0.0, {"path": KIT + "lampRoundTable.glb", "mode": "wall", "collide": false, "scale": S})
+	_prop("BedBench", Vector3(-5.60, UPPER_FLOOR, -3.80), 90.0, {"path": KIT + "benchCushion.glb", "scale": 2.2, "fabric": FABRIC_GREEN})
+	_prop("BedThrow", Vector3(-6.25, UPPER_FLOOR + 0.72, -3.80), 90.0, {"path": TEXTILE + "Textile_blanket_02.glb", "scale": 1.4, "mode": "wall", "collide": false, "tint": Color(1.0, 0.90, 0.78)})
+	_prop("BedPillow", Vector3(-8.55, UPPER_FLOOR + 0.72, -4.70), 90.0, {"path": TEXTILE + "Textile_pillow_03.glb", "scale": 1.1, "mode": "wall", "collide": false, "tint": Color(1.0, 0.95, 0.88)})
+	_prop("Dresser", Vector3(-3.30, UPPER_FLOOR, -0.35), 180.0, {"path": KIT + "sideTableDrawers.glb", "scale": 2.2})
+	_prop("Armoire", Vector3(-1.20, UPPER_FLOOR, -0.35), 180.0, {"path": KIT + "bookcaseClosedWide.glb", "scale": 2.3})
+	_prop("BedReadingRug", Vector3(0.20, UPPER_FLOOR + 0.015, -5.75), 0.0, {"path": KIT + "rugRound.glb", "scale": 1.3, "collide": false, "tint": FABRIC_BLUE})
+	_prop("BedReadingChair", Vector3(0.20, UPPER_FLOOR, -6.35), 170.0, {"path": KIT + "loungeChair.glb", "scale": 1.9, "fabric": FABRIC_MUSTARD})
+	_prop("BedReadingTable", Vector3(1.35, UPPER_FLOOR, -6.35), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.7})
+	_prop("BedReadingLamp", Vector3(1.90, UPPER_FLOOR, -6.90), 0.0, {"path": QUAT + "Light_Floor2.glb", "scale": 1.1})
+	_prop("Houseplant4", Vector3(1.85, UPPER_FLOOR, -0.65), 0.0, {"path": QUAT + "Houseplant_4.glb", "scale": 1.25})
+	_prop("BedroomDesk", Vector3(1.55, UPPER_FLOOR, -5.15), 270.0, {"path": KIT + "desk.glb", "scale": 1.8})
+	_prop("BedroomChaise", Vector3(1.20, UPPER_FLOOR, -3.10), 270.0, {"path": KIT + "loungeChair.glb", "scale": 2.1, "fabric": FABRIC_CREAM})
+	_prop("BedroomChaiseTable", Vector3(1.20, UPPER_FLOOR, -4.05), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.5})
+	_prop("BedroomChaiseRug", Vector3(0.40, UPPER_FLOOR + 0.015, -3.30), 0.0, {"path": KIT + "rugRound.glb", "scale": 1.8, "collide": false, "tint": FABRIC_BLUE})
+	_mesh_box(_furniture, "BedroomWindowSeat", Vector3(-4.90, UPPER_FLOOR + 0.23, -7.46), Vector3(2.10, 0.46, 0.52), _wood_trim())
+	_collide_box(Vector3(-4.90, UPPER_FLOOR + 0.23, -7.46), Vector3(2.10, 0.46, 0.52))
+	_mesh_box(_furniture, "BedroomWindowSeatCushion", Vector3(-4.90, UPPER_FLOOR + 0.51, -7.44), Vector3(1.98, 0.12, 0.50), _plain("cushion_cream", FABRIC_CREAM, 0.9))
+	_prop("BedroomDeskChair", Vector3(0.80, UPPER_FLOOR, -5.15), 90.0, {"path": KIT + "chairDesk.glb", "scale": 1.3})
+	_prop("BedroomDeskLamp", Vector3(1.55, UPPER_FLOOR + 1.12, -5.15), 0.0, {"path": KIT + "lampSquareTable.glb", "mode": "wall", "collide": false, "scale": 1.4})
+	_prop("BedroomPlant", Vector3(2.10, UPPER_FLOOR, -3.95), 0.0, {"path": QUAT + "Houseplant_4.glb", "scale": 1.2})
+	_picture(Vector3(2.24, UPPER_FLOOR + 1.80, -5.15), true, 1.00, 0.72, Color(0.44, 0.50, 0.42), Color(0.88, 0.82, 0.68))
+	_picture(Vector3(0.20, UPPER_FLOOR + 1.85, -7.63), false, 1.30, 0.86, Color(0.54, 0.43, 0.33), Color(0.86, 0.80, 0.68))
+	_picture(Vector3(-8.05, UPPER_FLOOR + 1.75, -7.63), false, 1.10, 0.78, Color(0.44, 0.48, 0.42), Color(0.88, 0.82, 0.68))
+	_picture(Vector3(-9.36, UPPER_FLOOR + 1.80, -0.80), true, 0.90, 0.66, Color(0.54, 0.43, 0.33), Color(0.86, 0.80, 0.68))
+	_curtains_for("MainBedSouthA")
+	_curtains_for("MainBedSouthB")
+	_curtains_for("MainBedSouthC")
+	_curtains_for("MainBedWestA")
+	_curtains_for("MainBedWestB")
 
 	# --- second bedroom ---
-	_prop("bedSingle", Vector3(-4.10, UPPER_FLOOR, 2.30), 270.0, {"scale": Vector3(0.9, 1.0, 1.6), "fabric": FABRIC_CREAM})
-	_prop("desk", Vector3(-1.30, UPPER_FLOOR, 4.05), 180.0, {"scale": 1.6})
-	_prop("chairDesk", Vector3(-1.30, UPPER_FLOOR, 3.30), 0.0, {"scale": 1.3})
-	_prop("bookcaseOpenLow", Vector3(0.95, UPPER_FLOOR, 1.45), 90.0, {"scale": S})
-	_prop("rugRound", Vector3(-3.20, UPPER_FLOOR, 3.00), 0.0, {"collide": false, "scale": 1.6, "fabric": FABRIC_TERRACOTTA})
-	_prop("pottedPlant", Vector3(0.90, UPPER_FLOOR, 3.90), 0.0, {"scale": S})
+	_prop("bedSingle", Vector3(-7.80, UPPER_FLOOR, 2.10), 270.0, {"scale": 2.0, "fabric": FABRIC_CREAM})
+	_prop("bedSingleB", Vector3(-7.80, UPPER_FLOOR, 5.50), 270.0, {"path": KIT + "bedSingle.glb", "scale": 2.0, "fabric": FABRIC_CREAM})
+	_prop("SecondBedRug", Vector3(-5.30, UPPER_FLOOR + 0.015, 3.80), 0.0, {"path": KIT + "rugRound.glb", "scale": 2.2, "collide": false, "tint": FABRIC_TERRACOTTA})
+	_prop("NightstandC", Vector3(-8.90, UPPER_FLOOR, 3.80), 270.0, {"path": KIT + "cabinetBedDrawer.glb", "scale": S})
+	_prop("BedLampC", Vector3(-8.90, UPPER_FLOOR + 0.78, 3.80), 0.0, {"path": KIT + "lampRoundTable.glb", "mode": "wall", "collide": false, "scale": S})
+	_prop("desk", Vector3(-2.40, UPPER_FLOOR, 7.05), 180.0, {"scale": 2.0})
+	_prop("chairDesk", Vector3(-2.40, UPPER_FLOOR, 6.25), 0.0, {"scale": 1.4})
+	_prop("laptop", Vector3(-2.45, UPPER_FLOOR + 1.20, 7.05), 180.0, {"mode": "wall", "collide": false, "scale": 2.0})
+	_prop("bookcaseOpenLow", Vector3(2.12, UPPER_FLOOR, 1.10), 270.0, {"scale": 2.3})
+	_prop("Chest", Vector3(2.12, UPPER_FLOOR, 5.90), 270.0, {"path": KIT + "sideTableDrawers.glb", "scale": 2.2})
+	_prop("Houseplant3B", Vector3(1.85, UPPER_FLOOR, 6.95), 0.0, {"path": QUAT + "Houseplant_3.glb", "scale": 1.25})
+	_prop("SecondBedChair", Vector3(0.75, UPPER_FLOOR, 2.60), 250.0, {"path": KIT + "loungeChair.glb", "scale": 1.8, "fabric": FABRIC_BLUE})
+	_prop("SecondBedTable", Vector3(1.65, UPPER_FLOOR, 2.60), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.5})
+	_prop("SecondBedPlant", Vector3(2.10, UPPER_FLOOR, 7.15), 0.0, {"path": QUAT + "Houseplant_4.glb", "scale": 1.1})
+	_picture(Vector3(-3.20, UPPER_FLOOR + 1.75, 7.63), false, 1.00, 0.72, Color(0.38, 0.44, 0.50), Color(0.88, 0.82, 0.68))
+	_curtains_for("SecondBedNorthA")
+	_curtains_for("SecondBedNorthB")
+	_curtains_for("SecondBedNorthC")
+	_curtains_for("SecondBedWestA")
+	_curtains_for("SecondBedWestB")
 
 	# --- bathroom ---
-	_prop("bathtub", Vector3(4.55, UPPER_FLOOR, 3.55), 270.0, {"scale": 1.35})
-	_prop("bathroomSink", Vector3(1.80, UPPER_FLOOR, 2.95), 90.0, {"scale": 1.4})
-	_prop("bathroomCabinet", Vector3(1.55, UPPER_FLOOR + 1.90, 2.95), 90.0, {"mode": "wall", "collide": false, "scale": 1.4})
-	_prop("bathroomCabinetDrawer", Vector3(1.85, UPPER_FLOOR, 3.85), 90.0, {"scale": 1.2})
-	_prop("toilet", Vector3(1.90, UPPER_FLOOR, 3.75), 90.0, {"scale": 0.9})
-	_prop("bathroomMirror", Vector3(1.52, UPPER_FLOOR + 1.12, 2.95), 90.0, {"mode": "wall", "collide": false, "scale": 1.4})
-	_prop("rugDoormat", Vector3(3.40, UPPER_FLOOR, 2.45), 0.0, {"collide": false, "scale": 1.4})
-	_prop("rugDoormat", Vector3(3.90, UPPER_FLOOR, 3.55), 0.0, {"collide": false, "scale": 1.2})
-	_prop("plantSmall2", Vector3(4.95, UPPER_FLOOR, 2.62), 0.0, {"scale": S, "collide": false})
+	_prop("bathtub", Vector3(7.35, UPPER_FLOOR, 6.95), 0.0, {"scale": 1.8})
+	_prop("bathroomSink", Vector3(3.60, UPPER_FLOOR, 7.28), 0.0, {"scale": 1.4})
+	_prop("bathroomSinkB", Vector3(5.05, UPPER_FLOOR, 7.28), 0.0, {"path": KIT + "bathroomSink.glb", "scale": 1.4})
+	_prop("Vanity", Vector3(4.32, UPPER_FLOOR, 7.32), 0.0, {"path": KIT + "bathroomCabinetDrawer.glb", "scale": 2.0})
+	_prop("bathroomMirror", Vector3(3.60, UPPER_FLOOR + 1.55, 7.56), 0.0, {"mode": "wall", "collide": false, "scale": 1.5})
+	_prop("bathroomMirrorB", Vector3(5.05, UPPER_FLOOR + 1.55, 7.56), 0.0, {"path": KIT + "bathroomMirror.glb", "mode": "wall", "collide": false, "scale": 1.5})
+	_prop("toilet", Vector3(3.10, UPPER_FLOOR, 5.35), 90.0, {"scale": 0.95})
+	_prop("TowelRail", Vector3(9.20, UPPER_FLOOR + 1.15, 4.55), 270.0, {"path": QUAT + "Bathroom_Towel.glb", "scale": 1.25, "mode": "wall", "collide": false, "tint": Color(1.0, 0.94, 0.86)})
+	_prop("BathRug", Vector3(5.40, UPPER_FLOOR + 0.015, 5.55), 0.0, {"path": KIT + "rugRectangle.glb", "collide": false, "scale": 2.6, "fabric": FABRIC_CREAM})
+	_prop("BathPlant", Vector3(8.95, UPPER_FLOOR, 4.00), 0.0, {"path": QUAT + "Houseplant_5.glb", "scale": 1.25})
+	_prop("BathStool", Vector3(8.95, UPPER_FLOOR, 5.95), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.4})
+	_prop("BathLaundry", Vector3(2.75, UPPER_FLOOR, 4.40), 0.0, {"path": PROPS + "yard/crate.glb", "scale": 0.75})
+	# Folded towels on the vanity and a bath tray across the tub.
+	_mesh_box(_furniture, "BathTowelA", Vector3(4.32, UPPER_FLOOR + 1.02, 7.12), Vector3(0.52, 0.10, 0.34), _plain("towel_cream", Color(0.92, 0.88, 0.80), 0.95))
+	_mesh_box(_furniture, "BathTowelB", Vector3(4.32, UPPER_FLOOR + 1.12, 7.12), Vector3(0.46, 0.09, 0.30), _plain("towel_blue", FABRIC_BLUE, 0.95))
+	_mesh_box(_furniture, "BathTray", Vector3(7.35, UPPER_FLOOR + 0.66, 6.95), Vector3(1.35, 0.05, 0.30), _wood_trim())
+	_picture(Vector3(2.24, UPPER_FLOOR + 1.65, 6.20), true, 0.75, 0.55, Color(0.48, 0.52, 0.50), Color(0.88, 0.84, 0.74))
+	_curtains_for("BathNorthA")
+	_curtains_for("BathNorthB")
+	_curtains_for("BathEast")
 
 	# --- landing and gallery ---
-	_prop("bookcaseClosed", Vector3(5.12, UPPER_FLOOR, -2.50), 270.0, {"scale": S})
-	_prop("chairRounded", Vector3(2.15, UPPER_FLOOR, -2.70), 0.0, {"scale": S, "fabric": FABRIC_GREEN})
-	_prop("rugDoormat", Vector3(4.10, UPPER_FLOOR, -3.10), 0.0, {"collide": false, "scale": 1.4})
-	_prop("plantSmall3", Vector3(4.95, UPPER_FLOOR, -2.50), 0.0, {"scale": S})
-	_prop("bench", Vector3(5.10, UPPER_FLOOR, 1.20), 270.0, {"scale": 1.6})
+	_prop("LandingRug", Vector3(4.60, UPPER_FLOOR + 0.015, -5.80), 0.0, {"path": KIT + "rugRectangle.glb", "scale": 1.3, "collide": false, "tint": FABRIC_BLUE})
+	_prop("LandingChairA", Vector3(3.90, UPPER_FLOOR, -6.40), 155.0, {"path": KIT + "loungeChair.glb", "scale": 1.9, "fabric": FABRIC_GREEN})
+	_prop("LandingChairB", Vector3(5.30, UPPER_FLOOR, -6.40), 205.0, {"path": KIT + "loungeChair.glb", "scale": 1.9, "fabric": FABRIC_GREEN})
+	_prop("LandingTable", Vector3(4.60, UPPER_FLOOR, -6.55), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.7})
+	_prop("LandingLamp", Vector3(5.85, UPPER_FLOOR, -7.00), 0.0, {"path": QUAT + "Light_Floor1.glb", "scale": 1.15})
+	_prop("LinenCupboard", Vector3(9.07, UPPER_FLOOR, -4.15), 270.0, {"path": KIT + "bookcaseClosedWide.glb", "scale": 2.4})
+	_prop("LandingConsole", Vector3(9.00, UPPER_FLOOR, -7.15), 270.0, {"path": KIT + "sideTable.glb", "scale": 1.2})
+	_prop("LandingConsoleLamp", Vector3(9.00, UPPER_FLOOR + 0.62, -7.15), 0.0, {"path": KIT + "lampRoundTable.glb", "mode": "wall", "collide": false, "scale": 1.3})
+	_prop("Houseplant6B", Vector3(3.10, UPPER_FLOOR, -4.25), 0.0, {"path": QUAT + "Houseplant_6.glb", "scale": 1.1})
+	_picture(Vector3(9.36, UPPER_FLOOR + 1.80, -6.70), true, 0.95, 0.70, Color(0.44, 0.50, 0.42), Color(0.87, 0.81, 0.67))
+	_curtains_for("LandingSouth")
+	_prop("GalleryBench", Vector3(2.78, UPPER_FLOOR, 2.80), 90.0, {"path": KIT + "bench.glb", "scale": 2.4})
+	_prop("GalleryCushion", Vector3(2.78, UPPER_FLOOR + 0.48, 2.80), 90.0, {"path": KIT + "benchCushion.glb", "scale": S, "fabric": FABRIC_MUSTARD})
+	_prop("GalleryBookcase", Vector3(2.72, UPPER_FLOOR, -2.80), 90.0, {"path": KIT + "bookcaseClosed.glb", "scale": 2.2})
+	_prop("GalleryRug", Vector3(5.60, UPPER_FLOOR + 0.015, 1.90), 0.0, {"path": KIT + "rugRound.glb", "scale": 1.8, "collide": false, "tint": FABRIC_TERRACOTTA})
+	_prop("GalleryPlant", Vector3(8.95, UPPER_FLOOR, 3.15), 0.0, {"path": QUAT + "Houseplant_7.glb", "scale": 1.1})
+	_prop("GalleryChair", Vector3(7.30, UPPER_FLOOR, 3.10), 200.0, {"path": KIT + "loungeChair.glb", "scale": 2.0, "fabric": FABRIC_GREEN})
+	_prop("GallerySideTable", Vector3(8.30, UPPER_FLOOR, 3.10), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.7})
+	_prop("GalleryConsole", Vector3(9.02, UPPER_FLOOR, 2.35), 270.0, {"path": KIT + "sideTable.glb", "scale": 1.6})
+	_picture(Vector3(2.24, UPPER_FLOOR + 1.80, 0.80), true, 0.95, 0.70, Color(0.50, 0.44, 0.32), Color(0.88, 0.82, 0.68))
+
 
 
 # --- seats ------------------------------------------------------------------
@@ -930,17 +1315,24 @@ func _seat(node_name: String, kind: String, pos: Vector3, yaw_deg: float, eye: f
 
 
 func _build_seats() -> void:
-	_seat("SofaSeat", "seat", Vector3(-1.85, 0.46, -2.20), 90.0, 1.12, {"stand_offset": Vector3(0.9, 0.0, 0.0)})
-	_seat("ChairSeatSouth", "seat", Vector3(-4.05, 0.46, -0.68), 120.0, 1.10)
-	_seat("ChairSeatNorth", "seat", Vector3(-4.05, 0.46, -3.72), 60.0, 1.10)
-	_seat("KitchenSeatWest", "seat", Vector3(-3.33, 0.47, 2.20), 90.0, 1.15, {"stand_offset": Vector3(-0.9, 0.0, 0.0)})
-	_seat("KitchenSeatEast", "seat", Vector3(-1.57, 0.47, 2.20), 270.0, 1.15, {"stand_offset": Vector3(0.9, 0.0, 0.0)})
-	_seat("KitchenSeatNorth", "seat", Vector3(-2.45, 0.47, 3.08), 180.0, 1.15)
-	_seat("KitchenSeatSouth", "seat", Vector3(-2.45, 0.47, 1.32), 0.0, 1.15, {"stand_offset": Vector3(0.0, 0.0, -0.9)})
-	_seat("StudySeat", "seat", Vector3(4.15, 0.50, -3.08), 0.0, 1.18)
-	_seat("LandingSeat", "seat", Vector3(2.15, 0.46, -2.72), 0.0, 1.12)
-	_seat("MainBedRest", "bed", Vector3(-4.20, UPPER_FLOOR + 0.48, -2.10), 90.0, 0.82, {"pitch": -22.0, "label": "REST", "stand_offset": Vector3(1.3, 0.0, 0.0)})
-	_seat("SecondBedRest", "bed", Vector3(-4.20, UPPER_FLOOR + 0.46, 2.30), 90.0, 0.80, {"pitch": -22.0, "label": "REST", "stand_offset": Vector3(1.3, 0.0, 0.0)})
+	_seat("SofaSeat", "seat", Vector3(-3.75, 0.48, -3.80), 90.0, 1.15, {"stand_offset": Vector3(1.0, 0.0, 0.0)})
+	_seat("ChairSeatSouth", "seat", Vector3(-6.80, 0.48, -5.55), -90.0, 1.12)
+	_seat("ChairSeatNorth", "seat", Vector3(-6.80, 0.48, -2.05), -90.0, 1.12)
+	_seat("NookChairSeatA", "seat", Vector3(-1.05, 0.48, -6.55), 165.0, 1.12)
+	_seat("NookChairSeatB", "seat", Vector3(1.55, 0.48, -6.55), 195.0, 1.12)
+	_seat("WindowSeat", "seat", Vector3(-2.20, 0.57, -7.42), 180.0, 1.10, {"stand_offset": Vector3(0.0, 0.0, 1.0)})
+	_seat("KitchenSeatWest", "seat", Vector3(-2.95, 0.47, 4.95), 0.0, 1.15, {"stand_offset": Vector3(0.0, 0.0, -0.9)})
+	_seat("KitchenSeatEast", "seat", Vector3(-1.65, 0.47, 4.95), 0.0, 1.15, {"stand_offset": Vector3(0.0, 0.0, -0.9)})
+	_seat("KitchenSeatNorth", "seat", Vector3(-2.95, 0.47, 6.85), 180.0, 1.15)
+	_seat("IslandSeatA", "seat", Vector3(-4.10, 0.86, 3.25), 270.0, 1.30, {"stand_offset": Vector3(0.9, 0.0, 0.0)})
+	_seat("IslandSeatB", "seat", Vector3(-4.10, 0.86, 3.85), 270.0, 1.30, {"stand_offset": Vector3(0.9, 0.0, 0.0)})
+	_seat("StudySeat", "seat", Vector3(6.20, 0.50, -6.25), 0.0, 1.18)
+	_seat("LandingSeatA", "seat", Vector3(3.90, UPPER_FLOOR + 0.48, -6.40), 155.0, 1.12)
+	_seat("LandingSeatB", "seat", Vector3(5.30, UPPER_FLOOR + 0.48, -6.40), 205.0, 1.12)
+	_seat("GallerySeat", "seat", Vector3(2.78, UPPER_FLOOR + 0.50, 2.80), 90.0, 1.12, {"stand_offset": Vector3(0.9, 0.0, 0.0)})
+	_seat("MainBedRest", "bed", Vector3(-7.85, UPPER_FLOOR + 0.52, -3.80), 90.0, 0.82, {"pitch": -22.0, "label": "REST", "stand_offset": Vector3(1.4, 0.0, 0.0)})
+	_seat("SecondBedRestA", "bed", Vector3(-7.80, UPPER_FLOOR + 0.50, 2.10), 90.0, 0.80, {"pitch": -22.0, "label": "REST", "stand_offset": Vector3(1.4, 0.0, 0.0)})
+	_seat("SecondBedRestB", "bed", Vector3(-7.80, UPPER_FLOOR + 0.50, 5.50), 90.0, 0.80, {"pitch": -22.0, "label": "REST", "stand_offset": Vector3(1.4, 0.0, 0.0)})
 
 
 # --- light and player -------------------------------------------------------
@@ -1016,17 +1408,33 @@ func _build_lighting() -> void:
 	sun.directional_shadow_max_distance = 45.0
 	_lighting.add_child(sun)
 
-	_lamp("LampSitting", Vector3(-3.0, 2.18, -2.2), Color(1.0, 0.80, 0.56), 2.5, 7.2)
-	_lamp("LampKitchen", Vector3(-3.0, 2.18, 2.2), Color(1.0, 0.86, 0.64), 2.4, 7.2)
-	_lamp("LampStudy", Vector3(4.1, 2.18, -3.3), Color(1.0, 0.84, 0.60), 1.8, 5.5)
-	_lamp("LampHall", Vector3(3.6, 2.18, 0.0), Color(1.0, 0.82, 0.58), 2.2, 7.0)
-	_lamp("LampBoot", Vector3(3.2, 2.18, 3.3), Color(1.0, 0.84, 0.62), 1.6, 5.0)
-	_lamp("LampMainBed", Vector3(-3.6, 4.66, -2.2), Color(1.0, 0.82, 0.62), 2.2, 7.0)
-	_lamp("LampSecondBed", Vector3(-3.6, 4.66, 2.2), Color(1.0, 0.82, 0.62), 2.0, 6.5)
-	_lamp("LampLanding", Vector3(3.6, 4.66, -3.3), Color(1.0, 0.84, 0.62), 1.8, 5.5)
-	_lamp("LampBath", Vector3(3.4, 4.66, 3.3), Color(1.0, 0.88, 0.72), 1.7, 5.0)
-	_lamp("LampGallery", Vector3(3.6, 4.66, 0.0), Color(1.0, 0.84, 0.62), 1.9, 6.2)
-	_lamp("Firelight", Vector3(X0 + 0.62, 0.42, -2.2), Color(1.0, 0.52, 0.20), 2.2, 4.8, true)
+	_lamp("LampSitting", Vector3(-5.30, 2.58, -3.80), Color(1.0, 0.80, 0.56), 2.6, 9.5)
+	_lamp("LampSittingNook", Vector3(0.50, 2.58, -6.00), Color(1.0, 0.82, 0.58), 1.8, 6.5)
+	_lamp("LampKitchen", Vector3(-5.80, 2.58, 3.40), Color(1.0, 0.86, 0.64), 2.5, 9.0)
+	_lamp("LampDining", Vector3(-2.30, 2.58, 5.90), Color(1.0, 0.80, 0.56), 2.3, 8.0)
+	_lamp("LampStudy", Vector3(6.20, 2.58, -5.80), Color(1.0, 0.84, 0.60), 2.0, 7.0)
+	_lamp("LampHall", Vector3(5.20, 2.58, 0.20), Color(1.0, 0.82, 0.58), 2.2, 8.0)
+	_lamp("LampBoot", Vector3(5.20, 2.58, 5.80), Color(1.0, 0.84, 0.62), 1.8, 6.0)
+	_lamp("LampMainBed", Vector3(-6.00, 5.58, -3.80), Color(1.0, 0.82, 0.62), 2.4, 8.5)
+	_lamp("LampSecondBed", Vector3(-6.00, 5.58, 3.80), Color(1.0, 0.82, 0.62), 2.2, 8.0)
+	_lamp("LampLanding", Vector3(4.50, 5.58, -5.80), Color(1.0, 0.84, 0.62), 2.0, 6.5)
+	_lamp("LampBath", Vector3(5.50, 5.58, 5.80), Color(1.0, 0.88, 0.72), 1.9, 6.0)
+	_lamp("LampGallery", Vector3(5.50, 5.58, 0.80), Color(1.0, 0.84, 0.62), 2.0, 6.5)
+	_lamp("Firelight", Vector3(X0 + 0.85, 0.42, -3.80), Color(1.0, 0.52, 0.20), 2.4, 5.5, true)
+
+
+## The house dog, in the kitchen by his bowl.  Same scene as the yard dog, so
+## the feeding and petting behaviour is shared.
+func _build_dog() -> void:
+	var packed := load(DOG) as PackedScene
+	if packed == null:
+		push_error("missing dog scene")
+		return
+	var dog := packed.instantiate() as Node3D
+	dog.name = "Dog"
+	dog.position = Vector3(0.0, 0.0, 6.85)
+	dog.rotation.y = deg_to_rad(0.0)
+	_root.add_child(dog)
 
 
 func _build_player() -> void:
@@ -1037,8 +1445,8 @@ func _build_player() -> void:
 	var player := packed.instantiate() as CharacterBody3D
 	player.name = "Player"
 	_root.add_child(player)
-	player.position = Vector3(4.35, 0.05, 0.55)
-	player.rotation.y = deg_to_rad(105.0)
+	player.position = Vector3(8.35, 0.05, 2.68)
+	player.rotation.y = deg_to_rad(90.0)
 	# Layer 1 is the shell, layer 4 the furniture: the player walks into both.
 	player.collision_mask = 1 | 4
 
@@ -1049,7 +1457,7 @@ func _build_exit_door() -> void:
 	var link := Node3D.new()
 	link.name = "FrontDoorExit"
 	link.set_script(load(DOOR))
-	link.position = Vector3(X1 - 0.60, 0.0, 1.55)
+	link.position = Vector3(X1 - 0.60, 0.0, 2.68)
 	link.set("target_scene", "res://scenes/main.tscn")
 	link.set("prompt_label", "GO OUTSIDE")
 	link.set("prompt_height", 2.35)
@@ -1063,23 +1471,23 @@ func _build_exit_door() -> void:
 	body.collision_layer = 1
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(0.12, 2.11, 0.99)
+	box.size = Vector3(0.12, 2.55, 1.28)
 	shape.shape = box
-	body.position = Vector3(X1, 1.075, 1.55)
+	body.position = Vector3(X1, 1.275, 2.68)
 	body.add_child(shape)
 	_root.add_child(body)
 
 
 func _rooms() -> Array:
 	return [
-		{"name": "sitting", "min": [X0, Z0], "max": [1.4, 0.0], "floor": 0},
-		{"name": "kitchen", "min": [X0, 0.0], "max": [1.4, Z1], "floor": 0},
-		{"name": "hall", "min": [1.4, -2.2], "max": [X1, 2.2], "floor": 0},
-		{"name": "study", "min": [1.4, Z0], "max": [X1, -2.2], "floor": 0},
-		{"name": "boot", "min": [1.4, 2.2], "max": [X1, Z1], "floor": 0},
-		{"name": "main_bed", "min": [X0, Z0], "max": [1.4, 0.0], "floor": 1},
-		{"name": "second_bed", "min": [X0, 0.0], "max": [1.4, Z1], "floor": 1},
-		{"name": "landing", "min": [1.4, Z0], "max": [X1, -2.2], "floor": 1},
-		{"name": "bath", "min": [1.4, 2.2], "max": [X1, Z1], "floor": 1},
-		{"name": "gallery", "min": [1.4, -2.2], "max": [X1, 2.2], "floor": 1},
+		{"name": "sitting", "min": [X0, Z0], "max": [HALL_X, 0.0], "floor": 0},
+		{"name": "kitchen", "min": [X0, 0.0], "max": [HALL_X, Z1], "floor": 0},
+		{"name": "hall", "min": [HALL_X, STUDY_Z], "max": [X1, BOOT_Z], "floor": 0},
+		{"name": "study", "min": [HALL_X, Z0], "max": [X1, STUDY_Z], "floor": 0},
+		{"name": "boot", "min": [HALL_X, BOOT_Z], "max": [X1, Z1], "floor": 0},
+		{"name": "main_bed", "min": [X0, Z0], "max": [HALL_X, 0.0], "floor": 1},
+		{"name": "second_bed", "min": [X0, 0.0], "max": [HALL_X, Z1], "floor": 1},
+		{"name": "landing", "min": [HALL_X, Z0], "max": [X1, STUDY_Z], "floor": 1},
+		{"name": "bath", "min": [HALL_X, BOOT_Z], "max": [X1, Z1], "floor": 1},
+		{"name": "gallery", "min": [HALL_X, STUDY_Z], "max": [X1, BOOT_Z], "floor": 1},
 	]

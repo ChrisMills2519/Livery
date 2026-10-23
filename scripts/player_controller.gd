@@ -13,7 +13,7 @@ const FOOTSTEP_SOUNDS := [
 @export var walk_speed := 3.0
 @export var run_speed := 6.0
 @export var jump_velocity := 6.0
-@export var mouse_sensitivity := 0.003
+@export var mouse_sensitivity := 0.0024
 @export var gravity := 20.0
 @export var step_interval_walk := 0.55
 @export var step_interval_run := 0.34
@@ -29,6 +29,21 @@ const RIDE_SWAY_HZ := 0.5
 ## Fallback camera offsets while mounted, used when no character profile is
 ## assigned.  Profiles can override them for shorter or taller bodies.
 const RIDE_PIVOT := Vector3(0.0, 1.0, 0.0)
+
+## Reach of the camera-centre interaction ray, in metres.
+const INTERACT_REACH := 2.4
+
+## Walls (layer 1) and furniture (layer 4) push the on-foot camera in.
+## The boom is resolved with a sphere cast, clamped inward at once and eased
+## back out, so a wall cannot drag the lens through itself.
+const CAMERA_CLIP_MASK := 1 | 4
+const CAMERA_CLIP_MARGIN := 0.10
+const CAMERA_CLIP_RADIUS := 0.28
+const CAMERA_MIN_BOOM := 0.35
+const CAMERA_RETURN_SPEED := 2.5
+const CAMERA_MODEL_HIDE_BOOM := 1.0
+const CAMERA_PITCH_MIN := -1.0
+const CAMERA_PITCH_MAX := 0.35
 const RIDE_CAMERA := Vector3(0.0, 0.0, 4.2)
 
 ## The selectable body.  Both shipped characters are retargeted to the same
@@ -55,6 +70,7 @@ const STATE_TO_CLIP := {
 
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
+@onready var camera_cast: ShapeCast3D = $CameraPivot/CameraCast
 @onready var footsteps: AudioStreamPlayer3D = $Footsteps
 @onready var anim_player: AnimationPlayer = $AnimationPlayer
 @onready var model: Node3D = $Model
@@ -77,6 +93,9 @@ var _hips_bone := -1
 var _model_base_yaw := 0.0
 var _camera_pivot_base := Vector3.ZERO
 var _camera_base := Vector3.ZERO
+var _camera_max_boom := 3.0
+var _camera_shoulder := 0.0
+var _boom_length := 3.0
 var _jump_blend := 0.0
 var _was_on_floor := true
 
@@ -94,8 +113,12 @@ func _ready() -> void:
 	# re-assert the capture once the new scene has drawn its first frame.
 	call_deferred("_capture_mouse")
 	footsteps.volume_db = -8.0
+	if camera_cast != null:
+		camera_cast.add_exception(self)
 	_camera_pivot_base = camera_pivot.position
 	_camera_base = camera.position
+	_apply_camera_profile()
+	_boom_length = _camera_base.length()
 	_apply_pending_spawn()
 	_select_requested_profile()
 	_apply_character_profile()
@@ -105,6 +128,22 @@ func _ready() -> void:
 	_play_state("idle", true)
 	if GameState.consume_auto_mount():
 		_begin_mounted_start.call_deferred()
+
+
+## The farmhouse (and any future interior) marks its root with camera metadata:
+## a shorter boom, a slightly higher pivot and a small shoulder offset.  The
+## yard and arena keep the familiar 3 m outdoor camera.
+func _apply_camera_profile() -> void:
+	var interior := get_tree().get_first_node_in_group("interior")
+	if interior == null:
+		_camera_max_boom = _camera_base.length()
+		_camera_shoulder = 0.0
+		return
+	_camera_max_boom = float(interior.get_meta("camera_max_boom", 2.35))
+	_camera_shoulder = float(interior.get_meta("camera_shoulder", 0.20))
+	_camera_pivot_base.y = float(interior.get_meta("camera_pivot_height", 1.62))
+	_camera_base = Vector3(_camera_shoulder, 0.0, _camera_max_boom)
+	camera_pivot.position = _camera_pivot_base
 
 
 ## A scene door leaves a spawn behind before changing scenes.  Move there on
@@ -260,6 +299,7 @@ func _cycle_character() -> void:
 
 
 func _process(delta: float) -> void:
+	_refresh_aim_prompt()
 	if (controls_enabled or seated) and TouchControls.is_active():
 		var look_delta := TouchControls.consume_look()
 		if look_delta != Vector2.ZERO:
@@ -281,16 +321,135 @@ func _process(delta: float) -> void:
 			jump_target = 1.0
 	var blend := 1.0 - exp(-6.0 * delta)
 	camera_pivot.position = camera_pivot.position.lerp(pivot_target, blend)
-	camera.position = camera.position.lerp(camera_target, blend)
+	if mounted:
+		# The riding camera is a fixed cinematic offset; it must not be pulled
+		# in by the horse or the ground.
+		camera.position = camera.position.lerp(camera_target, blend)
+		_boom_length = camera_target.length()
+		if model != null:
+			model.visible = true
+	else:
+		_boom_length = _resolve_boom(camera_target, delta)
+		camera.position = camera_target.normalized() * _boom_length
+		_update_model_visibility()
 	_jump_blend = move_toward(_jump_blend, jump_target, delta * 7.0)
 	if mounted and ride_pose != null:
 		var phase := 0.5 - 0.5 * cos(Time.get_ticks_msec() * 0.001 * TAU * RIDE_SWAY_HZ)
 		ride_pose.apply(phase, _jump_blend)
 
 
+## Shows the prompt on whichever interactable the camera is aimed at.
+var _aimed: Node = null
+
+
+func _refresh_aim_prompt() -> void:
+	var target := aim_target()
+	if _aimed != null and is_instance_valid(_aimed) and _aimed != target:
+		_aimed.call("show_prompt", false)
+	_aimed = target
+	if target != null:
+		target.call("show_prompt", true)
+
+
+## The interactable under the crosshair, or null.  Uses the camera's centre
+## ray so doors, furniture and the dog's bowl answer where the player looks.
+func aim_target() -> Node:
+	if mounted or seated or not controls_enabled:
+		return null
+	var origin := camera.global_position
+	var end := origin - camera.global_transform.basis.z * INTERACT_REACH
+	var query := PhysicsRayQueryParameters3D.create(origin, end, CAMERA_CLIP_MASK)
+	var excluded: Array[RID] = [get_rid()]
+	query.exclude = excluded
+	query.collide_with_areas = true
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty():
+		var node: Node = hit["collider"]
+		while node != null:
+			if node.is_in_group("interactable"):
+				return node
+			node = node.get_parent()
+	return _nearby_interactable()
+
+
+## Fallback when the camera ray misses: an interactable within its own
+## body_reach of the player, and roughly in front of them.  Measured from the
+## body, so a low target such as a bowl works without aiming the camera down.
+func _nearby_interactable() -> Node:
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() < 0.0001:
+		return null
+	forward = forward.normalized()
+	var best: Node = null
+	var best_facing := -INF
+	for node in get_tree().get_nodes_in_group("interactable"):
+		var item := node as Node3D
+		if item == null or not item.has_method("use"):
+			continue
+		var reach_value: Variant = item.get("body_reach")
+		if reach_value == null:
+			continue
+		var reach: float = float(reach_value)
+		if reach <= 0.0:
+			continue
+		var to_item := item.global_position - global_position
+		to_item.y = 0.0
+		var distance := to_item.length()
+		if distance > reach or distance < 0.001:
+			continue
+		var facing := forward.dot(to_item / distance)
+		if facing < 0.5:
+			continue
+		# Prefer the target the player is most squarely facing, not the nearest:
+		# two doors can be inside reach at once, and the one in view should win.
+		if facing > best_facing:
+			best_facing = facing
+			best = item
+	return best
+
+
+## Resolves the on-foot camera boom with a sphere cast.  A blocked boom is
+## clamped inward immediately (a safety constraint must never lag behind a
+## wall); it only eases back out once the way is clear.  Returns the length the
+## camera should sit at this frame.
+func _resolve_boom(target: Vector3, delta: float) -> float:
+	var length := target.length()
+	if length < 0.01 or camera_cast == null:
+		return length
+	camera_cast.target_position = target
+	camera_cast.force_shapecast_update()
+	var safe := length
+	if camera_cast.is_colliding():
+		var fraction := clampf(camera_cast.get_closest_collision_safe_fraction(), 0.0, 1.0)
+		safe = maxf(0.0, length * fraction - CAMERA_CLIP_MARGIN)
+	safe = maxf(safe, CAMERA_MIN_BOOM)
+	if safe < _boom_length:
+		return safe
+	return move_toward(_boom_length, safe, CAMERA_RETURN_SPEED * delta)
+
+
+## When the boom is squeezed close to the head, hide the body so it cannot
+## fill the frame.  It comes back as soon as there is room.
+func _update_model_visibility() -> void:
+	if model == null:
+		return
+	model.visible = _boom_length > CAMERA_MODEL_HIDE_BOOM
+
+
+## Current boom length, for the farmhouse camera checks.
+func camera_boom_length() -> float:
+	return _boom_length
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not controls_enabled and not seated:
 		return
+	if event.is_action_pressed("interact") and not mounted and not seated:
+		var target := aim_target()
+		if target != null and target.has_method("use") and target.use():
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		_look(event.relative)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -328,7 +487,7 @@ func _capture_mouse() -> void:
 func _look(relative: Vector2) -> void:
 	rotate_y(-relative.x * mouse_sensitivity)
 	camera_pivot.rotation.x = clamp(
-		camera_pivot.rotation.x - relative.y * mouse_sensitivity, -1.2, 0.4
+		camera_pivot.rotation.x - relative.y * mouse_sensitivity, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX
 	)
 
 
@@ -388,6 +547,7 @@ func stand_up(where: Vector3, yaw: float) -> void:
 	rotation.y = yaw
 	camera_pivot.position = _camera_pivot_base
 	camera.position = _camera_base
+	_boom_length = _camera_base.length()
 	camera_pivot.rotation.x = 0.0
 	if model != null:
 		model.visible = true
