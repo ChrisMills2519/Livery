@@ -39,9 +39,41 @@ const INTERACT_REACH := 2.4
 const CAMERA_CLIP_MASK := 1 | 4
 const CAMERA_CLIP_MARGIN := 0.10
 const CAMERA_CLIP_RADIUS := 0.28
+## The last-resort distance when every line is blocked.  The walkthrough
+## expects the lateral solver to keep the camera well above this in the house;
+## it is a safety clamp, not the normal tight-space answer.
 const CAMERA_MIN_BOOM := 0.35
 const CAMERA_RETURN_SPEED := 2.5
-const CAMERA_MODEL_HIDE_BOOM := 1.0
+const CAMERA_MODEL_HIDE_BOOM := 0.58
+
+## A blocked direct boom can usually be cleared by sliding the camera sideways
+## along the wall, past a chair back or around a plant.  Each offset is metres
+## from the normal shoulder line; the camera keeps the player's yaw, so the
+## slide shifts the framing rather than turning the view.  The small cost stops
+## a clear direct line from losing to a pointless offset.
+const CAMERA_SLIDE_OFFSETS := [-1.40, -1.00, -0.70, -0.50, -0.35, 0.0, 0.35, 0.50, 0.70, 1.00, 1.40]
+const CAMERA_SLIDE_COST := 0.25
+## A slide only helps if the player stays in frame.  At 35 degrees the body is
+## at the edge of a 68 degree vertical view, so wider offsets are not offered.
+const CAMERA_SLIDE_MAX_ANGLE := 0.61
+## When even a slide cannot get behind the player, the last usable view is a
+## high look-down from above the head.  It is only offered while the normal
+## boom is below a usable length, so a clear rear view never loses to it.
+## A doorway head limits how high a look-down can sit, so the lift is tried at
+## three heights; the clearest wins.  The lowest still clears the body and is
+## only used where a deeper lift would hit the door head.
+const CAMERA_OVERHEAD_LIFTS := [0.45, 0.60, 0.95]
+const CAMERA_OVERHEAD_TRIGGER := 0.90
+const CAMERA_OVERHEAD_OFFSETS := [-0.45, 0.0, 0.45]
+const CAMERA_OVERHEAD_TILT := 1.26
+const CAMERA_OVERHEAD_BLEND_SPEED := 8.0
+## A clear side line is useless if the ease cannot cross the chair that blocks
+## the direct line: it would stay pinned at the head.  When the chosen line is
+## more than this far around from the current one, step onto it at a usable
+## radius first, then ease outward along it.  The step changes direction, not
+## distance, so it is a swing rather than a boom pop.
+const CAMERA_SWING_ANGLE := 0.30
+const CAMERA_SWING_RADIUS := 0.62
 const CAMERA_PITCH_MIN := -1.0
 const CAMERA_PITCH_MAX := 0.35
 const RIDE_CAMERA := Vector3(0.0, 0.0, 4.2)
@@ -96,6 +128,7 @@ var _camera_base := Vector3.ZERO
 var _camera_max_boom := 3.0
 var _camera_shoulder := 0.0
 var _boom_length := 3.0
+var _camera_slide := 0.0
 var _jump_blend := 0.0
 var _was_on_floor := true
 
@@ -333,14 +366,19 @@ func _process(delta: float) -> void:
 	camera_pivot.position = camera_pivot.position.lerp(pivot_target, blend)
 	if mounted:
 		# The riding camera is a fixed cinematic offset; it must not be pulled
-		# in by the horse or the ground.
+		# in by the horse or the ground, and it must not inherit the on-foot
+		# corner look-down if the player mounted from a tight space.
 		camera.position = camera.position.lerp(camera_target, blend)
+		camera.rotation.x = 0.0
 		_boom_length = camera_target.length()
 		if model != null:
 			model.visible = true
 	else:
-		_boom_length = _resolve_boom(camera_target, delta)
-		camera.position = camera_target.normalized() * _boom_length
+		var resolved := _resolve_camera_position(camera_target, delta)
+		camera.position = resolved
+		_boom_length = resolved.length()
+		_camera_slide = resolved.x - _camera_shoulder
+		_update_camera_tilt(delta)
 		_update_model_visibility()
 	_jump_blend = move_toward(_jump_blend, jump_target, delta * 7.0)
 	if mounted and ride_pose != null:
@@ -419,30 +457,103 @@ func _nearby_interactable() -> Node:
 	return best
 
 
-## Resolves the on-foot camera boom with a sphere cast.  A blocked boom is
-## clamped inward immediately (a safety constraint must never lag behind a
-## wall); it only eases back out once the way is clear.  Returns the length the
-## camera should sit at this frame.
-func _resolve_boom(target: Vector3, delta: float) -> float:
+## Resolves the on-foot camera position in four steps.
+##  1. The direct shoulder line.
+##  2. A lateral line, for a chair or desk the player has just backed into.
+##     The line must keep the player inside 35 degrees of the view.
+##  3. A look-down from above the head, for a wall corner with no usable rear
+##     line.  It is offered only while the normal boom is below 0.90 m.
+##  4. If the chosen line is around a blocker, step onto it at a usable radius
+##     before easing out.  A plain ease would stay pinned at the head because
+##     the straight path to the side crosses the very blocker being avoided.
+## The final path is cast again, so a wall cannot be crossed between lines.
+func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 	var length := target.length()
 	if length < 0.01 or camera_cast == null:
+		return target
+	var direct_safe := _cast_safe_distance(target)
+	var desired := target.normalized() * maxf(direct_safe, CAMERA_MIN_BOOM)
+	var best_score := maxf(direct_safe, CAMERA_MIN_BOOM)
+	var overhead_position := Vector3.ZERO
+	var overhead_length := 0.0
+	if direct_safe < length - 0.05:
+		for offset in CAMERA_SLIDE_OFFSETS:
+			if is_zero_approx(offset):
+				continue
+			var candidate := target + Vector3(offset, 0.0, 0.0)
+			var safe := _cast_safe_distance(candidate)
+			var position := candidate.normalized() * maxf(safe, CAMERA_MIN_BOOM)
+			if position.z < 0.15 or atan2(absf(position.x), position.z) > CAMERA_SLIDE_MAX_ANGLE:
+				continue
+			var score := position.length() - absf(offset) * CAMERA_SLIDE_COST
+			if score > best_score + 0.001:
+				best_score = score
+				desired = position
+		# No rear or side line keeps the body in view: look down from above
+		# the head instead of pulling into it.  Either side of the head is
+		# offered because a corner usually blocks one of them.
+		for lift in CAMERA_OVERHEAD_LIFTS:
+			for side in CAMERA_OVERHEAD_OFFSETS:
+				var overhead := Vector3(side, lift, 0.0)
+				var overhead_safe := _cast_safe_distance(overhead)
+				var position := overhead.normalized() * maxf(overhead_safe, CAMERA_MIN_BOOM)
+				if position.length() > overhead_length:
+					overhead_length = position.length()
+					overhead_position = position
+		if best_score < CAMERA_OVERHEAD_TRIGGER and overhead_length > best_score + 0.05:
+			desired = overhead_position
+	var proposed := camera.position.move_toward(desired, CAMERA_RETURN_SPEED * delta)
+	if desired.length() > 0.01 and camera.position.length() > 0.01:
+		var around := camera.position.angle_to(desired)
+		if around > CAMERA_SWING_ANGLE:
+			var swing_length := minf(maxf(camera.position.length(), CAMERA_SWING_RADIUS), desired.length())
+			var swing := desired.normalized() * swing_length
+			if _cast_safe_distance(swing) > swing_length - 0.05:
+				proposed = swing
+	if proposed.length() < 0.01:
+		proposed = desired.normalized() * CAMERA_MIN_BOOM if desired.length() > 0.01 else Vector3(0.0, 0.0, CAMERA_MIN_BOOM)
+	var safe := _cast_safe_distance(proposed)
+	# The min boom is a floor on the result, not only a clamp when shortening;
+	# otherwise the ease can keep walking the camera below it frame by frame.
+	var final_length := maxf(minf(proposed.length(), safe), CAMERA_MIN_BOOM)
+	return proposed.normalized() * final_length
+
+
+## Distance along `local_target` at which the camera sphere stops.  The cast is
+## a child of the pivot, so the target is in pivot space.
+func _cast_safe_distance(local_target: Vector3) -> float:
+	var length := local_target.length()
+	if length < 0.01:
 		return length
-	camera_cast.target_position = target
+	camera_cast.target_position = local_target
 	camera_cast.force_shapecast_update()
-	var safe := length
-	if camera_cast.is_colliding():
-		var fraction := clampf(camera_cast.get_closest_collision_safe_fraction(), 0.0, 1.0)
-		safe = maxf(0.0, length * fraction - CAMERA_CLIP_MARGIN)
-	safe = maxf(safe, CAMERA_MIN_BOOM)
-	if safe < _boom_length:
-		return safe
-	return move_toward(_boom_length, safe, CAMERA_RETURN_SPEED * delta)
+	if not camera_cast.is_colliding():
+		return length
+	var fraction := clampf(camera_cast.get_closest_collision_safe_fraction(), 0.0, 1.0)
+	return maxf(0.0, length * fraction - CAMERA_CLIP_MARGIN)
 
 
-## When the boom is squeezed close to the head, hide the body so it cannot
-## fill the frame.  It comes back as soon as there is room.
+## The high fallback looks down over the player rather than along the level
+## boom.  The amount follows the camera's height and how little rear room it
+## has, so the tilt eases in and out with the position instead of snapping
+## when a candidate changes.
+func _update_camera_tilt(delta: float) -> void:
+	var height := clampf((camera.position.y - 0.10) / CAMERA_OVERHEAD_LIFTS[-1], 0.0, 1.0)
+	var no_rear := 1.0 - clampf(camera.position.z / 0.80, 0.0, 1.0)
+	var tilt := -CAMERA_OVERHEAD_TILT * height * no_rear
+	var blend := 1.0 - exp(-CAMERA_OVERHEAD_BLEND_SPEED * delta)
+	camera.rotation.x = lerp_angle(camera.rotation.x, tilt, blend)
+
+
+## Only a true first-person clamp hides the body.  The lateral and overhead
+## answers above keep the camera far enough out that the body stays in frame;
+## a look-down sits above the head even when its distance is short, so height
+## is checked as well as the boom.
 func _update_model_visibility() -> void:
 	if model == null:
+		return
+	if camera.position.y > 0.30:
+		model.visible = true
 		return
 	model.visible = _boom_length > CAMERA_MODEL_HIDE_BOOM
 
@@ -450,6 +561,12 @@ func _update_model_visibility() -> void:
 ## Current boom length, for the farmhouse camera checks.
 func camera_boom_length() -> float:
 	return _boom_length
+
+
+## Sideways offset from the normal shoulder line, for the walkthrough.  Zero
+## means the camera is on the direct line; positive means it slid right.
+func camera_slide_length() -> float:
+	return _camera_slide
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -546,6 +663,7 @@ func sit_at(seat: Transform3D, eye_height: float, pitch_degrees: float) -> void:
 	camera_pivot.position = Vector3(0.0, eye_height, 0.0)
 	camera_pivot.rotation.x = deg_to_rad(pitch_degrees)
 	camera.position = Vector3.ZERO
+	camera.rotation.x = 0.0
 
 
 ## Stands the player back up at `where`, keeping the seat's facing.
@@ -558,6 +676,7 @@ func stand_up(where: Vector3, yaw: float) -> void:
 	camera_pivot.position = _camera_pivot_base
 	camera.position = _camera_base
 	_boom_length = _camera_base.length()
+	camera.rotation.x = 0.0
 	camera_pivot.rotation.x = 0.0
 	if model != null:
 		model.visible = true
