@@ -134,7 +134,17 @@ func _ready() -> void:
 ## a shorter boom, a slightly higher pivot and a small shoulder offset.  The
 ## yard and arena keep the familiar 3 m outdoor camera.
 func _apply_camera_profile() -> void:
+	# The farmhouse root carries the profile as metadata.  Groups added by the
+	# builder are not saved into the packed scene, so walk up to the scene that
+	# owns the player rather than trusting a group lookup.
 	var interior := get_tree().get_first_node_in_group("interior")
+	if interior == null:
+		var ancestor := get_parent()
+		while ancestor != null:
+			if ancestor.has_meta("camera_max_boom"):
+				interior = ancestor
+				break
+			ancestor = ancestor.get_parent()
 	if interior == null:
 		_camera_max_boom = _camera_base.length()
 		_camera_shoulder = 0.0

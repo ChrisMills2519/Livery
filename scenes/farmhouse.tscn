@@ -11846,7 +11846,7 @@ transform = Transform3D(-2, 0, -1.7484555e-07, 0, 2, 0, 1.7484555e-07, 0, -2, -2
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.058080003, 0, 0.052814335)
 
 [node name="@Node3D@584" type="Node3D" parent="Furniture" unique_id=2025165400]
-transform = Transform3D(2.7427225e-08, 0, -2.3, 0, 2.3, 0, 2.3, 0, 2.7427225e-08, 2.12, 3.12, 1.1)
+transform = Transform3D(2.7427225e-08, 0, -2.3, 0, 2.3, 0, 2.3, 0, 2.7427225e-08, 2.12, 3.12, 3.95)
 
 [node name="bookcaseOpenLow" type="Node3D" parent="Furniture/@Node3D@584" unique_id=1348038443 instance=ExtResource("57_1xfyn")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0, 0.125)
