@@ -189,8 +189,9 @@ func _initialize() -> void:
 	_root.set_meta("windows", WINDOWS)
 	_root.set_meta("doors", DOORS)
 	# The player reads this profile when it spawns: a shorter, higher boom for
-	# interiors, while the yard keeps the full outdoor camera.
-	_root.add_to_group("interior")
+	# interiors, while the yard keeps the full outdoor camera.  It walks up to
+	# this metadata rather than using a group, because PackedScene does not save
+	# groups added after the root was created.
 	_root.set_meta("camera_max_boom", 2.35)
 	_root.set_meta("camera_pivot_height", 1.62)
 	_root.set_meta("camera_shoulder", 0.22)
@@ -1239,7 +1240,9 @@ func _build_furniture() -> void:
 	_prop("desk", Vector3(-2.40, UPPER_FLOOR, 7.05), 180.0, {"scale": 2.0})
 	_prop("chairDesk", Vector3(-2.40, UPPER_FLOOR, 6.25), 0.0, {"scale": 1.4})
 	_prop("laptop", Vector3(-2.45, UPPER_FLOOR + 1.20, 7.05), 180.0, {"mode": "wall", "collide": false, "scale": 2.0})
-	_prop("bookcaseOpenLow", Vector3(2.12, UPPER_FLOOR, 1.10), 270.0, {"scale": 2.3})
+	# Clear of the cased opening at z 0.70..2.50: a bookcase across the door
+	# left only a squeeze between it and the side table.
+	_prop("bookcaseOpenLow", Vector3(2.12, UPPER_FLOOR, 3.95), 270.0, {"scale": 2.3})
 	_prop("Chest", Vector3(2.12, UPPER_FLOOR, 5.90), 270.0, {"path": KIT + "sideTableDrawers.glb", "scale": 2.2})
 	_prop("Houseplant3B", Vector3(1.85, UPPER_FLOOR, 6.95), 0.0, {"path": QUAT + "Houseplant_3.glb", "scale": 1.25})
 	_prop("SecondBedChair", Vector3(0.75, UPPER_FLOOR, 2.60), 250.0, {"path": KIT + "loungeChair.glb", "scale": 1.8, "fabric": FABRIC_BLUE})

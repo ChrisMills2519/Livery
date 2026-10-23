@@ -578,4 +578,17 @@ State-machine review (no defects found in the horse or player code):
 - Verification: `godot --headless --path . --script res://tools/build_farmhouse.gd` rebuilds `scenes/farmhouse.tscn`; `check_farmhouse`, `check_scene_doors`, `check_editor_load`, `check_feed`, `check_touch`, `check_mount` and `check_dog` all pass. The yard door's farmhouse spawn moved with the front door to `(8.35, 0.05, 2.68)`. `tools/screenshot_farmhouse.gd` renders the eight review views, with the plans framed at 18.5 m so the whole 19 x 15.6 m footprint fits and the upper plan rendered before the ground plan so neither one's hidden storey leaks into the other.
 - Limitation: the review images are static renders. The camera's feel at speed and the room proportions in motion still need a play pass in the app.
 
+## The indoor camera was still the outdoor one
+
+2026-10-23
+
+- The farmhouse root published its camera metadata, but `_root.add_to_group("interior")` runs after the root exists and `PackedScene.pack()` does not save that group. The packed `scenes/farmhouse.tscn` had no `interior` group, `_apply_camera_profile()` found nothing, and the player kept the 3.0 m outdoor boom, 1.5 m pivot and no shoulder. The 2.35 m indoor rig described in the previous entry never ran in the house.
+- `_apply_camera_profile()` now walks up from the player to the scene that carries `camera_max_boom`, and the group lookup stays only as a fallback. The generator no longer claims to publish a group that cannot survive packing.
+- `check_farmhouse` now bounds the open sitting-room boom to 2.20-2.50 m and asserts the pivot at 1.62 m. The outdoor 3 m rig fails both; the previous test only had a lower bound and passed at 3.0 m.
+- The walkthrough found the second bedroom's bookcase standing across its cased opening at x = 2.43, z 0.70-2.50. Its collision covered z 0.68-1.52 and the side table blocked the north side, leaving a squeeze narrower than the player. It moved to z = 3.95, clear of the opening and the chest.
+- The door check used one centre ray at mid-height, which passed the blocked opening. It now sweeps a player-sized capsule (0.28 m radius, 1.10 m cylinder) along the centre line of every cased opening, so furniture in a doorway fails.
+- New `tools/check_walkthrough.gd` walks the house in motion: from the front door through every room and cased opening, up and down both stair flights, then 11 camera sweeps backing into walls, corners and furniture. It reports 57/57 legs, 0 clipped frames in 6,960 samples, a 0.35-2.36 m boom range, and no outward snap over 0.35 m. It takes about two minutes.
+- Verification: `check_farmhouse`, `check_walkthrough`, `check_scene_doors`, `check_editor_load`, `check_feed`, `check_touch`, `check_mount` and `check_dog` all pass.
+- Remaining rough edge: backing into a corner or standing under a plant drops the boom to its 0.35 m floor and hides the body, which reads as first person. That is the safety clamp doing its job, not clipping; the return to 2.35 m eases at 2.5 m/s. Feel in motion still needs a human pass with a mouse.
+
 <!-- end -->

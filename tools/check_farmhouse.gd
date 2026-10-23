@@ -173,6 +173,14 @@ func _check_doors() -> void:
 		var inside := Vector3(plane - 1.2, y, centre) if axis == "z" else Vector3(centre, y, plane - 1.2)
 		var outside := Vector3(plane + 1.2, y, centre) if axis == "z" else Vector3(centre, y, plane + 1.2)
 		_check(_ray(inside, outside, 5).is_empty(), "opening %s is clear" % door["name"])
+		# A single centre ray misses furniture standing in the opening.  Sweep a
+		# player-sized capsule along the centre line instead.  Furniture may
+		# legitimately narrow one edge of a wide opening; the centre must stay
+		# walkable.
+		_check(
+			_door_lane_clear(axis, plane, centre, base),
+			"opening %s is wide enough to walk through" % door["name"]
+		)
 
 
 func _check_solid_walls() -> void:
@@ -471,15 +479,36 @@ func _check_camera() -> void:
 	_check(inside == 0, "the indoor camera never enters walls or furniture (%d bad of %d)" % [inside, checked])
 
 	# From the centre of the enlarged sitting room the full indoor boom fits.
+	# The bounds also prove the interior profile was applied: the outdoor 3 m
+	# boom would otherwise pass a lower-bound-only test.
 	_player.global_position = Vector3(-3.50, 0.05, -5.90)
 	_player.rotation.y = 0.0
 	pivot.rotation.x = 0.0
 	await _wait_ms(1200)
 	var boom := float(_player.call("camera_boom_length"))
-	_check(boom > 2.10, "the open sitting room gets the full indoor boom (%.2f m)" % boom)
+	_check(boom > 2.20 and boom < 2.50, "the open sitting room gets the indoor boom (%.2f m, expected 2.35)" % boom)
+	_check(absf(pivot.position.y - 1.62) < 0.06, "the indoor camera pivot sits at 1.62 m (%.2f m)" % pivot.position.y)
 
 
 # --- helpers ----------------------------------------------------------------
+
+## Whether a player-sized capsule can cross the wall plane over a one-metre
+## span, at `along` of the opening.  Catches furniture standing in a doorway.
+func _door_lane_clear(axis: String, plane: float, along: float, base: float) -> bool:
+	var shape := CapsuleShape3D.new()
+	shape.radius = 0.28
+	shape.height = 1.10
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.collision_mask = 1 | 4
+	query.collide_with_areas = false
+	for step in [-0.60, -0.30, 0.0, 0.30, 0.60]:
+		var pos := Vector3(plane + step, base + 0.90, along) if axis == "z" else Vector3(along, base + 0.90, plane + step)
+		query.transform = Transform3D(Basis.IDENTITY, pos)
+		if not _space.intersect_shape(query, 1).is_empty():
+			return false
+	return true
+
 
 func _ray(from: Vector3, to: Vector3, mask := 1) -> Dictionary:
 	var query := PhysicsRayQueryParameters3D.create(from, to, mask)
