@@ -2,11 +2,32 @@ Farmhouse interior assets
 =========================
 
 kenney_furniture_kit/
-  140 GLB models from Kenney's "Furniture Kit" (2018, v1.0).
+ 140 GLB models from Kenney's "Furniture Kit" (2018, v1.0).
   https://kenney.nl/assets/furniture-kit
   License: Creative Commons Zero (CC0 1.0). See kenney_furniture_kit_LICENSE.txt.
   Only the .glb files are kept; the .fbx/.obj/.dae/.stl/.mtl copies in the
   original archive are redundant for Godot.
+
+kenney_food_kit/
+  Tableware and food GLB models from Kenney's "Food Kit" (2.0, 2024).
+  https://kenney.nl/assets/food-kit
+  License: Creative Commons Zero (CC0 1.0). See kenney_food_kit_LICENSE.txt.
+  Used for the dining table settings, the dresser plates, the fruit bowl and
+  the kitchen worktop.
+
+quaternius/
+  House plants, small tables, chairs and bath accessories from Quaternius's
+  "Ultimate House Interior Pack" (June 2020).
+  https://quaternius.com/packs/ultimatehomeinterior.html
+  License: Creative Commons Zero (CC0 1.0).
+  The round carpet models in the pack are authored as upright discs, so the
+  scene uses Kenney's flat rugs for floors instead.
+
+shapespark_textiles/
+  Rugs, curtains, pillows and blankets from the Shapespark asset library.
+  https://github.com/shapespark/shapespark-assets
+  License: Creative Commons Zero (CC0 1.0). See shapespark_LICENSE.txt.
+  Each GLB keeps its own PNG/JPG texture beside it.
 
 textures/
   wood_floor_diff_1k.jpg

@@ -23,6 +23,8 @@ extends Node3D
 @export var reach := 1.6
 ## Seconds of dimming for a bed rest before it comes back.
 @export var rest_hold := 1.6
+## Reach measured from the player's body, used by the aim path.
+@export var body_reach := 1.6
 
 var _player: Node3D
 var _prompt: Label3D
@@ -36,6 +38,7 @@ var _resting := false
 func _ready() -> void:
 	add_to_group("touch_context")
 	add_to_group("interior_spot")
+	add_to_group("interactable")
 	_prompt = _make_label(eye_height + 0.50, Device.pick("E  ·  " + prompt_label, "TAP  ·  " + prompt_label))
 	_toast = _make_label(eye_height + 0.85, "")
 	_toast.visible = false
@@ -74,6 +77,24 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif _can_use():
 		_sit()
 		get_viewport().set_input_as_handled()
+
+
+## Aim path: the aimed seat shows its prompt; the proximity prompt stays for
+## the player standing close without aiming.
+func show_prompt(show: bool) -> void:
+	if _prompt != null and show and not _seated:
+		_prompt.visible = true
+
+
+## Aim-path use: sit down, or stand up while seated.
+func use() -> bool:
+	if _seated:
+		_stand()
+		return true
+	if _can_use():
+		_sit()
+		return true
+	return false
 
 
 func is_seated() -> bool:

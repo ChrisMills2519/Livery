@@ -38,7 +38,7 @@ func _run() -> void:
 	if door != null:
 		_check(String(door.get("target_scene")) == FARMHOUSE, "the yard door enters the farmhouse")
 		_check(
-			(door.get("spawn_position") as Vector3).distance_to(Vector3(4.6, 0.05, 1.55)) < 0.01,
+			(door.get("spawn_position") as Vector3).distance_to(Vector3(8.35, 0.05, 2.68)) < 0.01,
 			"the yard door lands in the farmhouse hall"
 		)
 		var player := main.get_node_or_null("Player") as Node3D

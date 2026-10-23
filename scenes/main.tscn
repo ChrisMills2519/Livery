@@ -113,7 +113,7 @@ target_scene = "res://scenes/farmhouse.tscn"
 prompt_label = "ENTER"
 prompt_height = 2.55
 reach = 2.8
-spawn_position = Vector3(4.6, 0.05, 1.55)
+spawn_position = Vector3(8.35, 0.05, 2.68)
 spawn_yaw_degrees = 90.0
 
 [editable path="Root Scene"]

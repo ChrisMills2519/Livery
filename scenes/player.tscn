@@ -14,6 +14,9 @@
 radius = 0.3
 height = 1.7
 
+[sub_resource type="SphereShape3D" id="SphereShape3D_camera"]
+radius = 0.28
+
 [node name="Player" type="CharacterBody3D" unique_id=1892282212]
 script = ExtResource("1_player")
 character_profile = ExtResource("9_chris_profile")
@@ -98,6 +101,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 [node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=839831806]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
 current = true
+
+[node name="CameraCast" type="ShapeCast3D" parent="CameraPivot"]
+target_position = Vector3(0, 0, 3)
+shape = SubResource("SphereShape3D_camera")
+collision_mask = 5
 
 [node name="Footsteps" type="AudioStreamPlayer3D" parent="." unique_id=1881919144]
 stream = ExtResource("2_step")

@@ -13,16 +13,19 @@ extends SceneTree
 const SCENE := "res://scenes/farmhouse.tscn"
 
 const VIEWS := [
-	{"name": "sitting", "eye": Vector3(1.05, 1.62, -0.95), "look": Vector3(-4.7, 1.05, -2.25)},
-	{"name": "kitchen", "eye": Vector3(0.95, 1.62, 3.95), "look": Vector3(-4.9, 0.95, 2.30)},
-	{"name": "hall", "eye": Vector3(1.95, 1.66, 1.55), "look": Vector3(4.95, 1.05, -1.30)},
-	{"name": "bedroom", "eye": Vector3(1.05, 4.35, -0.40), "look": Vector3(-4.7, 3.45, -2.40)},
-	{"name": "landing", "eye": Vector3(1.90, 4.32, 0.95), "look": Vector3(4.40, 3.05, -1.55)},
-	{"name": "bathroom", "eye": Vector3(4.95, 4.32, 2.48), "look": Vector3(1.70, 3.20, 3.85)},
+	{"name": "sitting", "eye": Vector3(1.85, 1.66, -0.85), "look": Vector3(-6.8, 1.10, -4.50)},
+	{"name": "kitchen", "eye": Vector3(1.70, 1.66, 2.95), "look": Vector3(-7.4, 1.00, 5.90)},
+	{"name": "hall", "eye": Vector3(3.15, 1.70, 2.95), "look": Vector3(7.90, 1.15, -1.20)},
+	{"name": "bedroom", "eye": Vector3(1.85, 4.42, -1.00), "look": Vector3(-6.6, 3.50, -4.50)},
+	{"name": "landing", "eye": Vector3(3.10, 4.42, 1.15), "look": Vector3(7.60, 3.25, -3.05)},
+	{"name": "bathroom", "eye": Vector3(3.20, 4.42, 4.35), "look": Vector3(8.30, 3.40, 6.85)},
 	# Layout review: the ceilings and the storey above are hidden so the plan
 	# of each floor can be checked in one frame.
-	{"name": "plan_ground", "eye": Vector3(0.0, 12.0, 0.0), "look": Vector3(0.0, 0.0, -0.01), "plan": 0},
-	{"name": "plan_upper", "eye": Vector3(0.0, 12.0, 0.0), "look": Vector3(0.0, 2.72, -0.01), "plan": 1},
+	# Upper first: each plan view hides parts of the scene, and the ground view
+	# hides the upper storey for good.  Rendering the upper plan first keeps
+	# its furniture from being hidden by the previous frame.
+	{"name": "plan_upper", "eye": Vector3(0.0, 14.0, 0.0), "look": Vector3(0.0, 2.72, -0.01), "plan": 1},
+	{"name": "plan_ground", "eye": Vector3(0.0, 14.0, 0.0), "look": Vector3(0.0, 0.0, -0.01), "plan": 0},
 ]
 
 # Shell node name prefixes that sit above the floor a plan view is looking at.
@@ -38,6 +41,10 @@ var _frame := 0
 var _index := 0
 var _shot_frames := 0
 var _views: Array = []
+# Plan views hide whole groups for one frame.  Remember what was visible when
+# the scene loaded so a second plan view can put it all back before hiding the
+# other storey.
+var _base_visibility := {}
 
 
 func _initialize() -> void:
@@ -56,16 +63,29 @@ func _initialize() -> void:
 	_camera.far = 120.0
 	root.add_child(_camera)
 	_camera.current = true
+	for group in ["Shell", "Lighting", "Furniture", "Seats"]:
+		var parent := _scene.get_node_or_null(group)
+		if parent == null:
+			continue
+		for child in parent.get_children():
+			if child is Node3D:
+				_base_visibility[child] = (child as Node3D).visible
 	var player := _scene.get_node_or_null("Player") as Node3D
 	if player != null:
 		var player_camera := player.get_node_or_null("CameraPivot/Camera3D") as Camera3D
 		if player_camera != null:
 			player_camera.current = false
-		# The rooms are the subject, not the rider standing in the hall.
+		# The rooms are the subject, not the rider standing in the hall.  Park the
+		# player away from the doors and mute the prompts so nothing floats in the
+		# review frames.
 		player.visible = false
+		player.set("controls_enabled", false)
+		player.global_position = Vector3(-3.50, 0.05, -3.90)
 
 
 func _hide_above(floor_index: int) -> void:
+	for node in _base_visibility:
+		(node as Node3D).visible = bool(_base_visibility[node])
 	var shell := _scene.get_node("Shell")
 	for prefix in PLAN_HIDE[floor_index]:
 		for child in shell.get_children():
@@ -102,7 +122,9 @@ func _process(_delta: float) -> bool:
 		if view.has("plan"):
 			_hide_above(int(view["plan"]))
 			_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-			_camera.size = 14.0
+			# The clear plan is 19.05 x 15.59 m; 18.5 vertical leaves a margin at
+			# 16:9 instead of cropping the north and south rooms.
+			_camera.size = 18.5
 		else:
 			_camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 		_camera.global_position = view["eye"]
