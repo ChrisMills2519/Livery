@@ -79,6 +79,11 @@ const CORNERS := [
 ]
 
 const CAMERA_FAILURE_LIMIT := 8
+## The old rig could fall to the 0.35 m safety clamp in any tight spot.  These
+## floors are the measured answers: every open room and every backed-into
+## corner must keep a third-person boom, not just stay off the clamp.
+const ROOM_BOOM_FLOOR := 1.0
+const CORNER_BOOM_FLOOR := 0.90
 
 var _world: Node3D
 var _player: CharacterBody3D
@@ -87,6 +92,7 @@ var _camera: Camera3D
 var _space: PhysicsDirectSpaceState3D
 var _last_boom := 0.0
 var _min_boom := INF
+var _min_boom_at := Vector3.ZERO
 var _max_boom := 0.0
 var _max_inward := 0.0
 var _max_outward := 0.0
@@ -106,7 +112,8 @@ func _initialize() -> void:
 	for failure in _leg_failures:
 		print("  ROUTE FAIL: " + failure)
 	print("  camera samples: %d, clipped frames: %d, outward pops: %d" % [_sample_count, _clip_frames, _outward_pops])
-	print("  boom range: %.2f .. %.2f, max inward step: %.2f, max outward step: %.2f" % [_min_boom, _max_boom, _max_inward, _max_outward])
+	print("  boom range: %.2f .. %.2f, min at %s" % [_min_boom, _max_boom, _min_boom_at])
+	print("  max inward step: %.2f, max outward step: %.2f" % [_max_inward, _max_outward])
 	for key in _room_booms:
 		print("  %s boom: %.2f" % [key, _room_booms[key]])
 	for failure in _cam_failures:
@@ -190,8 +197,12 @@ func _orbit(room: String, quick := false) -> void:
 			_sample()
 			worst = minf(worst, float(_player.call("camera_boom_length")))
 	_room_booms[room] = worst
-	if worst < 0.34:
-		_add_cam_failure("%s: boom fell to %.2f m" % [room, worst])
+	var floor := CORNER_BOOM_FLOOR if quick else ROOM_BOOM_FLOOR
+	if worst < floor:
+		_add_cam_failure("%s: boom fell to %.2f m (floor %.2f)" % [room, worst, floor])
+	var body := _player.get_node_or_null("Model") as Node3D
+	if body != null and not body.visible:
+		_add_cam_failure("%s: body hidden at boom %.2f" % [room, worst])
 
 
 func _back_into(pos: Vector3, face_deg: float, label: String) -> void:
@@ -213,7 +224,9 @@ func _sample() -> void:
 		return
 	var boom := float(_player.call("camera_boom_length"))
 	_sample_count += 1
-	_min_boom = minf(_min_boom, boom)
+	if boom < _min_boom:
+		_min_boom = boom
+		_min_boom_at = _player.global_position
 	_max_boom = maxf(_max_boom, boom)
 	if _sample_count > 2:
 		var delta := boom - _last_boom

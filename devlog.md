@@ -591,4 +591,22 @@ State-machine review (no defects found in the horse or player code):
 - Verification: `check_farmhouse`, `check_walkthrough`, `check_scene_doors`, `check_editor_load`, `check_feed`, `check_touch`, `check_mount` and `check_dog` all pass.
 - Remaining rough edge: backing into a corner or standing under a plant drops the boom to its 0.35 m floor and hides the body, which reads as first person. That is the safety clamp doing its job, not clipping; the return to 2.35 m eases at 2.5 m/s. Feel in motion still needs a human pass with a mouse.
 
+## The camera steps around tight furniture instead of diving into the head
+
+2026-10-23
+
+- The earlier rig resolved the direct shoulder line, then tried a few lateral lines and eased between them. That worked in the open house, but in the tight spots it was still pinned: a chair, a bookcase or a wall blocked the direct line, the clear lateral line existed but the straight ease from the head to the lateral crossed the same blocker, so the boom sat on the 0.35 m safety floor and the body disappeared. The walkthrough measured 0.35 m in the sitting corner, 0.54-0.56 m at the study desk and 0.35-0.67 m in most of its 11 backed-into corners.
+- `player_controller.gd` now resolves four different cases instead of lowering one limit:
+  - **A chair or desk behind the player** gets a lateral line. The line must keep the player inside 35 degrees of the view, so a slide cannot put the body off-screen; a 0.25 cost per metre keeps the direct line when it is clear.
+  - **A wall corner** gets a look-down from above the head: lifts of 0.45, 0.60 and 0.95 m, each tried at 0, +0.45 and -0.45 m across the head because a corner usually blocks one side. The lower lifts are what fit under a doorway head; the look-down is offered only while the normal boom is below 0.90 m, so it never replaces a clear rear view.
+  - **A blocked path to a clear line** gets a swing: when the chosen line is more than 0.30 rad around from the current camera, the rig steps onto that line at a 0.62 m radius before easing outward. This is the missing piece that made the old lateral search ineffective; the step changes direction, not distance.
+  - **The body** is hidden only below a 0.58 m boom, so the lateral and overhead answers stay visibly third-person. The ride camera resets its pitch when mounted, so a look-down cannot follow the player into the saddle.
+- `check_walkthrough.gd` no longer accepts just "above the safety clamp". A room sweep must keep a 1.0 m boom and a backed-into corner a 0.90 m boom, and the body must still be visible at the end of every sweep. The measured floors after the change:
+  - rooms: study 1.05 (was 0.56), bathroom 1.32, landing 1.33, sitting 2.36, kitchen 1.91, hall 1.20, boot 1.34, gallery 1.91, bedrooms 2.05/2.36;
+  - corners: sitting fireplace 0.95 (was 0.35), study east wall 1.03, the other nine 1.05 or 2.36.
+- The full walkthrough is 57/57 legs, 0 clipped frames in 6,960 samples, 0 outward pops, boom range 0.35-2.85 m and a 0.30 m maximum outward step. The 0.35 m minimum is now the study doorway under the stair, where a wall is behind the player and the stair soffit caps the lift; every room and corner sweep stays at or above 0.95 m.
+- New `tools/screenshot_camera.gd` renders the player's own camera, not a review camera, at the four tight spots. It backs into the sitting corner the same 1.2 s the check does so the frame is the tight view. Output is `artifacts/camera_{sitting_corner,study_desk,bath,landing}.png`; `artifacts/` is ignored, so these are local review images, not committed.
+- Verification: `check_farmhouse`, `check_walkthrough`, `check_scene_doors`, `check_editor_load`, `check_feed`, `check_touch`, `check_mount` and `check_dog` all pass. The screenshots were rendered under `xvfb-run` at 1280x720.
+- Limitation: the swing is a direction step, not a rendered interpolation, and the overhead is a deliberate top-down view. The 2.23 m inward step on a doorway transition is unchanged and still needs a human feel pass with a mouse; the static review frames cannot judge that.
+
 <!-- end -->
