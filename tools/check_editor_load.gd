@@ -4,6 +4,33 @@ extends SceneTree
 ##     godot --headless --path . --script res://tools/check_editor_load.gd
 ## Exits non-zero when a scene, script or texture setting is broken.
 
+## The interior textures the house depends on, guarded one by one instead of by
+## sweeping all of res://Models/interior: a blanket scan forces every future
+## texture that lands there to change its import cost, which is not this
+## check's call.
+##
+## The four detail maps and the Food Kit atlas are the texture pass's own: every
+## surface that reads as wood, cloth, stone or metal goes through one of them.
+## They must stay lossless (VRAM compression crashes this machine), carry mipmaps
+## (or the grain shimmers across the room) and keep detect_3d/compress_to at 0 so
+## no future 3D import can undo that.
+##
+## The wall and floor maps predate that pass and were 1k with no mipmaps.  They
+## are on this list because they are now mipmapped on purpose: they tile across
+## the largest surfaces in the house, and without mips the floor and walls
+## shimmer at a distance.  That is about 2.8 MB of decoded VRAM, already counted
+## in the 18.1 MB that `tools/check_interior_cost.gd` measures against its 20 MB
+## budget; if that budget ever gets tight, this is the first thing to give back.
+const INTERIOR_TEXTURES := [
+	"res://Models/interior/textures/detail_wood_diff_512.jpg",
+	"res://Models/interior/textures/detail_fabric_diff_512.jpg",
+	"res://Models/interior/textures/detail_stone_diff_512.jpg",
+	"res://Models/interior/textures/detail_metal_diff_256.jpg",
+	"res://Models/interior/kenney_food_kit/Textures/colormap.png",
+	"res://Models/interior/textures/painted_plaster_wall_diff_1k.jpg",
+	"res://Models/interior/textures/wood_floor_diff_1k.jpg",
+]
+
 var _scanned := 0
 
 
@@ -31,25 +58,27 @@ func _initialize() -> void:
 
 	print("\n=== CHECK INTERIOR TEXTURES ARE LOSSLESS AND MIPMAPPED ===")
 	var interior: Array = []
-	_scan_interior_textures("res://Models/interior", interior)
+	for texture in INTERIOR_TEXTURES:
+		_check_interior_texture(texture, interior)
 	if interior.is_empty():
-		print("  OK: interior textures are lossless, mipmapped and cannot flip to VRAM compression")
+		print("  OK: %d interior textures are lossless, mipmapped and cannot flip to VRAM compression" % INTERIOR_TEXTURES.size())
 	else:
 		print("  FAIL: %d interior textures are set up wrong:" % interior.size())
 		for i in interior:
 			print("    - " + i)
 
 	print("\n=== CHECK SCENES LOAD ===")
-	var scenes := [
-		"res://scenes/character_select.tscn",
-		"res://scenes/main.tscn", "res://scenes/player.tscn", "res://scenes/horse.tscn",
-		"res://scenes/dog.tscn", "res://scenes/terrain.tscn", "res://scenes/stable.tscn",
-		"res://scenes/arena_fence.tscn",
-		"res://scenes/forest.tscn", "res://scenes/nature_props.tscn", "res://scenes/arena_course.tscn",
-		"res://scenes/farmhouse.tscn",
-		"res://scenes/competition_arena.tscn", "res://scenes/show_course.tscn",
-	]
+	# Discovered, not hand-listed: a copied list drifts as scenes come and go, and
+	# the version of this check that shipped in the texture pass named two scenes
+	# that were never committed, so it failed on every fresh clone.
+	var scenes: Array = []
+	_scene_paths("res://scenes", scenes)
+	scenes.sort()
+	print("  Found %d scenes under res://scenes" % scenes.size())
 	var ok := true
+	if scenes.is_empty():
+		print("  FAIL: no scenes found under res://scenes")
+		ok = false
 	for s in scenes:
 		var sc := load(s)
 		if sc == null:
@@ -90,48 +119,52 @@ func _initialize() -> void:
 	quit(0 if passed else 1)
 
 
-## The farmhouse's detail maps are multiplied over the furniture's own colours,
-## so they must stay lossless (VRAM compression crashes this machine), carry
-## mipmaps (or the grain shimmers across the room) and keep
-## detect_3d/compress_to at 0 so no future 3D import can undo that.
-func _scan_interior_textures(dir_path: String, problems: Array) -> void:
+## Recursively collect every scene under res://scenes, so the load check covers
+## what the project actually ships instead of a list that can go stale.
+func _scene_paths(dir_path: String, out: Array) -> void:
 	var dir := DirAccess.open(dir_path)
 	if dir == null:
 		return
 	for f in dir.get_files():
-		if not f.ends_with(".import"):
-			continue
-		var path := dir_path.path_join(f)
-		var ini := FileAccess.open(path, FileAccess.READ)
-		if ini == null:
-			continue
-		var is_texture := false
-		var lossless := false
-		var mipmapped := false
-		var detect_3d := true
-		while not ini.eof_reached():
-			var line := ini.get_line().strip_edges()
-			if line == "importer=\"texture\"":
-				is_texture = true
-			elif line.begins_with("compress/mode="):
-				lossless = line.get_slice("=", 1).to_int() == 0
-			elif line.begins_with("mipmaps/generate="):
-				# Import files spell booleans "true"/"false", not 1/0.
-				mipmapped = line.get_slice("=", 1).strip_edges() == "true"
-			elif line.begins_with("detect_3d/compress_to="):
-				detect_3d = line.get_slice("=", 1).to_int() != 0
-		ini.close()
-		if not is_texture:
-			continue
-		var source := path.trim_suffix(".import")
-		if not lossless:
-			problems.append(source + " is not lossless (compress/mode must be 0)")
-		if not mipmapped:
-			problems.append(source + " has no mipmaps")
-		if detect_3d:
-			problems.append(source + " could flip to VRAM compression (detect_3d/compress_to)")
+		if f.ends_with(".tscn"):
+			out.append(dir_path.path_join(f))
 	for sub in dir.get_directories():
-		_scan_interior_textures(dir_path.path_join(sub), problems)
+		_scene_paths(dir_path.path_join(sub), out)
+
+
+## One interior texture's import settings.  A missing .import file means the
+## texture was never imported, which is just as broken as a wrong setting.
+func _check_interior_texture(source: String, problems: Array) -> void:
+	var path := source + ".import"
+	var ini := FileAccess.open(path, FileAccess.READ)
+	if ini == null:
+		problems.append(source + " has no .import file")
+		return
+	var is_texture := false
+	var lossless := false
+	var mipmapped := false
+	var detect_3d := true
+	while not ini.eof_reached():
+		var line := ini.get_line().strip_edges()
+		if line == "importer=\"texture\"":
+			is_texture = true
+		elif line.begins_with("compress/mode="):
+			lossless = line.get_slice("=", 1).to_int() == 0
+		elif line.begins_with("mipmaps/generate="):
+			# Import files spell booleans "true"/"false", not 1/0.
+			mipmapped = line.get_slice("=", 1).strip_edges() == "true"
+		elif line.begins_with("detect_3d/compress_to="):
+			detect_3d = line.get_slice("=", 1).to_int() != 0
+	ini.close()
+	if not is_texture:
+		problems.append(source + " is not imported as a texture")
+		return
+	if not lossless:
+		problems.append(source + " is not lossless (compress/mode must be 0)")
+	if not mipmapped:
+		problems.append(source + " has no mipmaps")
+	if detect_3d:
+		problems.append(source + " could flip to VRAM compression (detect_3d/compress_to)")
 
 
 ## Recursively scan .import files for VRAM-compressed textures. The previous
