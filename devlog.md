@@ -696,6 +696,15 @@ State-machine review (no defects found in the horse or player code):
 - Verification: `check_farmhouse`, `check_walkthrough` (57/57 legs, 0 clipped frames, 0 outward pops), `check_scene_doors`, `check_interior_cost` and `check_editor_load` pass. The eight review views in `artifacts/farmhouse_*.png` were rendered under `xvfb-run`; the grain was softened and retiled once after the first pass, because a 0.55 m tile of the veneer's cathedral figure read as plywood on the bookcases.
 - Limitation: this machine has no GPU, so the budget check counts work rather than frame time. The measured numbers say the house is 31% lighter in triangles and three times lighter in materials, but the actual frame rate still has to come from the iPad build.
 
+## The gate that never passed on a clean clone
+
+2026-10-24
+
+- `tools/check_editor_load.gd` listed `res://scenes/competition_arena.tscn` and `res://scenes/show_course.tscn` by hand, and neither file has ever been committed. The check therefore exited 1 on any fresh clone: the texture pass's "all checks pass" only held on this machine, where unrelated uncommitted work had left those scenes on disk. The scene list is now discovered from `res://scenes` (recursive, sorted, and a failure if it finds none), so a scene that ships is checked and a scene that does not is never named.
+- The interior texture guard is now the named `INTERIOR_TEXTURES` list instead of a recursive sweep of `Models/interior/`: a blanket scan forces every future texture in that folder to change its import cost, which is not this check's call. The list holds the four detail maps, the Food Kit atlas and the two shell maps, and a missing `.import` or a non-texture importer now fails instead of being skipped.
+- The wall and floor maps stay mipmapped. That was flipped without a recorded reason in the texture pass, so it is recorded here: they are 1k maps tiling across the largest surfaces in the house, and without mips the floor and plaster shimmer at a distance. It costs about 2.8 MB of decoded VRAM, inside the 20 MB budget (`check_interior_cost` measures 18.1 MB with them on); if the budget gets tight, give it back first.
+- Verification: a checkout built from `git archive origin/master` plus this branch and imported from scratch passes `check_farmhouse`, `check_walkthrough`, `check_scene_doors`, `check_interior_cost` and `check_editor_load`. The gate was probed by corrupting `scenes/forest.tscn` (names the scene, exit 1), turning mipmaps off on `detail_wood_diff_512.jpg` (names the texture, exit 1), deleting `colormap.png.import` (exit 1) and emptying `scenes/` (exit 1); each was restored afterwards.
+
 ## The furniture went red on a driver that reads one channel
 
 2026-10-24
