@@ -32,6 +32,11 @@ build/tmp/interior_src (git-ignored); delete that folder to re-fetch.
 Every map is resized down from the 1k source and saved as a grey JPEG at
 quality 90.  They are mipmapped and lossless in Godot (see the .import files):
 this machine has no VRAM and crashes on VRAM-compressed textures.
+
+The maps are written as three-channel RGB even though every channel holds the
+same value.  A single-channel JPEG imports as a luminance texture, and a
+driver that samples that without a channel swizzle reads it as (grey, 0, 0) -
+which paints every surface that uses the map pure red.
 """
 
 from __future__ import annotations
@@ -117,6 +122,8 @@ def normalise(values: np.ndarray, floor: float) -> np.ndarray:
 
 def save(values: np.ndarray, name: str) -> None:
     image = Image.fromarray(np.round(values * 255.0).clip(0, 255).astype(np.uint8), "L")
+    # RGB, not L: see the note at the top of this file about luminance textures.
+    image = image.convert("RGB")
     path = os.path.join(OUT_DIR, name)
     # quality 90 keeps the grain and still lands each map under ~120 KB.
     image.save(path, "JPEG", quality=90, optimize=True)
