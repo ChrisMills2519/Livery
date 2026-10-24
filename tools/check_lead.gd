@@ -14,6 +14,11 @@ var _start := 0
 var _state := 0
 var _state_ms := 0
 var _rest_pos := Vector3.ZERO
+var _dragging := false
+var _drag_dir := Vector3.ZERO
+var _drag_speed := 0.0
+var _turn_min_align := 1.0
+var _turn_start := Vector3.ZERO
 
 
 func _initialize() -> void:
@@ -21,10 +26,21 @@ func _initialize() -> void:
 	root.add_child(_world)
 
 
-func _process(_delta: float) -> bool:
+func _process(delta: float) -> bool:
 	var now := Time.get_ticks_msec()
 	if _start == 0:
 		_start = now
+	if _dragging and _player != null:
+		_player.global_position += _drag_dir * _drag_speed * delta
+	if _horse != null:
+		var planar := Vector2(_horse.velocity.x, _horse.velocity.z)
+		if planar.length() > 0.2:
+			var forward := -_horse.global_transform.basis.z
+			forward.y = 0.0
+			_turn_min_align = minf(
+				_turn_min_align,
+				forward.normalized().dot(Vector3(planar.x, 0.0, planar.y).normalized())
+			)
 	match _state:
 		0:
 			if now - _start >= 300:
@@ -62,6 +78,29 @@ func _process(_delta: float) -> bool:
 				_check(_horse.global_position.z < -1.0, "horse followed the handler")
 				_check(speed < 0.4, "led horse comes to a stop when the handler stops")
 				_check(_rein_visible(), "lead rope is drawn while leading")
+				# A handler stepping sideways makes the horse turn on the rope, and
+				# it has to walk the way it is facing through that turn instead of
+				# sliding sideways across the ground.
+				_turn_min_align = 1.0
+				_turn_start = _horse.global_position
+				_dragging = true
+				_drag_dir = Vector3(1.0, 0.0, 0.0)
+				_drag_speed = 1.6
+				_next(8, now)
+		8:
+			if now - _state_ms >= 1200:
+				_dragging = false
+				var moved := _horse.global_position.distance_to(_turn_start)
+				print("lead turn: dot=%.2f moved=%.2f m" % [_turn_min_align, moved])
+				_check(moved > 0.3, "the led horse covers ground through the turn (%.2f m)" % moved)
+				_check(
+					_turn_min_align > 0.9,
+					"the led horse walks the way it faces through a turn (dot %.2f)"
+					% _turn_min_align
+				)
+				_next(9, now)
+		9:
+			if now - _state_ms >= 900:
 				_send_key(KEY_F)
 				_check(not _player.leading, "F releases the lead")
 				_check(_horse.get("leader") == null, "horse is free after release")

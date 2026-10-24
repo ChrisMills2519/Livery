@@ -654,8 +654,19 @@ func _lead(delta: float) -> void:
 	# canter on the rope.
 	var speed := clampf(distance * 1.8, 0.6, trot_speed)
 	_face(dir, delta)
-	velocity.x = move_toward(velocity.x, dir.x * speed, lead_acceleration * delta)
-	velocity.z = move_toward(velocity.z, dir.z * speed, lead_acceleration * delta)
+	# Travel along the direction the horse actually faces, not the raw path to
+	# the handler's shoulder, or it slides sideways across the ground while the
+	# body is still swinging round.  A sharp turn becomes a pivot on the spot and
+	# then a walk, which is how a horse turns on a rope.
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() < 0.001:
+		return
+	forward = forward.normalized()
+	var throttle := clampf((forward.dot(dir) - 0.2) / 0.6, 0.0, 1.0)
+	var goal := speed * throttle
+	velocity.x = move_toward(velocity.x, forward.x * goal, lead_acceleration * delta)
+	velocity.z = move_toward(velocity.z, forward.z * goal, lead_acceleration * delta)
 
 
 func _on_landed() -> void:
