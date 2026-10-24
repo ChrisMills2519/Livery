@@ -21,10 +21,12 @@ extends SceneTree
 
 const FOREST_PATH := "res://scenes/forest.tscn"
 const NATURE_PATH := "res://scenes/nature_props.tscn"
+const YARD_PATH := "res://scenes/stable_yard_props.tscn"
 const COURSE_PATH := "res://scenes/arena_course.tscn"
 const ARENA_FENCE_PATH := "res://scenes/arena_fence.tscn"
 
 const SPLIT := "res://Models/split/"
+const PROPS := "res://Models/props/"
 const ARENA_FENCE_MODEL := "res://Models/medieval_village/fence_713fa0e6.glb"
 const ARENA_FENCE_SCALE := 4.0
 const ARENA_COLLISION_HEIGHT := 1.32
@@ -38,30 +40,37 @@ const GATE_MAX_Z := 2.0
 
 # --- asset keys -------------------------------------------------------------
 
+## Species keys used by the forest belts. The prop-library trees are authored at
+## real-world scale with their origin on the ground, so the scales here are close
+## to 1 (5-9 m trees).
 const TREES := {
-	"a": SPLIT + "lowpoly_trees/00_Object_2.glb",
-	"b": SPLIT + "lowpoly_trees/01_Object_3.glb",
-	"c": SPLIT + "lowpoly_trees/02_Object_4.glb",
-	"d": SPLIT + "lowpoly_trees/03_Object_5.glb",
-	"e": SPLIT + "lowpoly_trees/04_Object_6.glb",
-	"f": SPLIT + "lowpoly_trees/05_Object_7.glb",
-	"g": SPLIT + "lowpoly_trees/06_Object_8.glb",
-	"h": SPLIT + "lowpoly_trees/07_Object_9.glb",
+	"a": PROPS + "trees/tree_oak_02.glb",
+	"b": PROPS + "trees/tree_birch.glb",
+	"c": PROPS + "trees/tree_apple.glb",
+	"d": PROPS + "trees/tree_pine_01.glb",
+	"e": PROPS + "trees/tree_willow.glb",
+	"f": PROPS + "trees/tree_oak_01.glb",
+	"g": PROPS + "trees/tree_oak_03.glb",
+	"h": PROPS + "trees/tree_pine_02.glb",
+	"autumn": PROPS + "trees/tree_oak_autumn.glb",
+	"dead": PROPS + "trees/tree_dead.glb",
+	"sapling": PROPS + "trees/tree_sapling.glb",
 }
 
+## Nature scatter from the prop library, again real-world scale.
 const NATURE := {
-	"n0": SPLIT + "low_poly_nature_assets_1/00_default.glb",
-	"n1": SPLIT + "low_poly_nature_assets_1/01_default1.glb",
-	"n2": SPLIT + "low_poly_nature_assets_1/02_default10.glb",
-	"n3": SPLIT + "low_poly_nature_assets_1/03_default11.glb",
-	"n4": SPLIT + "low_poly_nature_assets_1/04_default2.glb",
-	"n5": SPLIT + "low_poly_nature_assets_1/05_default3.glb",
-	"n6": SPLIT + "low_poly_nature_assets_1/06_default4.glb",
-	"n7": SPLIT + "low_poly_nature_assets_1/07_default5.glb",
-	"n8": SPLIT + "low_poly_nature_assets_1/08_default6.glb",
-	"n9": SPLIT + "low_poly_nature_assets_1/09_default7.glb",
-	"n10": SPLIT + "low_poly_nature_assets_1/10_default8.glb",
-	"n11": SPLIT + "low_poly_nature_assets_1/11_default9.glb",
+	"n0": PROPS + "nature/grass_tuft.glb",
+	"n1": PROPS + "nature/grass_tuft_small.glb",
+	"n2": PROPS + "nature/rock_cluster_01.glb",
+	"n3": PROPS + "nature/rock_cluster_02.glb",
+	"n4": PROPS + "nature/flower_patch.glb",
+	"n5": PROPS + "nature/reeds.glb",
+	"n6": PROPS + "bushes/bush_round.glb",
+	"n7": PROPS + "bushes/bush_large.glb",
+	"n8": PROPS + "nature/mushroom_cluster.glb",
+	"n9": PROPS + "trees/tree_stump.glb",
+	"n10": PROPS + "trees/fallen_log.glb",
+	"n11": PROPS + "bushes/bush_flower.glb",
 }
 
 const JUMPING := {
@@ -80,6 +89,49 @@ const FENCES := {
 	"box_3": SPLIT + "horse_riding_obstacles_box_1_to_10_wooden_fence/07_No_3_Box.glb",
 }
 
+## Working stable yard, replacing the old medieval loose props.  Positions keep
+## the yard's door, mount anchor, feed trough and path clear.  `lift` raises a
+## prop (stacked crate, blanket on the rack, hanging net); `collide` adds a
+## measured box collider so the player cannot walk through the big items.
+const YARD_LAYOUT := [
+	# Hay and feed beside the paddock's south fence.
+	{"name": "HayRoundA", "asset": "stable/hay_round.glb", "pos": Vector3(3.4, 0.0, -18.4), "yaw": 12.0, "collide": true},
+	{"name": "HayRoundB", "asset": "stable/hay_round.glb", "pos": Vector3(4.7, 0.0, -18.9), "yaw": 74.0, "collide": true},
+	{"name": "HaySquare", "asset": "stable/hay_square.glb", "pos": Vector3(3.5, 0.0, -16.95), "yaw": -18.0, "collide": true},
+	{"name": "BarrelA", "asset": "yard/barrel.glb", "pos": Vector3(5.9, 0.0, -19.2), "yaw": 0.0, "collide": true},
+	{"name": "BarrelB", "asset": "yard/barrel.glb", "pos": Vector3(6.55, 0.0, -18.55), "yaw": 40.0, "collide": true},
+	# Crates and the barrow on the west side of the yard.
+	{"name": "CrateA", "asset": "yard/crate.glb", "pos": Vector3(-3.9, 0.0, -18.95), "yaw": 12.0, "collide": true},
+	{"name": "CrateB", "asset": "yard/crate.glb", "pos": Vector3(-3.85, 0.0, -19.0), "yaw": 32.0, "lift": 0.64, "collide": true},
+	{"name": "Wheelbarrow", "asset": "yard/wheelbarrow.glb", "pos": Vector3(-5.9, 0.0, -18.35), "yaw": -38.0, "collide": true},
+	{"name": "Bench", "asset": "yard/bench.glb", "pos": Vector3(-9.8, 0.0, -20.7), "yaw": 90.0, "collide": true},
+	{"name": "Well", "asset": "yard/well.glb", "pos": Vector3(12.9, 0.0, -17.8), "yaw": 15.0, "scale": 0.9, "collide": true},
+	# Stable kit: trough, mounting block, hitching post, saddle rack and tools.
+	{"name": "WaterTrough", "asset": "stable/water_trough.glb", "pos": Vector3(6.4, 0.0, -22.3), "yaw": 90.0, "collide": true},
+	{"name": "MountingBlock", "asset": "stable/mounting_block.glb", "pos": Vector3(-8.6, 0.0, -21.9), "yaw": 90.0, "collide": true},
+	{"name": "HitchingPost", "asset": "stable/hitching_post.glb", "pos": Vector3(-3.5, 0.0, -21.7), "yaw": 0.0, "collide": true},
+	{"name": "SaddleRack", "asset": "stable/saddle_rack.glb", "pos": Vector3(-12.15, 0.0, -22.75), "yaw": 90.0, "collide": true},
+	{"name": "SaddleBlanket", "asset": "stable/saddle_blanket.glb", "pos": Vector3(-12.15, 0.0, -22.75), "yaw": 90.0, "lift": 0.70},
+	{"name": "GroomingTote", "asset": "stable/grooming_tote.glb", "pos": Vector3(-11.75, 0.0, -22.05), "yaw": 20.0},
+	{"name": "FeedBucket", "asset": "stable/feed_bucket.glb", "pos": Vector3(-5.5, 0.0, -22.55), "yaw": 0.0},
+	{"name": "WaterBucket", "asset": "stable/water_bucket.glb", "pos": Vector3(-4.95, 0.0, -22.4), "yaw": 35.0},
+	{"name": "Carrots", "asset": "stable/carrot_bunch.glb", "pos": Vector3(-5.45, 0.0, -22.55), "yaw": 0.0, "lift": 0.30},
+	{"name": "FeedSack", "asset": "stable/feed_sack.glb", "pos": Vector3(-6.3, 0.0, -22.2), "yaw": 25.0},
+	{"name": "Pitchfork", "asset": "stable/pitchfork.glb", "pos": Vector3(-2.3, 0.0, -24.35), "yaw": 90.0},
+	{"name": "Broom", "asset": "stable/broom.glb", "pos": Vector3(-2.3, 0.0, -22.65), "yaw": 85.0},
+	{"name": "MuckTub", "asset": "stable/muck_tub.glb", "pos": Vector3(-8.9, 0.0, -19.85), "yaw": 0.0, "collide": true},
+	{"name": "HayNet", "asset": "stable/hay_net.glb", "pos": Vector3(-2.12, 0.0, -23.85), "yaw": 0.0, "lift": 1.55},
+	{"name": "LeadRope", "asset": "stable/lead_rope.glb", "pos": Vector3(-3.0, 0.0, -21.9), "yaw": 0.0, "lift": 1.0},
+	# Yard dressing and the path to the gate.
+	{"name": "Signpost", "asset": "yard/signpost.glb", "pos": Vector3(-14.1, 0.0, -15.2), "yaw": -20.0, "scale": 0.85, "collide": true},
+	{"name": "LanternA", "asset": "yard/lantern_post.glb", "pos": Vector3(-10.3, 0.0, -19.2), "yaw": 0.0, "collide": true},
+	{"name": "LanternB", "asset": "yard/lantern_post.glb", "pos": Vector3(14.9, 0.0, -20.6), "yaw": 0.0, "collide": true},
+	{"name": "PlanterA", "asset": "yard/flower_planter.glb", "pos": Vector3(-1.6, 0.0, -21.7), "yaw": 0.0},
+	{"name": "PlanterB", "asset": "yard/flower_planter.glb", "pos": Vector3(-12.0, 0.0, -20.2), "yaw": 0.0},
+	{"name": "AppleBasket", "asset": "yard/apple_basket.glb", "pos": Vector3(-5.9, 0.0, -20.9), "yaw": 0.0},
+	{"name": "Firewood", "asset": "yard/firewood_stack.glb", "pos": Vector3(-12.25, 0.0, -24.2), "yaw": 90.0, "collide": true},
+]
+
 var _measured := {}
 
 
@@ -87,6 +139,7 @@ func _initialize() -> void:
 	print("=== BUILD SCENERY ===")
 	_build_forest()
 	_build_nature()
+	_build_yard()
 	_build_arena_fence()
 	_build_course()
 	print("=== DONE ===")
@@ -97,30 +150,30 @@ func _build_forest() -> void:
 	var items: Array = []
 	# North belt, behind the stable.
 	items.append_array(_zone("North", [
-		["h", -46.0, -50.0, 15.0, 1.15],
-		["a", -34.0, -48.0, 70.0, 1.05],
-		["f", -20.0, -52.0, 120.0, 1.10],
+		["h", -46.0, -50.0, 15.0, 1.05],
+		["b", -34.0, -48.0, 70.0, 1.05],
+		["e", -20.0, -52.0, 120.0, 1.05],
 		["d", -8.0, -47.0, 200.0, 1.15],
-		["h", 4.0, -52.0, 250.0, 1.05],
-		["a", 16.0, -49.0, 320.0, 1.00],
-		["f", 28.0, -51.0, 40.0, 1.15],
+		["h", 4.0, -52.0, 250.0, 1.00],
+		["c", 16.0, -49.0, 320.0, 1.00],
+		["f", 28.0, -51.0, 40.0, 1.05],
 		["d", 38.0, -47.0, 160.0, 1.10],
-		["g", 46.0, -53.0, 90.0, 1.25],
+		["g", 46.0, -53.0, 90.0, 1.20],
 	], TREES))
 	# West belt, outside the wide arena rail at x = -50.
 	items.append_array(_zone("West", [
 		["h", -57.0, -28.0, 30.0, 1.00],
 		["a", -59.0, -14.0, 100.0, 1.10],
-		["f", -56.0, 0.0, 190.0, 1.00],
-		["a", -61.0, 12.0, 270.0, 1.05],
+		["f", -56.0, 0.0, 190.0, 1.05],
+		["a", -61.0, 12.0, 270.0, 1.10],
 		["d", -55.0, 24.0, 340.0, 1.15],
 	], TREES))
 	# East grove, beyond the training ground.
 	items.append_array(_zone("East", [
-		["h", 66.0, -26.0, 60.0, 1.00],
+		["h", 66.0, -26.0, 60.0, 1.05],
 		["a", 72.0, -14.0, 130.0, 1.10],
-		["f", 64.0, -2.0, 200.0, 1.00],
-		["h", 76.0, 8.0, 270.0, 1.05],
+		["f", 64.0, -2.0, 200.0, 1.05],
+		["h", 76.0, 8.0, 270.0, 1.10],
 		["d", 68.0, 16.0, 20.0, 1.15],
 		["a", 74.0, 26.0, 90.0, 1.00],
 	], TREES))
@@ -136,9 +189,9 @@ func _build_forest() -> void:
 	], TREES))
 	# Small near-field accents framing the yard and path.
 	items.append_array(_zone("Accent", [
-		["b", 16.0, -22.0, 45.0, 1.20],
-		["c", -16.0, -36.0, 135.0, 1.30],
-		["e", 20.0, 22.0, 225.0, 1.40],
+		["autumn", 16.0, -22.0, 45.0, 1.00],
+		["dead", -16.0, -36.0, 135.0, 1.00],
+		["sapling", 20.0, 22.0, 225.0, 1.20],
 	], TREES))
 	_build_scene(FOREST_PATH, "Forest", items)
 
@@ -146,38 +199,96 @@ func _build_forest() -> void:
 func _build_nature() -> void:
 	var items: Array = []
 	items.append_array(_zone("Path", [
-		["n0", -2.7, -17.0, 0.0, 12.0],
-		["n4", 2.7, -14.0, 60.0, 12.0],
-		["n5", -2.8, -10.0, 120.0, 10.0],
-		["n0", 2.8, -7.0, 180.0, 12.0],
-		["n4", -2.7, -3.0, 240.0, 12.0],
-		["n8", 2.7, 2.0, 300.0, 12.0],
+		["n0", -2.7, -17.0, 0.0, 1.4],
+		["n4", 2.7, -14.0, 60.0, 1.0],
+		["n5", -2.8, -10.0, 120.0, 1.1],
+		["n0", 2.8, -7.0, 180.0, 1.3],
+		["n4", -2.7, -3.0, 240.0, 1.1],
+		["n8", 2.7, 2.0, 300.0, 1.0],
 	], NATURE))
 	items.append_array(_zone("Yard", [
-		["n6", -11.5, -28.5, 30.0, 12.0],
-		["n2", 11.5, -29.0, 90.0, 11.0],
-		["n9", -11.5, -15.5, 150.0, 12.0],
-		["n1", 11.8, -15.2, 210.0, 12.0],
+		["n6", -11.5, -28.5, 30.0, 1.0],
+		["n2", 11.5, -29.0, 90.0, 1.0],
+		["n9", -11.5, -15.5, 150.0, 1.0],
+		["n1", 11.8, -15.2, 210.0, 1.6],
 	], NATURE))
 	items.append_array(_zone("Paddock", [
-		["n10", -0.6, -27.0, 0.0, 10.0],
-		["n11", 12.2, -24.0, 100.0, 10.0],
-		["n10", 12.2, -21.0, 200.0, 10.0],
-		["n11", -0.6, -22.0, 260.0, 10.0],
+		["n10", -0.6, -27.0, 0.0, 1.0],
+		["n11", 12.2, -24.0, 100.0, 1.0],
+		["n10", 12.2, -21.0, 200.0, 1.0],
+		["n11", -0.6, -22.0, 260.0, 1.0],
 	], NATURE))
 	items.append_array(_zone("ArenaEdge", [
-		["n3", -53.5, -14.0, 45.0, 12.0],
-		["n6", -54.0, 0.0, 135.0, 12.0],
-		["n2", -53.5, 14.0, 225.0, 12.0],
-		["n9", -53.0, 30.0, 315.0, 12.0],
+		["n3", -53.5, -14.0, 45.0, 1.0],
+		["n6", -54.0, 0.0, 135.0, 1.0],
+		["n2", -53.5, 14.0, 225.0, 1.0],
+		["n9", -53.0, 30.0, 315.0, 1.0],
 	], NATURE))
 	items.append_array(_zone("TrainingEdge", [
-		["n0", 16.0, -12.0, 20.0, 12.0],
-		["n5", 16.0, 2.0, 110.0, 12.0],
-		["n4", 16.0, 12.0, 200.0, 11.0],
-		["n7", 54.0, -13.0, 290.0, 11.0],
+		["n0", 16.0, -12.0, 20.0, 1.3],
+		["n5", 16.0, 2.0, 110.0, 1.1],
+		["n4", 16.0, 12.0, 200.0, 1.0],
+		["n7", 54.0, -13.0, 290.0, 1.0],
 	], NATURE))
 	_build_scene(NATURE_PATH, "NatureProps", items)
+
+
+## Writes the stable yard dressing as its own scene so stable.tscn only holds
+## one instance.  Colliders are measured from the same AABB used to seat the
+## prop, so a prop can never float or have a mismatched collision box.
+func _build_yard() -> void:
+	var root := Node3D.new()
+	root.name = "YardProps"
+	var colliders := 0
+	for row in YARD_LAYOUT:
+		var slot := Node3D.new()
+		slot.name = String(row["name"])
+		slot.position = (row["pos"] as Vector3) + Vector3(0.0, float(row.get("lift", 0.0)), 0.0)
+		root.add_child(slot)
+		slot.owner = root
+
+		var inst := _make_instance(
+			PROPS + String(row["asset"]),
+			Vector3.ZERO,
+			float(row["yaw"]),
+			float(row.get("scale", 1.0))
+		)
+		if inst == null:
+			root.free()
+			return
+		inst.name = "Model"
+		slot.add_child(inst)
+		inst.owner = root
+
+		if bool(row.get("collide", false)):
+			var bounds := _aabb_of(inst)
+			var body := StaticBody3D.new()
+			body.name = "Body"
+			slot.add_child(body)
+			body.owner = root
+			var size := Vector3(
+				maxf(0.05, bounds.size.x - 0.02),
+				maxf(0.05, bounds.size.y - 0.02),
+				maxf(0.05, bounds.size.z - 0.02)
+			)
+			_add_collision_box(body, root, "Shape", size, bounds.get_center())
+			colliders += 1
+
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		push_error("pack failed for %s (error %d)" % [YARD_PATH, err])
+		root.free()
+		quit(1)
+		return
+	err = ResourceSaver.save(packed, YARD_PATH)
+	if err != OK:
+		push_error("save failed for %s (error %d)" % [YARD_PATH, err])
+		root.free()
+		quit(1)
+		return
+	print("  wrote %s (%d props, %d colliders)" % [YARD_PATH, YARD_LAYOUT.size(), colliders])
+	root.free()
 
 
 ## Builds the enlarged arena rail from the fence module's measured length.
