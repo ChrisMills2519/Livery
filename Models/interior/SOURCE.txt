@@ -14,6 +14,10 @@ kenney_food_kit/
   License: Creative Commons Zero (CC0 1.0). See kenney_food_kit_LICENSE.txt.
   Used for the dining table settings, the dresser plates, the fruit bowl and
   the kitchen worktop.
+  Textures/colormap.png is the kit's own palette atlas, taken from the same
+  archive (Models/GLB format/Textures/colormap.png). Every model in the kit
+  references Textures/colormap.png, so the folder has to sit beside the GLBs;
+  without it all 34 models import with a missing texture.
 
 quaternius/
   House plants, small tables, chairs and bath accessories from Quaternius's
@@ -38,3 +42,22 @@ textures/
     https://polyhaven.com/a/painted_plaster_wall
   1024x1024 diffuse maps, downloaded through the public files API
   (https://api.polyhaven.com/files/<asset>).
+
+  The four detail maps below are neutral-luminance greys, not colour: each one
+  sits at a 0.90 mean so StandardMaterial3D can multiply it over the furniture's
+  own albedo colour and leave the farmhouse palette untouched. They are built
+  from the CC0 sources above by tools/make_interior_detail.py, which also
+  documents the processing; edit that script rather than the JPEGs.
+
+  detail_wood_diff_512.jpg
+    Poly Haven, "Angli Veneer" (CC0 1.0), 1k diffuse.
+    https://polyhaven.com/a/angli_veneer
+  detail_fabric_diff_512.jpg
+    Poly Haven, "Book Pattern" (CC0 1.0), 1k colour map: coarse plain-weave
+    cotton, reduced to luminance.
+    https://polyhaven.com/a/book_pattern
+  detail_stone_diff_512.jpg
+    Derived from painted_plaster_wall_diff_1k.jpg above, at lower contrast.
+  detail_metal_diff_256.jpg
+    Derived from the Angli Veneer, high-passed and streaked horizontally so the
+    kit's taps, handles and appliance fronts read as brushed metal.

@@ -326,7 +326,9 @@ func _check_furniture() -> void:
 		for entry in FURNISHED:
 			if position.x >= float(entry[1]) - 0.25 and position.x <= float(entry[3]) + 0.25 and position.z >= float(entry[2]) - 0.25 and position.z <= float(entry[4]) + 0.25:
 				if absf(position.y - float(entry[6])) < 0.6:
-					counts[entry[0]] = int(counts[entry[0]]) + 1
+					# A merged group stands for every piece it folded together, so a table
+					# setting still counts as a setting rather than as one object.
+					counts[entry[0]] = int(counts[entry[0]]) + int(node.get_meta("merged_parts", 1))
 					break
 	for entry in FURNISHED:
 		var count: int = counts[entry[0]]

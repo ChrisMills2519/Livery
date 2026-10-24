@@ -609,4 +609,20 @@ State-machine review (no defects found in the horse or player code):
 - Verification: `check_farmhouse`, `check_walkthrough`, `check_scene_doors`, `check_editor_load`, `check_feed`, `check_touch`, `check_mount` and `check_dog` all pass. The screenshots were rendered under `xvfb-run` at 1280x720.
 - Limitation: the swing is a direction step, not a rendered interpolation, and the overhead is a deliberate top-down view. The 2.23 m inward step on a doorway transition is unchanged and still needs a human feel pass with a mouse; the static review frames cannot judge that.
 
+## The farmhouse furniture gets textures, and gets lighter
+
+2026-10-24
+
+- The furniture was flat colour: Kenney's 140 kit models and Quaternius's 28 carry only a `baseColorFactor`, and the walls and floor were the only textured surfaces in the house. Every wood, fabric, metal and ceramic surface now has a detail map.
+- Four neutral-luminance maps in `Models/interior/textures/` - veneer grain, plain-weave cotton, plaster stone and brushed metal - are multiplied over the kit's own colours, so the farmhouse palette is unchanged. They are greys at a 0.90 mean built by the new `tools/make_interior_detail.py` from Poly Haven's CC0 "Angli Veneer", "Book Pattern" and the project's own plaster map; `_detail_gain` in the generator lifts the albedo by the reciprocal of that mean so the tone stays where it was. No normal or roughness maps: one extra fetch per surface is the whole cost on the Compatibility renderer.
+- The 104 per-prop duplicated materials became one shared material per real material (`_surface()` in the generator): kit materials matched by name, Quaternius by name prefix, textiles by a cached tint copy. The house went from 354 materials to 103, and the ones that remain are mostly the pictures' flat canvases, the yard props and the textiles' own maps.
+- The Food Kit was broken: all 34 tableware and food models reference `Textures/colormap.png`, which was never included with the models, so plates, forks, bread, fruit and the dresser china rendered with a missing texture. Restoring the 10 KB palette atlas from the same Kenney archive fixed all 34 at a cost of 512x512.
+- `_prop` no longer instances the downloaded GLB. Instancing plus a surface override made Godot save a duplicate clone of the mesh beside the instance, which rendered twice and doubled the prop's triangles - an existing bug for the ~60 tinted props that this pass would otherwise have spread to all 195. Props are now flattened into their own nodes, one MeshInstance3D per model surface, sharing one mesh resource between every copy.
+- Small static dressing is merged: each place setting is one mesh (12 plates and forks), the table centre 3, the island fruit 4 and the dresser plates 2, and every balustrade's spindles are one mesh. The merged groups keep a `merged_parts` meta so `check_farmhouse` still counts a set table as 21 pieces.
+- Mipmaps are on for the wall, floor and detail maps, which the floor and walls were missing.
+- Measured across Shell, Furniture and Lighting, before -> after: 1098 -> 941 mesh instances, 154,532 -> 107,246 triangles (-31%), 354 -> 103 materials, 75 -> 52 textured materials, 11 -> 15 textures, 17.0 -> 18.1 MB decoded texture memory.
+- New `tools/check_interior_cost.gd` enforces that budget, and `tools/check_editor_load.gd` now fails if any texture under `Models/interior/` is not lossless, is not mipmapped, or has a nonzero `detect_3d/compress_to`.
+- Verification: `check_farmhouse`, `check_walkthrough` (57/57 legs, 0 clipped frames, 0 outward pops), `check_scene_doors`, `check_interior_cost` and `check_editor_load` pass. The eight review views in `artifacts/farmhouse_*.png` were rendered under `xvfb-run`; the grain was softened and retiled once after the first pass, because a 0.55 m tile of the veneer's cathedral figure read as plywood on the bookcases.
+- Limitation: this machine has no GPU, so the budget check counts work rather than frame time. The measured numbers say the house is 31% lighter in triangles and three times lighter in materials, but the actual frame rate still has to come from the iPad build.
+
 <!-- end -->
