@@ -8,9 +8,16 @@ extends Node
 
 signal money_changed(money: int)
 signal best_time_changed(seconds: float)
+signal rosettes_changed(count: int)
 
 var money := 0
 var best_round_time := 0.0
+
+## Show-class rosettes won this session.  Each entry is
+## {class, place, colour}.  They are not saved to disk yet.
+var rosettes: Array[Dictionary] = []
+var show_best_time := 0.0
+var show_entries := 0
 
 ## Character-select handoff.  The selected profile survives the scene change
 ## into main.tscn; auto_mount asks the player to start in the saddle instead
@@ -61,6 +68,23 @@ func add_money(amount: int) -> void:
 		return
 	money += amount
 	money_changed.emit(money)
+
+
+## Adds a show-class rosette and returns the new total.
+func award_rosette(class_label: String, place: int, colour: String) -> int:
+	rosettes.append({"class": class_label, "place": place, "colour": colour})
+	rosettes_changed.emit(rosettes.size())
+	return rosettes.size()
+
+
+## Records a clear show-class time and returns true when it is a new best.
+func record_show_time(seconds: float) -> bool:
+	if seconds <= 0.0:
+		return false
+	if show_best_time <= 0.0 or seconds < show_best_time:
+		show_best_time = seconds
+		return true
+	return false
 
 
 ## Records a completed round and returns true when it is a new best time.

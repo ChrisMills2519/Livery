@@ -15,6 +15,7 @@
 [ext_resource type="Script" uid="uid://dmpx6r7ilnyjq" path="res://scripts/footprint_trail.gd" id="13_footprints"]
 [ext_resource type="PackedScene" uid="uid://gbsbio30jtet" path="res://Models/medieval_village/fantasy_house_341c9305.glb" id="14_a8y0u"]
 [ext_resource type="Script" path="res://scripts/scene_door.gd" id="15_door"]
+[ext_resource type="PackedScene" path="res://Models/props/arena/showground_arch.glb" id="16_arch"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tuyoq"]
 sky_top_color = Color(0.23, 0.42, 0.72, 1)
@@ -114,6 +115,39 @@ prompt_label = "ENTER"
 prompt_height = 2.55
 reach = 2.8
 spawn_position = Vector3(8.35, 0.05, 2.68)
+spawn_yaw_degrees = 90.0
+
+[node name="ShowgroundArch" parent="." instance=ExtResource("16_arch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.2, 0.02, -1.5)
+
+[node name="ArchSign" type="Label3D" parent="ShowgroundArch"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 0.08, 4.78, 0)
+pixel_size = 0.006
+billboard = 0
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.1, 0.05, 0.03, 1)
+text = "SHOWGROUND"
+font_size = 100
+outline_size = 10
+
+[node name="ArchSubtitle" type="Label3D" parent="ShowgroundArch"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 0.08, 4.40, 0)
+pixel_size = 0.0042
+billboard = 0
+modulate = Color(1, 0.93, 0.74, 1)
+outline_modulate = Color(0.1, 0.05, 0.03, 1)
+text = "SUMMER SHOW  ·  CLASS 1 TODAY"
+font_size = 44
+outline_size = 7
+
+[node name="ShowgroundGate" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.2, 0, -1.5)
+script = ExtResource("15_door")
+target_scene = "res://scenes/competition_arena.tscn"
+prompt_label = "ENTER SHOWGROUND"
+prompt_height = 2.9
+reach = 3.0
+spawn_position = Vector3(31, 0, 6.5)
 spawn_yaw_degrees = 90.0
 
 [editable path="Root Scene"]

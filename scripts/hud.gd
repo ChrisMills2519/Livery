@@ -20,6 +20,7 @@ var _player: Node3D
 var _money_label: Label
 var _skill_label: Label
 var _best_label: Label
+var _rosette_label: Label
 var _objective_label: Label
 var _timer_label: Label
 var _progress_label: Label
@@ -51,6 +52,7 @@ func _bind() -> void:
 		_course.notice.connect(_show_toast)
 	GameState.money_changed.connect(func(_m): _refresh_stats())
 	GameState.best_time_changed.connect(func(_t): _refresh_stats())
+	GameState.rosettes_changed.connect(func(_n): _refresh_stats())
 	_refresh_stats()
 
 
@@ -69,6 +71,8 @@ func _build_ui() -> void:
 	_money_label = _label(stats, "£0", 27, ACCENT)
 	_skill_label = _label(stats, "Jumping 1.0 / 10", 17, DIM_COLOR)
 	_best_label = _label(stats, "Best round —", 17, DIM_COLOR)
+	_rosette_label = _label(stats, "", 17, Color(1.0, 0.86, 0.52))
+	_rosette_label.visible = false
 
 	# Top-centre: objective, timer and fence progress.
 	var centre := VBoxContainer.new()
@@ -104,12 +108,14 @@ func _build_ui() -> void:
 	style.set_corner_radius_all(12)
 	style.set_content_margin_all(22)
 	_result_panel.add_theme_stylebox_override("panel", style)
+	_result_panel.name = "ResultCard"
 	_result_panel.visible = false
 	root.add_child(_result_panel)
 	var result_box := VBoxContainer.new()
 	result_box.add_theme_constant_override("separation", 8)
 	_result_panel.add_child(result_box)
 	_result_title = _label(result_box, "ROUND COMPLETE", 30, ACCENT)
+	_result_title.name = "ResultTitle"
 	_result_body = _label(result_box, "", 20, TEXT_COLOR)
 	var hint := _label(result_box, "Clear a fence to go again", 15, DIM_COLOR)
 	hint.name = "Hint"
@@ -172,9 +178,16 @@ func _refresh_stats() -> void:
 		_best_label.text = "Best round  %.1fs" % GameState.best_round_time
 	else:
 		_best_label.text = "Best round  —"
+	if _rosette_label != null:
+		var count := GameState.rosettes.size()
+		_rosette_label.visible = count > 0
+		_rosette_label.text = "Rosettes  %d" % count
 
 
 func _update_objective() -> void:
+	if _course.has_method("get_objective_text"):
+		_objective_label.text = String(_course.call("get_objective_text"))
+		return
 	var mounted: bool = _player != null and _player.get("mounted") == true
 	match _course.state:
 		"running":
@@ -236,6 +249,10 @@ func _on_round_finished(result: Dictionary) -> void:
 	var faults: int = result.get("faults", 0)
 	var is_clear_round: bool = result.get("clear_round", false)
 
+	if result.get("show_class", false):
+		_show_class_result(result)
+		return
+
 	if timed_out:
 		_result_title.text = "TIME UP"
 	elif is_clear_round:
@@ -253,6 +270,51 @@ func _on_round_finished(result: Dictionary) -> void:
 	if result.get("new_best", false):
 		_result_body.text += "\nNew personal best time!"
 	_result_panel.visible = true
+
+
+## Show-class card: placing, field, prize and the rosette are added only when
+## the result carries them, so schooling rounds are unchanged.
+func _show_class_result(result: Dictionary) -> void:
+	var placing: int = result.get("placing", 0)
+	var field: int = result.get("field", 0)
+	var prize: int = result.get("prize", 0)
+	var eliminated: bool = result.get("eliminated", false)
+	var rosette := String(result.get("rosette", ""))
+	_result_title.text = String(result.get("title", "CLASS RESULT"))
+	var lines: Array[String] = []
+	lines.append(String(result.get("class_label", "CLASS")))
+	lines.append("%d / %d fences   ·   %d faults" % [
+		int(result.get("clears", 0)), int(result.get("total", 0)), int(result.get("faults", 0))])
+	lines.append("Time  %.2fs" % float(result.get("seconds", 0.0)))
+	if placing > 0:
+		lines.append("%s of %d   ·   Prize  +£%d" % [_ordinal(placing), field, prize])
+	elif eliminated:
+		lines.append("No placing or prize")
+	else:
+		lines.append("Not placed this time")
+	if not rosette.is_empty():
+		lines.append("Rosette: %s  ·  collect it at the judges' box" % rosette.capitalize())
+	if result.get("new_best", false):
+		lines.append("New personal best!")
+	if not bool(result.get("timed_out", false)) and placing == 0 and not eliminated:
+		lines.append("Clear every fence with 0 faults to be placed")
+	_result_body.text = "\n".join(lines)
+	var hint := _result_panel.find_child("Hint", true, false) as Label
+	if hint != null:
+		hint.text = "Enter again at the secretary's desk"
+	_result_panel.visible = true
+
+
+func _ordinal(value: int) -> String:
+	match value:
+		1:
+			return "1st"
+		2:
+			return "2nd"
+		3:
+			return "3rd"
+		_:
+			return "%dth" % value
 
 
 func _on_round_reset() -> void:
