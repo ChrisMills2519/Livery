@@ -457,6 +457,17 @@ func _nearby_interactable() -> Node:
 	return best
 
 
+## A line can be clear at full length and still be unreachable from a camera
+## on another line: the short arc between them crosses a door jamb.  Test the
+## candidate at the current boom rather than trusting its full length.
+func _line_reachable(candidate: Vector3) -> bool:
+	if candidate.length() < 0.01 or camera.position.length() < 0.01:
+		return true
+	var radius := minf(maxf(camera.position.length(), CAMERA_SWING_RADIUS), candidate.length())
+	var swing := candidate.normalized() * radius
+	return _cast_safe_distance(swing) > radius - 0.05
+
+
 ## Resolves the on-foot camera position in four steps.
 ##  1. The direct shoulder line.
 ##  2. A lateral line, for a chair or desk the player has just backed into.
@@ -476,6 +487,12 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 	var best_score := maxf(direct_safe, CAMERA_MIN_BOOM)
 	var overhead_position := Vector3.ZERO
 	var overhead_length := 0.0
+	var current_safe := _cast_safe_distance(camera.position) if camera.position.length() > 0.01 else 0.0
+	var current_blocked := camera.position.length() > 0.01 and current_safe < camera.position.length() - 0.05
+	# Only rescue a camera that has already fallen into the first-person clamp.
+	# Rooms and corners that still have a third-person line keep their previous
+	# lateral and overhead choices.
+	var recovering := current_blocked and current_safe < CAMERA_OVERHEAD_TRIGGER
 	if direct_safe < length - 0.05:
 		for offset in CAMERA_SLIDE_OFFSETS:
 			if is_zero_approx(offset):
@@ -484,6 +501,12 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 			var safe := _cast_safe_distance(candidate)
 			var position := candidate.normalized() * maxf(safe, CAMERA_MIN_BOOM)
 			if position.z < 0.15 or atan2(absf(position.x), position.z) > CAMERA_SLIDE_MAX_ANGLE:
+				continue
+			# A lateral line that is only clear further out cannot be reached
+			# from a camera already on the other side of a door jamb.  Keep the
+			# direct line rather than chasing it inward.  The overhead search
+			# stays available for corners that genuinely have no rear line.
+			if recovering and not _line_reachable(position):
 				continue
 			var score := position.length() - absf(offset) * CAMERA_SLIDE_COST
 			if score > best_score + 0.001:
@@ -497,7 +520,7 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 				var overhead := Vector3(side, lift, 0.0)
 				var overhead_safe := _cast_safe_distance(overhead)
 				var position := overhead.normalized() * maxf(overhead_safe, CAMERA_MIN_BOOM)
-				if position.length() > overhead_length:
+				if position.length() > overhead_length and (not recovering or _line_reachable(position)):
 					overhead_length = position.length()
 					overhead_position = position
 		if best_score < CAMERA_OVERHEAD_TRIGGER and overhead_length > best_score + 0.05:
@@ -505,7 +528,11 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 	var proposed := camera.position.move_toward(desired, CAMERA_RETURN_SPEED * delta)
 	if desired.length() > 0.01 and camera.position.length() > 0.01:
 		var around := camera.position.angle_to(desired)
-		if around > CAMERA_SWING_ANGLE:
+		# A blocked current point has to move even when the angle to the next
+		# line is small: the straight ease between the two is inside the jamb.
+		# This is what closes the study doorway without moving any room that
+		# still has a third-person line.
+		if around > CAMERA_SWING_ANGLE or current_blocked:
 			var swing_length := minf(maxf(camera.position.length(), CAMERA_SWING_RADIUS), desired.length())
 			var swing := desired.normalized() * swing_length
 			if _cast_safe_distance(swing) > swing_length - 0.05:

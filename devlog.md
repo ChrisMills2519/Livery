@@ -609,6 +609,17 @@ State-machine review (no defects found in the horse or player code):
 - Verification: `check_farmhouse`, `check_walkthrough`, `check_scene_doors`, `check_editor_load`, `check_feed`, `check_touch`, `check_mount` and `check_dog` all pass. The screenshots were rendered under `xvfb-run` at 1280x720.
 - Limitation: the swing is a direction step, not a rendered interpolation, and the overhead is a deliberate top-down view. The 2.23 m inward step on a doorway transition is unchanged and still needs a human feel pass with a mouse; the static review frames cannot judge that.
 
+## The camera recovers from a jamb instead of diving into the head
+
+2026-10-24
+
+- The doorway transit between the hall and the study still fell to the 0.35 m safety clamp and hid the body. `player_controller.gd` chose a lateral or overhead line by its full length, but a camera already on the far side of a door jamb could not reach that line: the short arc between the current point and the candidate crosses the jamb, so the straight ease stayed blocked.
+- `_line_reachable()` now tests a candidate at the current boom's radius instead of trusting its full length, and the recovery path runs only when the current camera is already blocked below the overhead trigger (0.90 m). Rooms and corners that still have a third-person line keep exactly the behaviour they had. A blocked current point also forces the 0.62 m direction step even when the angle to the next line is small.
+- `check_walkthrough` measures the doorway transit separately: the route must keep a 0.90 m third-person boom, and the 1.2 m stair, which has a wall behind the player, keeps a 0.30 m first-person exception. Both are floors, not the 0.35 m safety clamp.
+- Measured after the change: 57/57 legs, 0 clipped frames in 6960 samples, 0 outward pops, third-person boom 0.95-2.85 m (was 0.35 m in the study doorway), stair 0.35 m, max inward step 1.61 m, max outward 0.29 m. Room booms are unchanged.
+- `tools/screenshot_camera.gd` gained a `study_doorway` view (`artifacts/camera_study_doorway.png`).
+- Verification: `check_walkthrough` and `check_farmhouse` pass. Limitation: still a static measurement; the doorway feel needs a human pass with a mouse.
+
 ## The farmhouse furniture gets textures, and gets lighter
 
 2026-10-24

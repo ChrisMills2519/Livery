@@ -9,8 +9,8 @@ extends SceneTree
 ##     --resolution 1280x720 --script res://tools/screenshot_camera.gd
 ##
 ## Output: artifacts/camera_sitting_corner.png, camera_study_desk.png,
-## camera_bath.png and camera_landing.png.  Pass names after `--` to render
-## only those.
+## camera_study_doorway.png, camera_bath.png and camera_landing.png.  Pass
+## names after `--` to render only those.
 
 const SCENE := "res://scenes/farmhouse.tscn"
 
@@ -19,6 +19,9 @@ const SPOTS := [
 	# same so the frame is the tight view, not the open spot beside it.
 	{"name": "sitting_corner", "pos": Vector3(-8.80, 0.0, -6.90), "yaw": -45.0, "back": 72},
 	{"name": "study_desk", "pos": Vector3(5.80, 0.0, -5.80), "yaw": 0.0},
+	# The doorway transit where the camera used to be cut off by the east jamb.
+	# The player stands just inside the study with the opening behind them.
+	{"name": "study_doorway", "pos": Vector3(4.24, 0.0, -4.49), "yaw": -50.0},
 	{"name": "bath", "pos": Vector3(6.00, 3.12, 5.80), "yaw": 180.0},
 	{"name": "landing", "pos": Vector3(4.20, 3.12, -4.70), "yaw": 270.0},
 ]
