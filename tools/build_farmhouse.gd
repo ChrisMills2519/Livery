@@ -31,6 +31,16 @@ const TEXTILE := "res://Models/interior/shapespark_textiles/"
 const PROPS := "res://Models/props/"
 const TEX_FLOOR := "res://Models/interior/textures/wood_floor_diff_1k.jpg"
 const TEX_WALL := "res://Models/interior/textures/painted_plaster_wall_diff_1k.jpg"
+const TEX_FOOD := "res://Models/interior/kenney_food_kit/Textures/colormap.png"
+
+# Neutral-luminance detail maps, built by tools/make_interior_detail.py.  Every
+# map sits at a 0.90 sRGB mean, so it only modulates the surface; the colours in
+# the tables below still come from the kit and the FABRIC_* palette.
+const DETAIL_MEAN := 0.90
+const DETAIL_WOOD := "res://Models/interior/textures/detail_wood_diff_512.jpg"
+const DETAIL_FABRIC := "res://Models/interior/textures/detail_fabric_diff_512.jpg"
+const DETAIL_STONE := "res://Models/interior/textures/detail_stone_diff_512.jpg"
+const DETAIL_METAL := "res://Models/interior/textures/detail_metal_diff_256.jpg"
 const PLAYER := "res://scenes/player.tscn"
 const SPOT := "res://scripts/interior_spot.gd"
 const DOOR := "res://scripts/scene_door.gd"
@@ -137,15 +147,47 @@ const DOORS := [
 	{"name": "BackDoor", "axis": "x", "plane": Z1, "centre": 5.40, "width": 1.20, "head": 2.50, "base": 0.0, "leaf": true},
 ]
 
-# The kit's upholstery colour.  Everything the PROP table marks as "fabric"
-# swaps this pink for a colour that suits the house; wood, metal and porcelain
-# surfaces keep the kit's own colours.
-const KIT_FABRIC := Color(0.9747, 0.6399, 0.6202)
+# The farmhouse upholstery palette.  Everything the PROP table marks as
+# "fabric" swaps the kit's own colour for one of these; wood, metal and
+# porcelain surfaces keep the kit's own colours.
 const FABRIC_GREEN := Color(0.40, 0.45, 0.36)
 const FABRIC_CREAM := Color(0.88, 0.85, 0.78)
 const FABRIC_TERRACOTTA := Color(0.53, 0.35, 0.28)
 const FABRIC_MUSTARD := Color(0.62, 0.47, 0.25)
 const FABRIC_BLUE := Color(0.33, 0.41, 0.46)
+
+# One real material per category, shared by every surface that uses it.  "uv"
+# is the tile size for the kit models, whose UVs are already per-face planar at
+# 78.7 units per model unit; "world" is the tile size in metres for hand-built
+# boxes and for the Quaternius models, which carry no UVs and need triplanar.
+const SURFACES := {
+	"wood": {"texture": DETAIL_WOOD, "roughness": 0.62, "metallic": 0.0, "uv": 0.085, "world": 2.6},
+	"wood_dark": {"texture": DETAIL_WOOD, "roughness": 0.52, "metallic": 0.0, "uv": 0.105, "world": 3.2},
+	"fabric": {"texture": DETAIL_FABRIC, "roughness": 0.92, "metallic": 0.0, "uv": 0.140, "world": 6.0},
+	"metal": {"texture": DETAIL_METAL, "roughness": 0.36, "metallic": 0.25, "uv": 0.070, "world": 3.2},
+	"stone": {"texture": DETAIL_STONE, "roughness": 0.88, "metallic": 0.0, "uv": 0.055, "world": 1.4},
+	"ceramic": {"texture": DETAIL_STONE, "roughness": 0.26, "metallic": 0.0, "uv": 0.150, "world": 3.4},
+}
+
+# The kit's own material names, which are stable across its 140 models.  An
+# empty entry keeps the source material, which is what the glass needs.
+const KIT_SURFACE := {
+	"wood": "wood",
+	"woodDark": "wood_dark",
+	"metal": "metal",
+	"metalDark": "metal",
+	"metalMedium": "metal",
+	"metalLight": "metal",
+	"carpet": "fabric",
+	"carpetDarker": "fabric",
+	"carpetWhite": "fabric",
+	"carpetBlue": "fabric",
+	"fur": "fabric",
+	"lamp": "fabric",
+	"_defaultMat": "ceramic",
+	"plant": "",
+	"glass": "",
+}
 
 var _root: Node3D
 var _shell: Node3D
@@ -154,11 +196,25 @@ var _furniture: Node3D
 var _spots: Node3D
 var _lighting: Node3D
 var _materials := {}
+# category + colour + space -> one shared StandardMaterial3D, so the 195 props
+# in the house reference a few dozen materials instead of a copy each.
+var _book := {}
+# source material + tint -> one shared copy, for the Shapespark textiles.
+var _tinted := {}
+# merge group -> the surfaces that will become one mesh, see _flush_merges().
+var _merges := {}
+var _detail_gain := 1.0
 var _kit := {}
 var _trim_index := 0
 
 
 func _initialize() -> void:
+	# The detail maps are sRGB greys, so the shader samples them linearised.
+	# Lifting the albedo by the reciprocal of the map's linear mean puts the
+	# kit's own tone back; without it every textured surface would read a fifth
+	# darker than the flat colour it replaced.
+	_detail_gain = 1.0 / Color(DETAIL_MEAN, DETAIL_MEAN, DETAIL_MEAN).srgb_to_linear().r
+
 	_root = Node3D.new()
 	_root.name = "Farmhouse"
 	_shell = _named(_root, "Shell")
@@ -216,10 +272,24 @@ func _named(parent: Node, node_name: String) -> Node3D:
 	return node
 
 
-func _own_tree(node: Node) -> void:
+## Copies a downloaded model into the prop's own node instead of instancing its
+## GLB scene.  Instancing plus a surface override makes Godot save a duplicate
+## clone of the mesh beside the instance, which renders twice and doubles the
+## prop's triangles; flattening leaves one MeshInstance3D per model surface,
+## sharing the same mesh resource between every copy of that model.
+func _flatten_model(node: Node3D, parent: Node3D, parent_transform: Transform3D) -> void:
+	var here := parent_transform * node.transform
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		var source := node as MeshInstance3D
+		var mesh_instance := MeshInstance3D.new()
+		mesh_instance.name = "Surface" if parent.get_child_count() == 0 else "Surface%d" % parent.get_child_count()
+		mesh_instance.mesh = source.mesh
+		mesh_instance.transform = here
+		mesh_instance.visible = source.visible
+		parent.add_child(mesh_instance)
 	for child in node.get_children():
-		child.owner = _root
-		_own_tree(child)
+		if child is Node3D:
+			_flatten_model(child as Node3D, parent, here)
 
 
 func _own(node: Node) -> void:
@@ -278,8 +348,87 @@ func _plain(key: String, colour: Color, roughness := 0.8, metallic := 0.0) -> St
 	return mat
 
 
+## A shared material for one real surface category.  `mode` "uv" follows the
+## kit's per-face UVs, "tri" uses world-space triplanar for hand-built boxes
+## and for the Quaternius models, which carry no UVs.  `roughness` overrides the
+## category default when a piece needs it (the worktop is polished, say).
+func _surface(category: String, base: Color, tint := Color.WHITE, mode := "uv", roughness := -1.0) -> StandardMaterial3D:
+	var spec: Dictionary = SURFACES[category]
+	var colour := Color(base.r * tint.r, base.g * tint.g, base.b * tint.b, base.a)
+	var key := "%s|%s|%s|%.2f" % [category, colour.to_html(), mode, roughness]
+	if _book.has(key):
+		return _book[key]
+	var mat := StandardMaterial3D.new()
+	mat.resource_name = "surface_" + category
+	mat.albedo_texture = _texture(String(spec["texture"]))
+	mat.albedo_color = Color(
+		colour.r * _detail_gain, colour.g * _detail_gain, colour.b * _detail_gain, colour.a)
+	mat.roughness = roughness if roughness >= 0.0 else float(spec["roughness"])
+	mat.metallic = float(spec["metallic"])
+	if mode == "tri":
+		mat.uv1_triplanar = true
+		mat.uv1_world_triplanar = true
+		mat.uv1_scale = Vector3.ONE * float(spec["world"])
+	else:
+		mat.uv1_scale = Vector3.ONE * float(spec["uv"])
+	_book[key] = mat
+	return mat
+
+
+## A flat colour with no detail map, shared by every surface that wants it: the
+## plants and the few kit materials with no believable texture of their own.
+func _flat(base: Color, tint: Color) -> StandardMaterial3D:
+	var colour := Color(base.r * tint.r, base.g * tint.g, base.b * tint.b, base.a)
+	var key := "flat|%s" % colour.to_html()
+	if _book.has(key):
+		return _book[key]
+	var mat := StandardMaterial3D.new()
+	mat.resource_name = "surface_flat"
+	mat.albedo_color = colour
+	mat.roughness = 0.85
+	_book[key] = mat
+	return mat
+
+
+## Upholstery and other soft goods that are built as plain boxes rather than
+## kit models: same fabric detail, world-space so the weave keeps its size.
+func _cloth(key: String, colour: Color, roughness := 0.9) -> StandardMaterial3D:
+	if _materials.has(key):
+		return _materials[key]
+	var mat := _surface("fabric", colour, Color.WHITE, "tri", roughness)
+	_materials[key] = mat
+	return mat
+
+
+## The Food Kit's palette atlas.  All 34 tableware and food models share this
+## one texture and one material, which is why a whole place setting can merge
+## into a single draw call.
+func _food_material() -> StandardMaterial3D:
+	if _materials.has("food"):
+		return _materials["food"]
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = _texture(TEX_FOOD)
+	mat.roughness = 0.45
+	# Every Food Kit material is double sided in its glTF.
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_materials["food"] = mat
+	return mat
+
+
+## A tinted copy of a downloaded model's own material, shared between every
+## prop that asks for the same colour.
+func _tinted_copy(source: BaseMaterial3D, tint: Color) -> BaseMaterial3D:
+	var key := "%d|%s" % [source.get_instance_id(), tint.to_html()]
+	if _tinted.has(key):
+		return _tinted[key]
+	var copy := source.duplicate() as BaseMaterial3D
+	copy.albedo_color = copy.albedo_color * tint
+	_tinted[key] = copy
+	return copy
+
+
 func _wood_trim() -> StandardMaterial3D:
-	return _plain("trim", Color(0.46, 0.31, 0.20), 0.6)
+	return _surface("wood", Color(0.46, 0.31, 0.20), Color.WHITE, "tri")
 
 
 func _trim_paint() -> StandardMaterial3D:
@@ -287,15 +436,15 @@ func _trim_paint() -> StandardMaterial3D:
 
 
 func _worktop() -> StandardMaterial3D:
-	return _plain("worktop", Color(0.28, 0.26, 0.24), 0.45)
+	return _surface("stone", Color(0.28, 0.26, 0.24), Color.WHITE, "tri", 0.45)
 
 
 func _dark_wood() -> StandardMaterial3D:
-	return _plain("dark_wood", Color(0.20, 0.13, 0.09), 0.55)
+	return _surface("wood_dark", Color(0.20, 0.13, 0.09), Color.WHITE, "tri")
 
 
 func _stone() -> StandardMaterial3D:
-	return _plain("stone", Color(0.47, 0.45, 0.42), 0.95)
+	return _surface("stone", Color(0.47, 0.45, 0.42), Color.WHITE, "tri")
 
 
 func _glass() -> StandardMaterial3D:
@@ -796,10 +945,33 @@ func _balustrade_parts(a: Vector3, b: Vector3, height: float, basis: Basis) -> v
 
 	var span := height - 0.20
 	var count := maxi(2, int(round(length / 0.34)))
+	# The spindles share one material and never move, so they are built as a
+	# single mesh: a balustrade costs one draw call instead of a dozen.
+	var spindles := []
 	for i in range(count + 1):
 		var t := float(i) / float(count)
 		var p := a.lerp(b, t)
-		_add_mesh_box("Spindle", Vector3(p.x, p.y + 0.12 + span * 0.5, p.z), Vector3(0.04, span, 0.04), _wood_trim())
+		spindles.append({
+			"centre": Vector3(p.x, p.y + 0.12 + span * 0.5, p.z),
+			"size": Vector3(0.04, span, 0.04),
+		})
+	_merged_boxes("Spindle", spindles, _wood_trim())
+
+
+## One mesh for several boxes that share a material.
+func _merged_boxes(node_name: String, parts: Array, mat: Material, parent: Node = null) -> MeshInstance3D:
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for part in parts:
+		var box := BoxMesh.new()
+		box.size = part["size"]
+		tool.append_from(box, 0, Transform3D(part.get("basis", Basis.IDENTITY), part["centre"]))
+	var node := MeshInstance3D.new()
+	node.name = node_name
+	node.mesh = tool.commit()
+	node.material_override = mat
+	(parent if parent != null else _shell).add_child(node)
+	return node
 
 
 func _newel(pos: Vector3, height := STAIR_GUARD_HEIGHT + 0.10) -> void:
@@ -891,9 +1063,11 @@ func _picture(centre: Vector3, along_x: bool, width: float, height: float, frame
 	var frame_size := Vector3(0.06, height, width) if along_x else Vector3(width, height, 0.06)
 	var mat_size := Vector3(0.025, height - 0.10, width - 0.10) if along_x else Vector3(width - 0.10, height - 0.10, 0.025)
 	var canvas_size := Vector3(0.015, height - 0.20, width - 0.20) if along_x else Vector3(width - 0.20, height - 0.20, 0.015)
-	var frame := _mesh_box(_furniture, "Picture%d" % _picture_index, centre, frame_size, _plain("frame_%d" % _picture_index, frame_colour, 0.65))
+	# Keyed by colour rather than by picture, so the frames and canvases that
+	# share a tone share one material.
+	var frame := _mesh_box(_furniture, "Picture%d" % _picture_index, centre, frame_size, _plain("frame_%s" % frame_colour.to_html(false), frame_colour, 0.65))
 	_mesh_box(_furniture, "PictureMat%d" % _picture_index, centre + normal * 0.035, mat_size, _plain("mat", Color(0.90, 0.87, 0.79), 0.9))
-	_mesh_box(_furniture, "PictureCanvas%d" % _picture_index, centre + normal * 0.052, canvas_size, _plain("canvas_%d" % _picture_index, canvas_colour, 0.85))
+	_mesh_box(_furniture, "PictureCanvas%d" % _picture_index, centre + normal * 0.052, canvas_size, _plain("canvas_%s" % canvas_colour.to_html(false), canvas_colour, 0.85))
 	_picture_index += 1
 
 
@@ -911,7 +1085,6 @@ func _prop(file: String, pos: Vector3, yaw_deg: float, opts := {}) -> Node3D:
 	var wrapper := Node3D.new()
 	wrapper.name = String(opts.get("name", file))
 	var model := packed.instantiate() as Node3D
-	wrapper.add_child(model)
 	_furniture.add_child(wrapper)
 
 	var box := _model_aabb(model)
@@ -921,18 +1094,21 @@ func _prop(file: String, pos: Vector3, yaw_deg: float, opts := {}) -> Node3D:
 	var centre_x := box.position.x + box.size.x * 0.5
 	var centre_z := box.position.z + box.size.z * 0.5
 	model.position = Vector3(-centre_x, -box.position.y if on_floor else 0.0, -centre_z)
-	if opts.has("fabric"):
-		_recolour_fabric(model, opts["fabric"])
-		# Surface overrides live on nodes inside the instanced GLB.  Those nodes
-		# belong to the GLB's own scene, so the packer would drop the overrides;
-		# handing them to the farmhouse root saves them with the scene.
-		_own_tree(model)
-	if opts.has("tint"):
-		_tint_model(model, opts["tint"])
-		_own_tree(model)
+	_flatten_model(model, wrapper, Transform3D.IDENTITY)
+	model.free()
+	_apply_surfaces(wrapper, path, opts)
 	wrapper.position = pos
 	wrapper.rotation.y = deg_to_rad(yaw_deg)
 	wrapper.scale = scale
+
+	# Dressing that never moves can be folded into its neighbours, so a set table
+	# is one draw call rather than one per plate.  Everything merged keeps its
+	# own place and its own material; only the node count goes away.
+	if opts.has("merge"):
+		_collect_merge(String(opts["merge"]), wrapper, wrapper.transform)
+		_furniture.remove_child(wrapper)
+		wrapper.free()
+		return null
 
 	if bool(opts.get("collide", true)) and on_floor:
 		var body := StaticBody3D.new()
@@ -952,53 +1128,129 @@ func _prop(file: String, pos: Vector3, yaw_deg: float, opts := {}) -> Node3D:
 	return wrapper
 
 
-## Replaces only the kit's upholstery material, so legs, frames and fittings
-## keep their own wood and metal colours.
-func _recolour_fabric(node: Node, colour: Color) -> int:
-	var changed := 0
+## Walks one instanced model and gives every surface the shared material for
+## its real category.  Kit materials are matched by name (they are stable
+## across the 140 models); Quaternius names are matched by prefix; Shapespark
+## textiles keep their own weave and only get a shared tint copy; Food Kit
+## models all resolve to the single palette-atlas material.
+func _apply_surfaces(model: Node, path: String, opts: Dictionary) -> void:
+	var food := path.begins_with(FOOD)
+	var textile := path.begins_with(TEXTILE)
+	var quat := path.begins_with(QUAT)
+	var fabric: Variant = opts.get("fabric", null)
+	var tint: Color = opts.get("tint", Color.WHITE)
+	_apply_surfaces_node(model, food, textile, quat, fabric, tint)
+
+
+func _apply_surfaces_node(node: Node, food: bool, textile: bool, quat: bool, fabric: Variant, tint: Color) -> void:
 	if node is MeshInstance3D:
 		var mesh_instance := node as MeshInstance3D
 		if mesh_instance.mesh != null:
 			for i in range(mesh_instance.mesh.get_surface_count()):
-				var material := mesh_instance.get_active_material(i)
-				# glTF imports arrive as ORMMaterial3D, so this must not test for
-				# StandardMaterial3D.
-				if not (material is BaseMaterial3D):
-					continue
-				var standard := material as BaseMaterial3D
-				if not _same_colour(standard.albedo_color, KIT_FABRIC):
-					continue
-				var copy := standard.duplicate() as BaseMaterial3D
-				copy.albedo_color = colour
-				mesh_instance.set_surface_override_material(i, copy)
-				changed += 1
+				var replacement := _surface_for(
+					mesh_instance.get_active_material(i), food, textile, quat, fabric, tint)
+				if replacement != null:
+					mesh_instance.set_surface_override_material(i, replacement)
 	for child in node.get_children():
-		changed += _recolour_fabric(child, colour)
-	return changed
+		_apply_surfaces_node(child, food, textile, quat, fabric, tint)
 
 
-func _same_colour(a: Color, b: Color) -> bool:
-	return absf(a.r - b.r) < 0.02 and absf(a.g - b.g) < 0.02 and absf(a.b - b.b) < 0.02
+func _surface_for(source: Material, food: bool, textile: bool, quat: bool, fabric: Variant, tint: Color) -> Material:
+	if food:
+		return _food_material()
+	# glTF imports arrive as ORMMaterial3D, so this must not test for
+	# StandardMaterial3D.
+	if not (source is BaseMaterial3D):
+		return null
+	var standard := source as BaseMaterial3D
+	if textile:
+		return null if tint == Color.WHITE else _tinted_copy(standard, tint)
+	var material_name := String(standard.resource_name)
+	var category := _quat_surface(material_name) if quat else String(KIT_SURFACE.get(material_name, "flat"))
+	if category.is_empty():
+		# Glass keeps the model's own transparent material.
+		return null
+	var base := standard.albedo_color
+	if category == "flat":
+		return _flat(base, tint)
+	if fabric != null and category == "fabric":
+		base = fabric
+	return _surface(category, base, tint, "tri" if quat else "uv")
 
 
-## Multiplies a downloaded model's own base colours, so its linen, wool or
-## painted wood can join the farmhouse palette without losing its texture.
-func _tint_model(node: Node, colour: Color) -> int:
-	var changed := 0
+## Quaternius's 28 models use per-model material names ("Wood.003",
+## "Plant_Green.002"), so they are grouped by prefix rather than by name.
+func _quat_surface(material_name: String) -> String:
+	var key := material_name.to_lower()
+	if key.begins_with("plant") or key.begins_with("darkgreen"):
+		return "flat"
+	if key.begins_with("wood") or key.begins_with("brown") or key.begins_with("lightorange"):
+		return "wood"
+	if key.begins_with("lightmetal") or key.begins_with("metal") or key.begins_with("black"):
+		return "metal"
+	if key.begins_with("marble") or key.begins_with("white") or key.begins_with("grey") or key.begins_with("light"):
+		return "ceramic"
+	if key.begins_with("couch") or key.begins_with("cushin"):
+		return "fabric"
+	return "flat"
+
+
+## Records one prop's surfaces for a merge group once its transforms are final.
+func _collect_merge(group: String, node: Node, xform: Transform3D) -> void:
 	if node is MeshInstance3D:
 		var mesh_instance := node as MeshInstance3D
 		if mesh_instance.mesh != null:
+			if not _merges.has(group):
+				_merges[group] = []
 			for i in range(mesh_instance.mesh.get_surface_count()):
-				var material := mesh_instance.get_active_material(i)
-				if not (material is BaseMaterial3D):
-					continue
-				var copy := (material as BaseMaterial3D).duplicate() as BaseMaterial3D
-				copy.albedo_color = copy.albedo_color * colour
-				mesh_instance.set_surface_override_material(i, copy)
-				changed += 1
+				_merges[group].append({
+					"mesh": mesh_instance.mesh,
+					"surface": i,
+					"transform": xform,
+					"material": mesh_instance.get_active_material(i),
+				})
 	for child in node.get_children():
-		changed += _tint_model(child, colour)
-	return changed
+		if child is Node3D:
+			_collect_merge(group, child, xform * (child as Node3D).transform)
+
+
+## Commits every merge group as one mesh per material.  The node sits on the
+## group's centroid, so the furniture-in-every-room check still knows where the
+## pieces are, and its meta keeps the piece count the merge folded away.
+func _flush_merges() -> void:
+	for group in _merges:
+		var by_material := {}
+		for entry in _merges[group]:
+			var material: Material = entry["material"]
+			var key := str(material.get_instance_id()) if material != null else "none"
+			if not by_material.has(key):
+				by_material[key] = []
+			by_material[key].append(entry)
+		var index := 0
+		for key in by_material:
+			var parts: Array = by_material[key]
+			var centre := Vector3.ZERO
+			for entry in parts:
+				centre += (entry["transform"] as Transform3D).origin
+			centre /= float(parts.size())
+			var tool := SurfaceTool.new()
+			tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+			for entry in parts:
+				tool.append_from(
+					entry["mesh"] as Mesh, int(entry["surface"]),
+					Transform3D(Basis.IDENTITY, -centre) * (entry["transform"] as Transform3D))
+			var mesh := tool.commit()
+			if mesh == null:
+				continue
+			var node := MeshInstance3D.new()
+			node.name = group if by_material.size() == 1 else "%s_%d" % [group, index]
+			node.mesh = mesh
+			node.material_override = parts[0]["material"] as Material
+			node.position = centre
+			node.set_meta("merged_parts", parts.size())
+			_furniture.add_child(node)
+			index += 1
+	_merges.clear()
 
 
 func _model_aabb(node: Node, xform := Transform3D.IDENTITY) -> AABB:
@@ -1052,7 +1304,7 @@ func _build_furniture() -> void:
 	# A window seat under the middle south window.
 	_mesh_box(_furniture, "WindowSeat", Vector3(-2.20, 0.23, -7.48), Vector3(2.30, 0.46, 0.52), _wood_trim())
 	_collide_box(Vector3(-2.20, 0.23, -7.48), Vector3(2.30, 0.46, 0.52))
-	_mesh_box(_furniture, "WindowSeatCushion", Vector3(-2.20, 0.51, -7.46), Vector3(2.18, 0.12, 0.50), _plain("cushion_mustard", FABRIC_MUSTARD, 0.9))
+	_mesh_box(_furniture, "WindowSeatCushion", Vector3(-2.20, 0.51, -7.46), Vector3(2.18, 0.12, 0.50), _cloth("cushion_mustard", FABRIC_MUSTARD))
 	_picture(Vector3(2.24, 1.85, -6.20), true, 0.95, 0.72, Color(0.42, 0.51, 0.48), Color(0.82, 0.74, 0.58))
 	_picture(Vector3(-8.92, 2.18, -3.80), true, 1.55, 0.95, Color(0.55, 0.40, 0.30), Color(0.86, 0.79, 0.64))
 	_picture(Vector3(-4.90, 1.90, -7.63), false, 1.05, 0.75, Color(0.34, 0.40, 0.46), Color(0.88, 0.82, 0.68))
@@ -1113,19 +1365,19 @@ func _build_furniture() -> void:
 	# Table setting: warm, used, not a showroom.
 	for x in [-2.95, -2.30, -1.65]:
 		for z in [5.48, 6.32]:
-			_prop("Plate", Vector3(x, 0.875, z), 0.0, {"path": FOOD + "plate-dinner.glb", "mode": "wall", "collide": false, "scale": 1.0})
-			_prop("Utensil", Vector3(x + 0.28, 0.875, z), 0.0, {"path": FOOD + "utensil-fork.glb", "mode": "wall", "collide": false, "scale": 1.0})
-	_prop("Teapot", Vector3(-2.30, 0.875, 5.90), 0.0, {"path": FOOD + "bottle-oil.glb", "mode": "wall", "collide": false, "scale": 1.0})
-	_prop("BreadBoard", Vector3(-2.30, 0.875, 5.90), 0.0, {"path": FOOD + "cutting-board-round.glb", "mode": "wall", "collide": false, "scale": 1.0})
-	_prop("Bread", Vector3(-2.30, 0.90, 5.90), 25.0, {"path": FOOD + "bread.glb", "mode": "wall", "collide": false, "scale": 1.0})
-	_prop("FruitBowl", Vector3(-6.10, 1.00, 3.40), 0.0, {"path": FOOD + "bowl.glb", "mode": "wall", "collide": false, "scale": 1.0})
+			_prop("Plate", Vector3(x, 0.875, z), 0.0, {"path": FOOD + "plate-dinner.glb", "merge": "KitchenTableSetting", "mode": "wall", "collide": false, "scale": 1.0})
+			_prop("Utensil", Vector3(x + 0.28, 0.875, z), 0.0, {"path": FOOD + "utensil-fork.glb", "merge": "KitchenTableSetting", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("Teapot", Vector3(-2.30, 0.875, 5.90), 0.0, {"path": FOOD + "bottle-oil.glb", "merge": "KitchenTableCentre", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("BreadBoard", Vector3(-2.30, 0.875, 5.90), 0.0, {"path": FOOD + "cutting-board-round.glb", "merge": "KitchenTableCentre", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("Bread", Vector3(-2.30, 0.90, 5.90), 25.0, {"path": FOOD + "bread.glb", "merge": "KitchenTableCentre", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("FruitBowl", Vector3(-6.10, 1.00, 3.40), 0.0, {"path": FOOD + "bowl.glb", "merge": "IslandFruit", "mode": "wall", "collide": false, "scale": 1.0})
 	for offset in [Vector3(-0.12, 0.06, 0.0), Vector3(0.10, 0.06, 0.05), Vector3(0.0, 0.06, -0.12)]:
-		_prop("Apple", Vector3(-6.10, 1.04, 3.40) + offset, 0.0, {"path": FOOD + "apple.glb", "mode": "wall", "collide": false, "scale": 1.0})
+		_prop("Apple", Vector3(-6.10, 1.04, 3.40) + offset, 0.0, {"path": FOOD + "apple.glb", "merge": "IslandFruit", "mode": "wall", "collide": false, "scale": 1.0})
 	_prop("KitchenDresser", Vector3(2.10, 0.0, 5.55), 270.0, {"path": KIT + "cabinetTelevision.glb", "scale": 2.4})
 	_prop("KitchenDresserLow", Vector3(2.10, 0.0, 6.75), 270.0, {"path": KIT + "cabinetTelevisionDoors.glb", "scale": 2.2})
 	_prop("AppleBasket", Vector3(1.05, 0.0, 6.55), 0.0, {"path": PROPS + "yard/apple_basket.glb", "scale": 1.0})
-	_prop("DresserPlates", Vector3(2.10, 1.26, 5.35), 270.0, {"path": FOOD + "plate-deep.glb", "mode": "wall", "collide": false, "scale": 1.0})
-	_prop("DresserPlatesB", Vector3(2.10, 1.27, 5.70), 270.0, {"path": FOOD + "plate-deep.glb", "mode": "wall", "collide": false, "scale": 0.9})
+	_prop("DresserPlates", Vector3(2.10, 1.26, 5.35), 270.0, {"path": FOOD + "plate-deep.glb", "merge": "DresserPlates", "mode": "wall", "collide": false, "scale": 1.0})
+	_prop("DresserPlatesB", Vector3(2.10, 1.27, 5.70), 270.0, {"path": FOOD + "plate-deep.glb", "merge": "DresserPlates", "mode": "wall", "collide": false, "scale": 0.9})
 	# A little round breakfast table in the north-west corner.
 	_prop("BreakfastTable", Vector3(-7.70, 0.0, 6.45), 0.0, {"path": KIT + "table.glb", "scale": 1.75, "fabric": FABRIC_TERRACOTTA})
 	_prop("BreakfastChairA", Vector3(-8.55, 0.0, 6.45), 90.0, {"path": KIT + "chair.glb", "scale": 1.75})
@@ -1134,7 +1386,7 @@ func _build_furniture() -> void:
 	# on the long east wall, so the middle of the kitchen is not bare floor.
 	_mesh_box(_furniture, "KitchenWindowSeat", Vector3(-4.90, 0.23, 7.46), Vector3(2.10, 0.46, 0.52), _wood_trim())
 	_collide_box(Vector3(-4.90, 0.23, 7.46), Vector3(2.10, 0.46, 0.52))
-	_mesh_box(_furniture, "KitchenWindowSeatCushion", Vector3(-4.90, 0.51, 7.44), Vector3(1.98, 0.12, 0.50), _plain("cushion_blue", FABRIC_BLUE, 0.9))
+	_mesh_box(_furniture, "KitchenWindowSeatCushion", Vector3(-4.90, 0.51, 7.44), Vector3(1.98, 0.12, 0.50), _cloth("cushion_blue", FABRIC_BLUE))
 	_prop("KitchenLarder", Vector3(2.14, 0.0, 3.00), 270.0, {"path": KIT + "bookcaseClosedWide.glb", "scale": 2.2})
 	_prop("KitchenChair", Vector3(0.95, 0.0, 6.65), 250.0, {"path": KIT + "loungeChair.glb", "scale": 1.9, "fabric": FABRIC_GREEN})
 	_prop("KitchenChairTable", Vector3(1.85, 0.0, 6.65), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.6})
@@ -1217,7 +1469,7 @@ func _build_furniture() -> void:
 	_prop("BedroomChaiseRug", Vector3(0.40, UPPER_FLOOR + 0.015, -3.30), 0.0, {"path": KIT + "rugRound.glb", "scale": 1.8, "collide": false, "tint": FABRIC_BLUE})
 	_mesh_box(_furniture, "BedroomWindowSeat", Vector3(-4.90, UPPER_FLOOR + 0.23, -7.46), Vector3(2.10, 0.46, 0.52), _wood_trim())
 	_collide_box(Vector3(-4.90, UPPER_FLOOR + 0.23, -7.46), Vector3(2.10, 0.46, 0.52))
-	_mesh_box(_furniture, "BedroomWindowSeatCushion", Vector3(-4.90, UPPER_FLOOR + 0.51, -7.44), Vector3(1.98, 0.12, 0.50), _plain("cushion_cream", FABRIC_CREAM, 0.9))
+	_mesh_box(_furniture, "BedroomWindowSeatCushion", Vector3(-4.90, UPPER_FLOOR + 0.51, -7.44), Vector3(1.98, 0.12, 0.50), _cloth("cushion_cream", FABRIC_CREAM))
 	_prop("BedroomDeskChair", Vector3(0.80, UPPER_FLOOR, -5.15), 90.0, {"path": KIT + "chairDesk.glb", "scale": 1.3})
 	_prop("BedroomDeskLamp", Vector3(1.55, UPPER_FLOOR + 1.12, -5.15), 0.0, {"path": KIT + "lampSquareTable.glb", "mode": "wall", "collide": false, "scale": 1.4})
 	_prop("BedroomPlant", Vector3(2.10, UPPER_FLOOR, -3.95), 0.0, {"path": QUAT + "Houseplant_4.glb", "scale": 1.2})
@@ -1269,8 +1521,8 @@ func _build_furniture() -> void:
 	_prop("BathStool", Vector3(8.95, UPPER_FLOOR, 5.95), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.4})
 	_prop("BathLaundry", Vector3(2.75, UPPER_FLOOR, 4.40), 0.0, {"path": PROPS + "yard/crate.glb", "scale": 0.75})
 	# Folded towels on the vanity and a bath tray across the tub.
-	_mesh_box(_furniture, "BathTowelA", Vector3(4.32, UPPER_FLOOR + 1.02, 7.12), Vector3(0.52, 0.10, 0.34), _plain("towel_cream", Color(0.92, 0.88, 0.80), 0.95))
-	_mesh_box(_furniture, "BathTowelB", Vector3(4.32, UPPER_FLOOR + 1.12, 7.12), Vector3(0.46, 0.09, 0.30), _plain("towel_blue", FABRIC_BLUE, 0.95))
+	_mesh_box(_furniture, "BathTowelA", Vector3(4.32, UPPER_FLOOR + 1.02, 7.12), Vector3(0.52, 0.10, 0.34), _cloth("towel_cream", Color(0.92, 0.88, 0.80), 0.95))
+	_mesh_box(_furniture, "BathTowelB", Vector3(4.32, UPPER_FLOOR + 1.12, 7.12), Vector3(0.46, 0.09, 0.30), _cloth("towel_blue", FABRIC_BLUE, 0.95))
 	_mesh_box(_furniture, "BathTray", Vector3(7.35, UPPER_FLOOR + 0.66, 6.95), Vector3(1.35, 0.05, 0.30), _wood_trim())
 	_picture(Vector3(2.24, UPPER_FLOOR + 1.65, 6.20), true, 0.75, 0.55, Color(0.48, 0.52, 0.50), Color(0.88, 0.84, 0.74))
 	_curtains_for("BathNorthA")
@@ -1298,6 +1550,8 @@ func _build_furniture() -> void:
 	_prop("GallerySideTable", Vector3(8.30, UPPER_FLOOR, 3.10), 0.0, {"path": KIT + "sideTable.glb", "scale": 1.7})
 	_prop("GalleryConsole", Vector3(9.02, UPPER_FLOOR, 2.35), 270.0, {"path": KIT + "sideTable.glb", "scale": 1.6})
 	_picture(Vector3(2.24, UPPER_FLOOR + 1.80, 0.80), true, 0.95, 0.70, Color(0.50, 0.44, 0.32), Color(0.88, 0.82, 0.68))
+
+	_flush_merges()
 
 
 
@@ -1364,7 +1618,7 @@ func _pendant(pos: Vector3) -> void:
 	shade_mesh.bottom_radius = 0.21
 	shade_mesh.height = 0.20
 	shade.mesh = shade_mesh
-	shade.material_override = _plain("shade", Color(0.93, 0.88, 0.77), 0.65)
+	shade.material_override = _cloth("shade", Color(0.93, 0.88, 0.77), 0.65)
 	shade.position = pos + Vector3(0.0, 0.16, 0.0)
 	_lighting.add_child(shade)
 
