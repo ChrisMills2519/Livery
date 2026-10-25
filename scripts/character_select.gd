@@ -45,6 +45,9 @@ var _starting := false
 
 
 func _ready() -> void:
+	# The menu is the end of a visit.  At boot there is no live session, so
+	# this is a no-op; it closes one if the menu is ever re-entered in-game.
+	Analytics.end("quit")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	TouchControls.set_mode("select")
 	_build_environment()
@@ -596,6 +599,7 @@ func _start_ride() -> void:
 	if _starting:
 		return
 	_starting = true
+	Analytics.start()
 	_start_button.disabled = true
 	for card in _card_buttons:
 		card.disabled = true

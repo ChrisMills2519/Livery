@@ -17,6 +17,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+Analytics="*res://scripts/analytics.gd"
 GameState="*res://scripts/game_state.gd"
 SceneFade="*res://scripts/scene_fade.gd"
 Device="*res://scripts/device.gd"
