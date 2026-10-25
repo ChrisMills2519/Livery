@@ -19,10 +19,23 @@ extends CanvasLayer
 const STICK_RADIUS := 110.0
 const RUN_ENTER := 0.80
 const RUN_EXIT := 0.70
-const LOOK_GAIN := 1.0
+## Fraction of the mouse look rate a finger drag applies.  A thumb covers far
+## less distance than a mouse sweep, and movement is camera-relative, so at 1:1
+## dragging to look also re-aims the character's heading and the view spins.
+const LOOK_GAIN := 0.55
+## How far the stick finger may sit from its anchor and still count as resting
+## (a palm, or a thumb that has not pushed yet).
+const STICK_REST := 10.0
 const ORBIT_GAIN := 0.5
 const CONTEXT_REFRESH := 0.1
 const BUTTON_SLOP := 8.0
+## How far the thumb must push before the stick counts as steering.  Below this
+## it is a resting finger, not a direction.
+const STICK_PUSH := 0.12
+## A two-finger gesture only zooms once the gap has changed by this fraction
+## from where the second finger landed.  Below it the gesture is pure orbit, so
+## wrist wobble cannot drag the camera in and out while turning the horse.
+const PINCH_TRIGGER := 0.10
 
 const TEXT_COLOR := Color(0.96, 0.97, 0.92, 1.0)
 const DIM_COLOR := Color(0.86, 0.90, 0.80, 0.42)
@@ -44,6 +57,8 @@ var _look_accum := Vector2.ZERO
 var _orbit_accum := Vector2.ZERO
 var _pinch_ratio := 1.0
 var _pair_distance := 0.0
+var _pair_start := 0.0
+var _pinching := false
 var _swipe_accum := 0.0
 var _paint_active := false
 var _paint_pos := Vector2.ZERO
@@ -72,6 +87,10 @@ func _process(delta: float) -> void:
 	if _context_timer <= 0.0:
 		_context_timer = CONTEXT_REFRESH
 		_refresh_context()
+	if mode == "groom":
+		# Sampled once a frame, after both thumbs have reported, so moving them
+		# one after the other is not mistaken for a squeeze.
+		_update_pinch()
 	_overlay.queue_redraw()
 
 
@@ -165,6 +184,12 @@ func is_stick_active() -> bool:
 	return _stick_index >= 0
 
 
+## True once the thumb has actually pushed the stick away from its anchor.  A
+## finger that merely owns the stick has not asked for a direction yet.
+func is_stick_pushing() -> bool:
+	return _stick_index >= 0 and _move.length() > STICK_PUSH
+
+
 func is_running() -> bool:
 	return _running
 
@@ -205,7 +230,6 @@ func feed_drag(index: int, pos: Vector2, relative: Vector2) -> bool:
 			_paint_pos = pos
 		"orbit":
 			_orbit_accum += relative * ORBIT_GAIN
-			_update_pinch()
 		"swipe":
 			_swipe_accum += relative.x
 		_:
@@ -215,7 +239,9 @@ func feed_drag(index: int, pos: Vector2, relative: Vector2) -> bool:
 
 func _touch_down(index: int, pos: Vector2) -> bool:
 	if _fingers.has(index):
-		return true
+		# The release for this finger was lost (app switch, a dropped event).
+		# The new press wins instead of leaving a stale role wedged in place.
+		_touch_up(index)
 	var button: Dictionary = _button_at(pos) if mode == "ride" else {}
 	if not button.is_empty():
 		var action := _action_for(String(button["id"]))
@@ -229,12 +255,11 @@ func _touch_down(index: int, pos: Vector2) -> bool:
 	match mode:
 		"ride":
 			if pos.x < get_viewport().get_visible_rect().size.x * 0.5:
-				if _stick_index < 0:
-					_stick_index = index
-					_stick_base = pos
-					_stick_offset = Vector2.ZERO
-					_move = Vector2.ZERO
-					_fingers[index] = {"role": "stick", "pos": pos}
+				if _stick_index < 0 or _stick_is_resting():
+					# Whatever is holding the stick has not pushed it, so the thumb
+					# that just landed takes over.  That is what stops a resting
+					# palm from locking the stick out.
+					_claim_stick(index, pos)
 				else:
 					_fingers[index] = {"role": "idle", "pos": pos}
 			else:
@@ -265,7 +290,7 @@ func _groom_touch_down(index: int, pos: Vector2) -> bool:
 			if String(_fingers[other]["role"]) == "paint":
 				_fingers[other]["role"] = "orbit"
 		_fingers[index] = {"role": "orbit", "pos": pos}
-		_pair_distance = _orbit_pair_distance()
+		_begin_pinch_pair()
 		return true
 	# The first finger of a stroke: it paints or becomes a two-finger gesture.
 	_fingers[index] = {"role": "paint", "pos": pos}
@@ -292,11 +317,14 @@ func _touch_up(index: int) -> bool:
 			_move = Vector2.ZERO
 			_stick_offset = Vector2.ZERO
 			_set_run(false)
+			_adopt_idle_stick()
 		"paint":
 			_paint_active = false
 		"orbit":
 			_paint_active = false
 			_pair_distance = 0.0
+			_pair_start = 0.0
+			_pinching = false
 			for other in _fingers:
 				if String(_fingers[other]["role"]) == "orbit":
 					_fingers[other]["role"] = "idle"
@@ -315,6 +343,8 @@ func _release_all() -> void:
 	_orbit_accum = Vector2.ZERO
 	_swipe_accum = 0.0
 	_pinch_ratio = 1.0
+	_pair_start = 0.0
+	_pinching = false
 	_paint_active = false
 	_set_run(false)
 
@@ -323,7 +353,45 @@ func _on_mode_changed(_is_touch: bool) -> void:
 	set_mode(mode)
 
 
+func _notification(what: int) -> void:
+	# Backgrounding the app can swallow the touch-up events, which would leave a
+	# finger index and the stick wedged until the next scene change.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		_release_all()
+
+
 # --- Stick and run -----------------------------------------------------------
+
+## Arms the stick on `index`, taking it away from whatever finger held it.
+func _claim_stick(index: int, pos: Vector2) -> void:
+	if _stick_index >= 0 and _stick_index != index and _fingers.has(_stick_index):
+		_fingers[_stick_index]["role"] = "idle"
+	_stick_index = index
+	_stick_base = pos
+	_stick_offset = Vector2.ZERO
+	_move = Vector2.ZERO
+	_fingers[index] = {"role": "stick", "pos": pos}
+
+
+## True while the stick finger sits on its anchor without pushing.
+func _stick_is_resting() -> bool:
+	return _stick_offset.length() < STICK_REST
+
+
+## Hands the stick to a finger already resting in the stick half, so lifting one
+## thumb while the other is down does not leave the stick dead.
+func _adopt_idle_stick() -> void:
+	if _stick_index >= 0 or mode != "ride":
+		return
+	var half := get_viewport().get_visible_rect().size.x * 0.5
+	for other in _fingers:
+		if String(_fingers[other]["role"]) != "idle":
+			continue
+		var pos: Vector2 = _fingers[other]["pos"]
+		if pos.x < half:
+			_claim_stick(other, pos)
+			return
+
 
 func _update_stick(pos: Vector2) -> void:
 	_stick_offset = pos - _stick_base
@@ -354,11 +422,24 @@ func _orbit_pair_distance() -> float:
 	return points[0].distance_to(points[1])
 
 
+## Records the gap between the two orbit fingers when the gesture forms.
+func _begin_pinch_pair() -> void:
+	_pair_distance = _orbit_pair_distance()
+	_pair_start = _pair_distance
+	_pinching = false
+
+
 func _update_pinch() -> void:
 	var distance := _orbit_pair_distance()
 	if distance <= 0.0 or _pair_distance <= 0.0:
 		_pair_distance = distance
 		return
+	if not _pinching:
+		# Deliberate pinch or nothing: an orbit keeps the gap roughly steady.
+		if _pair_start <= 0.0 or absf(distance / _pair_start - 1.0) <= PINCH_TRIGGER:
+			_pair_distance = distance
+			return
+		_pinching = true
 	# Spreading the fingers gives a ratio below 1, which brings the camera in.
 	_pinch_ratio *= _pair_distance / distance
 	_pair_distance = distance

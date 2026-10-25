@@ -73,6 +73,9 @@ func _run() -> void:
 	_check(_touch.is_active() and _touch.mode == "ride", "player puts the layer in ride mode")
 
 	await _check_stick()
+	await _check_stick_takeover()
+	await _check_simultaneous_thumbs()
+	await _check_steer_frame()
 	await _check_look()
 	await _check_keyboard_still_works()
 	await _check_context_mount()
@@ -109,6 +112,92 @@ func _check_stick() -> void:
 	_check(not _touch.is_stick_active() and _touch.get_move_input().length() < 0.01, "lifting the thumb stops the stick")
 
 
+# --- Ride: stick takeover ---------------------------------------------------
+
+func _check_stick_takeover() -> void:
+	# A resting contact (palm, forearm, a thumb that has not pushed yet) grabs
+	# the stick half first; the thumb that actually pushes must still take over.
+	_touch.feed_touch(30, Vector2(120, 420), true)
+	_check(_touch.is_stick_active(), "a resting contact arms the stick")
+	_touch.feed_touch(31, Vector2(230, 500), true)
+	_touch.feed_drag(31, Vector2(230, 430), Vector2(0, -70))
+	_check(_touch.get_move_input().y < -0.5, "a pushing thumb takes the stick from a resting contact")
+	_check(int(_touch._stick_index) == 31, "the stick follows the pushing thumb")
+
+	# Lifting the pushing thumb hands the stick to the finger still down, so the
+	# player keeps steering instead of dropping to a dead stick.
+	_touch.feed_touch(31, Vector2(230, 430), false)
+	_check(_touch.is_stick_active() and int(_touch._stick_index) == 30,
+		"lifting the thumb hands the stick back to the resting finger")
+
+	# A lost release (app switch, dropped event) must not wedge the index: a
+	# fresh press for the same index re-arms instead of being ignored.
+	_touch.feed_touch(30, Vector2(150, 460), true)
+	_touch.feed_drag(30, Vector2(150, 390), Vector2(0, -70))
+	_check(_touch.get_move_input().y < -0.5, "a repeated press on a stale index re-arms the stick")
+	_touch.feed_touch(30, Vector2(150, 390), false)
+	await _frames(2)
+	_check(not _touch.is_stick_active() and _touch.get_move_input().length() < 0.01,
+		"releasing the last finger leaves no stick held")
+
+	# Backgrounding the app can swallow the touch-ups entirely; focus loss must
+	# release the fingers so the stick is not wedged when the player returns.
+	_touch.feed_touch(32, Vector2(200, 500), true)
+	_touch.feed_drag(32, Vector2(200, 430), Vector2(0, -70))
+	_check(_touch.is_stick_active(), "the stick is held before the app loses focus")
+	_touch.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	await _frames(2)
+	_check(not _touch.is_stick_active() and _touch.get_move_input().length() < 0.01,
+		"losing focus releases a stick whose touch-up never arrived")
+
+
+# --- Ride: the held stick owns the movement frame ---------------------------
+
+func _check_steer_frame() -> void:
+	var base := Vector2(200, 500)
+	_touch.feed_touch(50, base, true)
+	_touch.feed_drag(50, base + Vector2(0, -60), Vector2(0, -60))
+	await _frames(2)
+	_check(bool(_player.call("is_steering_with_stick")), "a pushed stick owns the movement frame")
+	var frame: float = _player.call("steer_yaw")
+	var yaw_before: float = _player.rotation.y
+	await _physics_frames(6)
+
+	# Look 120 px right while the thumb holds the direction.
+	_touch.feed_touch(51, Vector2(960, 300), true)
+	for i in range(6):
+		_touch.feed_drag(51, Vector2(980 + i * 20, 300), Vector2(20, 0))
+	await _frames(3)
+	_check(absf(_player.rotation.y - yaw_before) > 0.1, "the look drag still turns the camera")
+	_check(is_equal_approx(float(_player.call("steer_yaw")), frame),
+		"the held stick keeps its frame while the camera turns")
+
+	await _physics_frames(4)
+	var planar := Vector2(_player.velocity.x, _player.velocity.z)
+	var want := Basis(Vector3.UP, frame) * Vector3(0.0, 0.0, -1.0)
+	var want_flat := Vector2(want.x, want.z).normalized()
+	if planar.length() > 0.5:
+		_check(planar.normalized().angle_to(want_flat) < 0.2,
+			"walking keeps its line while the camera turns (%.0f deg off)" % rad_to_deg(planar.normalized().angle_to(want_flat)))
+
+	_touch.feed_touch(51, Vector2(1080, 300), false)
+	_touch.feed_touch(50, base + Vector2(0, -60), false)
+	await _frames(2)
+	_check(not bool(_player.call("is_steering_with_stick")), "releasing the stick frees the frame")
+	_check(is_equal_approx(float(_player.call("steer_yaw")), _player.rotation.y),
+		"the free frame follows the camera again")
+
+	# Pushing again re-aims from wherever the camera is looking now.
+	var yaw_now: float = _player.rotation.y
+	_touch.feed_touch(52, base, true)
+	_touch.feed_drag(52, base + Vector2(0, -60), Vector2(0, -60))
+	await _frames(2)
+	_check(is_equal_approx(float(_player.call("steer_yaw")), yaw_now),
+		"a fresh push re-aims from the current view")
+	_touch.feed_touch(52, base + Vector2(0, -60), false)
+	await _frames(2)
+
+
 # --- Ride: look drag --------------------------------------------------------
 
 func _check_look() -> void:
@@ -117,7 +206,13 @@ func _check_look() -> void:
 	_touch.feed_drag(5, Vector2(1060, 300), Vector2(60, 0))
 	await _frames(3)
 	_touch.feed_touch(5, Vector2(1060, 300), false)
-	_check(absf(_player.rotation.y - yaw) > 0.05, "a right-hand drag turns the player's yaw")
+	var turned := absf(_player.rotation.y - yaw)
+	_check(turned > 0.05, "a right-hand drag turns the player's yaw")
+	# Dragging to look must not swing the view at the full mouse rate: movement
+	# is camera-relative, so a 1:1 drag re-aims the heading and spins.
+	var raw := 60.0 * float(_player.get("mouse_sensitivity"))
+	_check(absf(turned - raw * 0.55) < 0.005,
+		"a touch drag applies its own gain, not the mouse rate (%.3f vs %.3f rad)" % [turned, raw])
 
 
 # --- Keyboard stays live with touch on -------------------------------------
@@ -165,6 +260,18 @@ func _check_grooming_gestures() -> void:
 	if _session == null:
 		return
 
+	# The touch brush works above the thumb, so the finger does not cover the
+	# red/green disk.  The hoof pick keeps the finger position (small targets).
+	_session.call("set_tool", 0)
+	var aim: Vector2 = _session.call("_brush_screen_pos", Vector2(600, 400))
+	var lift := 400.0 - aim.y
+	_check(is_equal_approx(aim.x, 600.0) and lift > 30.0 and lift < 120.0,
+		"the touch brush cleans above the finger (lifted %.0f px)" % lift)
+	_session.call("set_tool", 4)
+	var hoof_aim: Vector2 = _session.call("_brush_screen_pos", Vector2(600, 400))
+	_check(hoof_aim.is_equal_approx(Vector2(600, 400)), "the hoof pick stays under the finger")
+	_session.call("set_tool", 0)
+
 	# One finger paints; a second finger takes over as an orbit and pinch.
 	_touch.feed_touch(10, Vector2(600, 300), true)
 	_check(_touch.is_painting(), "one finger starts a paint stroke")
@@ -172,12 +279,14 @@ func _check_grooming_gestures() -> void:
 	_check(not _touch.is_painting(), "a second finger stops painting")
 
 	var yaw: float = _session.get("_yaw")
+	var distance: float = _session.get("_distance")
 	_touch.feed_drag(10, Vector2(620, 300), Vector2(20, 0))
 	_touch.feed_drag(11, Vector2(720, 300), Vector2(20, 0))
 	await _frames(2)
 	_check(not is_equal_approx(float(_session.get("_yaw")), yaw), "two-finger drag orbits the groom camera")
+	_check(is_equal_approx(float(_session.get("_distance")), distance),
+		"orbiting with a steady gap does not zoom the camera")
 
-	var distance: float = _session.get("_distance")
 	_touch.feed_drag(10, Vector2(560, 300), Vector2(-60, 0))
 	_touch.feed_drag(11, Vector2(760, 300), Vector2(60, 0))
 	await _frames(2)
@@ -207,6 +316,26 @@ func _check_select_swipe() -> void:
 	_touch.feed_touch(20, Vector2(700, 360), false)
 	_check(not _touch.is_swiping(), "lifting the finger ends the swipe")
 	_touch.set_mode("ride")
+
+
+func _check_simultaneous_thumbs() -> void:
+	# The reported problem: moving right with the left thumb while the right
+	# thumb turns the camera.  Both fingers must keep their own job and the
+	# stick must not so much as flinch.
+	_touch.feed_touch(40, Vector2(200, 500), true)
+	_touch.feed_drag(40, Vector2(280, 500), Vector2(80, 0))
+	await _frames(2)
+	var steering: Vector2 = _touch.get_move_input()
+	_check(steering.x > 0.5 and absf(steering.y) < 0.05, "the stick holds a rightward push")
+	_touch.feed_touch(41, Vector2(960, 320), true)
+	for i in range(6):
+		_touch.feed_drag(41, Vector2(970 + i * 10, 320), Vector2(10, 0))
+	await _frames(2)
+	_check(_touch.get_move_input().is_equal_approx(steering), "a look drag leaves the stick push untouched")
+	_check(int(_touch._stick_index) == 40, "a right-hand drag cannot steal the stick")
+	_touch.feed_touch(41, Vector2(1020, 320), false)
+	_touch.feed_touch(40, Vector2(280, 500), false)
+	await _frames(2)
 
 
 # --- Helpers ----------------------------------------------------------------

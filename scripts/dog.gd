@@ -43,11 +43,11 @@ const ACTIVE_STATES := [
 @export var gravity := 20.0
 
 @export_group("Home")
-@export var home_radius := 6.0
+@export var home_radius := 9.0
 @export var home_leash := 22.0
 
 @export_group("Following")
-@export var follow_radius := 8.0
+@export var follow_radius := 12.0
 @export var follow_stop_distance := 1.15
 @export var heel_offset := Vector3(0.8, 0.0, 1.0)
 @export var sit_after_seconds := 2.5
@@ -61,10 +61,10 @@ const ACTIVE_STATES := [
 @export var sniff_radius := 2.0
 
 @export_group("Greeting and petting")
-@export var greet_radius := 7.0
+@export var greet_radius := 10.5
 @export var greet_distance := 1.25
 @export var greet_time := 1.4
-@export var pet_range := 1.6
+@export var pet_range := 2.4
 @export var pet_time := 1.8
 
 @export_group("Needs")

@@ -5,7 +5,7 @@
 [ext_resource type="Script" path="res://scripts/dog_animator.gd" id="3_animator"]
 
 [sub_resource type="BoxShape3D" id="BoxShape_dog"]
-size = Vector3(0.16, 0.2, 0.34)
+size = Vector3(0.24, 0.3, 0.51)
 
 [sub_resource type="CylinderMesh" id="Cylinder_bowl"]
 top_radius = 0.085
@@ -54,7 +54,7 @@ position = Vector3(0, 0.1, 0)
 shape = SubResource("BoxShape_dog")
 
 [node name="Model" parent="Body" instance=ExtResource("1_model")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+transform = Transform3D(-1.5, 0, 0, 0, 1.5, 0, 0, 0, -1.5, 0, 0, 0)
 
 [node name="Animator" type="Node" parent="Body"]
 script = ExtResource("3_animator")

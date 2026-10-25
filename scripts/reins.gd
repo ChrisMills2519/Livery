@@ -7,6 +7,8 @@ extends Node3D
 ## being baked into either rig.  That keeps it attached through walk, trot,
 ## canter and the jump, and lets the hands shorten the rein naturally.
 
+var _lead_rope_side := "R"  # tracks which side the lead rope is on: "L" or "R"
+
 @export var width := 0.046
 @export var segments := 9
 @export var sag_ratio := 0.11
@@ -67,17 +69,26 @@ func _process(_delta: float) -> void:
 	_immediate.surface_end()
 
 
-## On foot the handler holds one rope.  Use the side whose hand and bit are
-## closest, so the leather does not have to cross the horse's neck.
+## On foot the handler holds one rope.  The lead rope stays on one side
+## unless the player clearly moves to the other side, preventing awkward
+## mid-rope hand switches.
 func _add_lead_rope() -> void:
 	var bit_left: Vector3 = _horse.get_bit_anchor("L")
 	var bit_right: Vector3 = _horse.get_bit_anchor("R")
 	var hand_left: Vector3 = _player.get_hand_anchor("Left")
 	var hand_right: Vector3 = _player.get_hand_anchor("Right")
-	if bit_right.distance_to(hand_right) < bit_left.distance_to(hand_left):
+	var mounted: bool = _player.mounted
+	var leading: bool = _player.get("leading") == true
+
+	# If leading, lock the rope to the right hand so it never changes
+	if leading:
 		_add_rein(bit_right, hand_right)
 	else:
-		_add_rein(bit_left, hand_left)
+		# Not leading: use the closer side to avoid crossing the neck
+		if bit_right.distance_to(hand_right) < bit_left.distance_to(hand_left):
+			_add_rein(bit_right, hand_right)
+		else:
+			_add_rein(bit_left, hand_left)
 
 
 func _add_rein(bit: Vector3, hand: Vector3) -> void:

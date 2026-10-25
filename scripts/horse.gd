@@ -581,10 +581,19 @@ func _ride(delta: float) -> void:
 			velocity.z = move_toward(velocity.z, 0.0, deceleration * delta)
 		return
 
-	var dir := rider.global_transform.basis * Vector3(input.x, 0, input.y)
+	# The horse follows the same steering frame as the walk: camera-relative
+	# while the view is free, frozen while a touch stick is pushed.  Godot's
+	# forward is -Z and Input.get_vector puts forward on the negative Y axis, so
+	# the raw (x, 0, y) already points where the rider is pushing; only the frame
+	# comes from the view.  Multiplying a forward vector by input.y instead
+	# swaps W and S.
+	var yaw := rotation.y
+	if rider.has_method("steer_yaw"):
+		yaw = float(rider.call("steer_yaw"))
+	var dir := Basis(Vector3.UP, yaw) * Vector3(input.x, 0.0, input.y)
 	dir.y = 0.0
-	dir = dir.normalized()
-	_face(dir, delta, ridden_turn_speed)
+	if dir.length_squared() > 0.001:
+		_face(dir.normalized(), delta, ridden_turn_speed)
 
 	# Airborne steering is limited to body rotation; the horse keeps the
 	# momentum it left the ground with.

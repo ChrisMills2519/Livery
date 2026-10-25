@@ -54,6 +54,11 @@ func _process(delta: float) -> void:
 		Phase.OUT:
 			_set_alpha(_alpha + delta / _duration)
 			if _alpha >= 1.0:
+				# Free the outgoing scene before the synchronous load.  Godot's
+				# change_scene keeps the old scene resident until the new one has
+				# loaded, which doubles the peak on the character-select handoff.
+				if get_tree().current_scene != null:
+					get_tree().unload_current_scene()
 				var err := get_tree().change_scene_to_file(_target)
 				if err != OK:
 					push_error("SceneFade: cannot change to %s (error %d)" % [_target, err])
