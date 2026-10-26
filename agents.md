@@ -1,217 +1,229 @@
-# Groom — devlog and troubleshooting notes
+# Groom — invariants and gotchas
 
-## Incompatible machine
+Rules an agent must not break, and the operational facts that are expensive to
+rediscover. This file is not a log: what happened, why, and what was measured
+lives in [devlog.md](./devlog.md) and in `git log`. If a rule here needs its
+story, follow the devlog entry it names.
 
-Godot 4.7.stable (GL Compatibility renderer) on a Chromebook Crostini container with *no real VRAM*:
+## The machine
 
-- Display: Wayland via XWayland, `DISPLAY=:0`, `XDG_SESSION_TYPE=wayland`
-- GPU: Intel UHD "Jasper Lake" (VirGL / Mesa 22.3.6) → `OpenGL API 4.3`
-- RAM: ~2.7 GB total, ~1.7 GB available, no swap
-- Godot: `/usr/local/bin/godot` 4.7.stable.official
-- MCP driver: `@keeveeg/godot-mcp` (npx), 386 tools, connected as the `godot` server in `~/.agents/mcp.json`
+Godot 4.7 (GL Compatibility) in a Crostini container on a Chromebook: Wayland
+via XWayland, Intel UHD "Jasper Lake" through VirGL, ~2.7 GB RAM, no swap, and
+**no real VRAM**. Two consequences:
 
-The project uses the GL Compatibility renderer and is ~51 MB of import cache (236 files) once warm.
+- Textures must stay **Lossless** with `detect_3d/compress_to=0`, or the editor
+  segfaults on a cold import. See below.
+- The browser here has **no WebGL2**, so a local browser run can only prove the
+  page and assets load. Rendering and touch feel have to be checked on the iPad
+  or another GPU-backed browser.
 
-## The crash you saw
+## Textures and imports
 
-`godot` crashes with `SIGSEGV / signal 11` (sometimes crashing the whole system) when the editor starts on a *cold* import cache and has to import the 118 project assets (47 GLB models) for the first time. You saw it twice, and both times it showed that exact log.
+- `Models/lowpoly_trees_0.png`, `Models/low_poly_nature_assets_1_0.jpg` and
+  `Models/horse_riggedgame_ready_0.png` stay on `compress/mode=0`. They were the
+  three that crashed the editor on this machine.
+- Every `.import` file keeps `detect_3d/compress_to=0`, so neither a re-import
+  nor a 3D probe can flip a texture into VRAM compression later.
+- Normal-map detection may set `compress/normal_map=1`; that is fine and is not
+  the crash. Such a texture still has to be `compress/mode=0` with
+  `detect_3d/compress_to=0`.
+- `tools/check_editor_load.gd` is the guard. It loads every scene under
+  `res://scenes` (the list drifted when it was hand-written) and fails on a
+  VRAM-compressed or `detect_3d`-enabled texture, including the seven interior
+  textures `INTERIOR_TEXTURES` names. Do not widen it to sweep all of
+  `Models/interior/`; measure first.
+- The `ERROR: Attempting to parent and popup a dialog that already has a parent`
+  lines during a reimport are Godot [#77426](https://github.com/godotengine/godot/issues/77426)
+  and come from the editor's import dialog. This project has no such code.
+- A cold checkout needs `--headless --editor --quit` to build the cache before
+  any scene loads; `tools/check_all.sh` does it automatically.
+- The web export re-encodes textures for ETC2 on purpose (`export_web_mobile.py`),
+  so the mobile build and the desktop import settings are allowed to differ.
 
-Later (after all fixes below) testing reproduced it 7/7 times and then comfortably survived. Root cause is fixed.
+## Touch input
 
-## Root cause
+The touch layer is `scripts/touch_controls.gd`; `scripts/device.gd` picks the
+mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
 
-A small number of textures in the project are set to **VRAM Compressed (S3TC/BPTC)** by their `.import` files. That is exactly the thing that crashes on this machine — there is no persistent VRAM for the GPU to upload those compressed textures to.
-
-In particular, the three textures named in your crash log:
-
-- `Models/lowpoly_trees_0.png`
-- `Models/low_poly_nature_assets_1_0.jpg`
-- `Models/horse_riggedgame_ready_0.png`
-
-were set to `compress/mode=2` (VRAM‑compressed). In Godot 4 text mode, `compress/mode=2` means VRAM‑compressed. These are 1024x1024 images, so even once the crash is gone the loss in memory is small (around 16 MiB lossless versus 4 MiB compressed).
-
-Every other import file in the project was 0 (Lossless), and the clone/project you are using for this is otherwise plain.
-
-## Fix (already applied here)
-
-1. Set all three to `compress/mode=0` (Lossless) in their `.import` files.
-2. Set `detect_3d/compress_to=0` in every other `.import` file so that neither on‑import reimport nor 3D reprobe will auto‑switch any texture to VRAM compression again.
-3. Re‑import the whole project via `godot --headless --editor --quit --path .` so the cache is fully built with the corrected settings.
-
-The plugin and the project editor are otherwise unchanged.
-
-## A side bug in the same scene
-
-The 3D scene `scenes/stable.tscn` contained four CollisionShape3D nodes all named `%sShape` as children of `PaddockCollision` — duplicate sibling names, which would produce Godot’s “name clash” dialog during scene reload. Those were renamed to `ColX_A`, `ColX_B`, `ColZ_A`, `ColZ_B`. No scripts were found to reference that name, so the rename is safe.
-
-## MCP / agent setup here
-
-- The Godot editor plugin for the AI agent lives at `addons/godot_mcp/plugin.cfg` and is registered in `project.godot` under `[editor_plugins]`. You connect to it via `@keeveeg/godot-mcp` (npx), giving you 386 Godot tools.
-- The connector config in `~/.agents/mcp.json` has a `godot` server entry that runs `cd /home/chrismills029/liv/groom && exec npx -y @keeveeg/godot-mcp`. **You must open the Godot editor on this project for MCP tools to work.**
-- There is also a headless fallback connector (`godot-headless`) using `@coding-solo/godot-mcp` (14 tools) that you can keep as a backup; it works without the GUI editor.
-- A helper script `tools/safe_editor.sh` exists. It used to be treated as the solution but its comments now reflect the corrected root cause — it is a *belt and braces* renderer-safe hydration script only.
-
-## A note on what this is *not*
-
-- The crash is not a project-data problem. Headless re‑importing all assets finishes successfully, and the exported game runs headlessly without errors.
-- It is not the Godot MCP plugin. We tested with the plugin removed entirely (the server entry in `~/.agents/mcp.json` too) and the crash still happened.
-- It is not the editor side of Godot itself. Even on a clean, newly-imported headless build, the same textures crashed if left VRAM-compressed. It is a texture-compression configuration issue.
-- It is not a memory exhaustion problem. Peak memory during cold runs was about 850–940 MB, well under the ~1.7 GB available.
-
-## Normal-map auto-detection looks alarming but is safe
-
-Godot 4.7 rewrites `.import` files the first time it sees a texture used as a normal or roughness map. The editor prints, once per texture:
-
-```
-...: Texture detected as used as a normal map in 3D. Enabling red-green texture compression to reduce memory usage (blue channel is discarded).
-...: Texture detected as used as a roughness map in 3D. Enabling roughness limiter based on the detected associated normal map at ...
-```
-
-This only sets `compress/normal_map=1` and `roughness/mode=1`. It is **not** the VRAM-compression crash: with `compress/mode=0` the image is still stored lossless (WebP/PNG inside the `.ctex`), and the normal-map flag only changes mipmap generation. The 14 textures under `Models/split/` whose `_Image_2.png` files were detected in October 2026 are genuinely normal maps (flat `128,128,255`), so the change is correct; the 14 edits are legitimate.
-
-The `ERROR: Attempting to parent and popup a dialog that already has a parent.` lines that arrive at the same time come from the editor's import progress dialog, one per reimported texture, and are the known benign Godot issue [#77426](https://github.com/godotengine/godot/issues/77426). They are not project code: this project has no `Window`/`AcceptDialog`/`.popup*()` usage. They stop when the reimports finish and need no fix.
-
-`tools/check_editor_load.gd` guards the dangerous case: it fails if a normal map is VRAM-compressed or if its `detect_3d/compress_to` is nonzero, so it cannot silently flip to `mode=2` later.
-
-## Touch controls and the touch-first rule
-
-- `Device` (`scripts/device.gd`) picks the input mode. Force it with `GROOM_TOUCH=1` or `GROOM_TOUCH=0`. In debug builds, F3 toggles it at runtime.
-- `TouchControls` (`scripts/touch_controls.gd`) owns the stick, look drag, CONTEXT / JUMP / LEAD / RESET cluster, grooming gestures and select swipe. It reads raw fingers, so don't route touch through Buttons on the play surface: emulated mouse only follows the first finger.
-- **A pushed touch stick owns the movement frame.** `player_controller.steer_yaw()` returns the yaw captured when the thumb pushed the stick (`TouchControls.is_stick_pushing()`), and both the walk and `horse._ride()` map input through it. Releasing the stick hands the frame back to the camera. Keyboard and mouse are unchanged, so never swap this for a live `transform.basis` or the right thumb starts re-aiming again.
-- **The root carries the view; the model carries the facing.** The player's `rotation.y` is the camera yaw: `_look()` turns it, the camera hangs off it, and the tooling aims with it. `_body_yaw` is where the character actually faces, and `_turn_body()` eases it toward the walk direction at `BODY_TURN_SPEED`, writing the model's local yaw as `_model_base_yaw + wrapf(_body_yaw - rotation.y, -PI, PI)` - the same wrap the mounted rider uses. Do not rotate the root toward the movement direction instead: the camera would swing with every step and every `player.rotation.y` aim in `tools/` would stop meaning "look this way". Footprints read `facing_yaw()` for the same reason.
-- **Movement is the raw input vector rotated by the steering yaw.** `Input.get_vector` puts `move_forward` on the *negative* Y axis, because Godot's forward is -Z, so `Basis(Vector3.UP, steer_yaw()) * Vector3(input.x, 0, input.y)` is the walk direction and the same expression steers the horse. Building a forward vector (`-basis.z`) and multiplying it by `input.y` applies that negation a second time and swaps W and S; that inversion has been introduced once already.
-- **The grooming session owns the player body.** It calls `player.set_model_hidden(true/false)`; `_update_model_visibility()` must keep its early return, or the camera rule turns the body back on a frame after the session hid it (`check_groom` fails on exactly that).
-- **Touch grooming cleans above the thumb.** `TOUCH_BRUSH_OFFSET` lifts the paint point (and with it the red/green disk) 64 px, falling back to the finger when the lifted ray misses. The hoof pick stays on the finger. Touch painting must not use `_hud.is_pointer_over_ui()`; that hover belongs to the mouse path.
-- **Two-finger orbit is sampled per frame** in `TouchControls._process`, and only zooms once the gap changes by more than `PINCH_TRIGGER` (10%) from where the second finger landed. Measuring per drag event, or zooming below the trigger, makes the camera fight the orbit.
-- Touch look runs at `LOOK_GAIN` (0.55) of the mouse rate on purpose. Movement is camera-relative, so a 1:1 drag re-aims the heading mid-look and reads as spinning. Don't raise it toward 1.0; the mouse path is unaffected.
-- The stick takes over from any finger resting in its half (`STICK_REST`), re-arms on a repeated press for an index whose release was lost, and is released on focus loss. Keep those guards: the stick is the only movement input on touch.
-- **A stick holder that has gone quiet is claimable.** iOS Safari cancels a touch instead of ending it (edge back-swipe, its toolbar moving, a system gesture, palm rejection) and Godot's web input has no event for that, so `_touch_up` never runs and `_stick_index` keeps pointing at a finger that no longer exists. `_stick_is_available()` therefore also clears a holder that has not reported for `STICK_STALE_MS` (250 ms), `_process` drops an index with no entry behind it, and an "idle" finger that pushes past `STICK_REST` takes over rather than staying a passenger. Without those three, every later left-half press is filed "idle" and the stick is dead for the rest of the scene - that was the "left stick does nothing on the phone" report, and `check_touch` now fails if any of them regresses.
-- Only the finger that owns the stick may release it (`_touch_up` checks `_stick_owned and index == _stick_index`). A late touch-up from a holder that was already demoted must not kill the thumb that took over; that ordering is what makes the recovery safe.
-- **Ownership is `_stick_owned`, never the sign of `_stick_index`.** iOS Safari's touch identifiers climb for the life of the page and overflow into a negative int32 - a real iPhone reported `-410517893` - so `-1` is not the only "no stick" value, and `_stick_index < 0` was true for a live stick. Every ownership test reads the flag: `get_move_input()`, `is_stick_active()`, `is_stick_pushing()`, the stale-holder drop in `_process`, `_stick_is_available()`, `_adopt_idle_stick()`, `_touch_up()` and `_draw_stick()`. With a negative index the old sign test made `get_move_input()` return bare keyboard input, so neither the walk nor the horse moved, the ring was never drawn and the steering frame stayed on the camera; `check_touch` now drives a `-410517893` finger through arming, steering, walking and release. Never reintroduce a sign test on the index.
-- None of this changes movement. Which finger owns the stick is routing; the camera-relative mapping, the frozen `steer_yaw()` frame, the body turn, the gait ramp and every feel constant stay exactly as they are. Do not "fix" a stick fault by changing how input becomes a direction.
-- `?touchdebug=1` (or `GROOM_TOUCH_DEBUG=1`) draws two lines of state on screen - mode, viewport, fps, each finger's role, the stick owner and the move vector, then the player's `ctrl`/`mnt`/`seat`/`air` flags with the value `get_move_input()` returns (`in`), the resolved `vel` and its `pos`. The player line is what separates the three failures that all look like "no movement": `in` zero is routing, `in` set with `vel` near zero is a blocked or repositioned body, and a low `fps` is the phone not stepping physics. It is the only way to read the phone's internals without a console, the draw path is exercised by `tools/screenshot_touch.gd` under `GROOM_TOUCH_DEBUG=1`, and it sits on a dark plate below the wallet block because the HUD prompt crosses that band on a phone.
-- **Touch-first rule for new work:** every new player-facing interaction needs a touch path in the same change. That means a CONTEXT offer (a `touch_context()` method in the `touch_context` group) or a gesture, plus a `Device.pick(keyboard, touch)` prompt. Never hardcode a key name in prompt text.
-- Every new interaction also gets a case in `tools/check_touch.gd`. Keyboard-only tests should say so.
-- A `--script` check cannot name an autoload **global** — `SaveGame.foo` is a compile error even though the node exists at `/root`. Resolve it by path (`root.get_node("SaveGame")`) and leave the variable untyped, so the calls stay dynamic. Timing matters too: the tree is not live inside `_initialize()`, so `await process_frame` before touching a `get_tree()`-dependent path.
-- Known check status before the touch work: `check_character_select` already failed (handoff timeout), and `check_lead` was flaky. `check_dog` also fails occasionally on timing.
-
-## Web build and the R2 deploy
-
-- **Only deploy when the user explicitly asks.** Never deploy or re-deploy as a side effect of another change (a gameplay fix, a doc edit, a "while I'm here" upload), and never export-and-push to refresh the site on your own initiative. Build and test locally as much as you like; wait for the word before anything reaches the bucket. When they do ask, deploy only what they asked for and say which objects and host you touched. `tools/release.sh` is a deploy, not a convenience: running it needs the same word.
-- Browser builds go through the `Web` preset in `export_presets.cfg`. It is single-threaded on purpose, so the host needs no `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers.
-- Export, then publish. There is no hosting config file any more: the response headers live in `tools/deploy_r2.py`, because R2 serves them from object metadata.
-- `tools/release.sh` is the release, so a new version is one command and no secret is typed: export, brotli, upload, then assert the live host. `--dry-run` stops after the wire sizes, `--skip-export` publishes the export already in `build/web-mobile`. It exits 1 while the game is on its `r2.dev` address, because the check's one expected failure is `/` -> 404; the script says so on the way out and the custom domain clears it. Do not add a flag to swallow that status.
-
-```bash
-cd /home/chrismills029/liv/groom
-tools/release.sh                    # export, brotli, upload, check the host
-tools/release.sh --dry-run          # the same, but report the sizes and upload nothing
-tools/release.sh --skip-export      # publish build/web-mobile exactly as it stands
-python3 tools/deploy_r2.py --only index.pck   # refresh a single object
-```
-
-- The two binaries are stored brotli-compressed and served with `Content-Encoding: br`, which is the reason for this host: 84.0 MiB pck -> 42.9 MiB and 37.7 MiB wasm -> 7.6 MiB. Godot asks for `index.pck` by name, so the object keeps its name; the encoding does the work, not a renamed file. A cold visit is about 50.9 MiB instead of the ~93 MiB Netlify was sending, because it never compressed the pck. Everything but the icons is served `no-cache` and revalidated (`If-None-Match` -> 304), not given an hour of blind reuse: an hour kept the *previous* pck on a phone that had already played, so a device test could measure code that had already been replaced.
-- Credentials live in `.env` beside the repo root: an R2 API token with *Object Read & Write* scoped to the bucket as `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`, plus `R2_ACCOUNT_ID`, `R2_BUCKET` (default `livery-web`) and `R2_HOST`. `tools/deploy_r2.py` loads that file before it builds its argument parser, and a variable already set in the real environment wins, so an override on the command line still works. The file is git-ignored and mode 600 (check with `git check-ignore -v .env`, do not assume); never commit it and never paste its values into a chat, an issue or a log. The tool reads the `R2_` names only — `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` are ignored, and a run given only those falls through to the `cf` route, which cannot work: minting one-hour keys needs `--parent-access-key-id`, a parent key that does not exist, and `cf accounts tokens permission-groups list` answers `403 [9109]`. If `cf` complains that it needs Node.js v22 or newer, put the nvm bin directory first on `PATH` — it resolves `node` through `/usr/bin/env`.
-- Two R2 behaviours the host checks depend on, both of which produce convincing false failures if removed. **The stored brotli representation is only returned to a client that advertises `Accept-Encoding: br`** — curl or urllib without it gets the edge's decoded copy (`Transfer-Encoding: chunked`, no encoding header, the full 84 MiB), which reads as an upload that did not happen. **A request carrying an unadvertised user agent is refused with `error code: 1010` and a 403**, which is what urllib's default UA gets on this host. `--check` therefore sends a browser UA and `Accept-Encoding: br`; it reported every object as a mismatch until it did.
-- `--check` has exactly one expected failure while the game runs on its `r2.dev` address: `/` answers 404, because a public bucket has no index document. That clears once the bucket has a custom domain and a Redirect Rule from `/` to `/index.html`.
-- Add `?touch=1` or `?touch=0` to the game URL to force an input mode; without it the build decides from the touchscreen and `mobile` features, which an iPad reports as touch.
-- **Every export is stamped with its own build.** The exporter writes `build <UTC time>  <short commit>[+local]` into the loading screen's `#status` block in `index.html` and into the staged `project.godot` as `application/config/version`, so the page and the pack carry the same string and a stale one of either disagrees visibly. `+local` means tracked files had uncommitted edits, and the timestamp is what separates two builds of one commit - a hash alone cannot. `?touchdebug=1` shows the same string first on its line, so the build can be read mid-session, and `python3 tools/deploy_r2.py --check` fails if the live `index.html` is not serving the stamp in the local export. When someone reports "the fix did not arrive", read the stamp before re-testing anything.
-- Hosts already ruled out, so nobody spends an afternoon rediscovering them:
-  - **Netlify** paused the site on 26 Oct 2026 with `503 usage_exceeded`. Its credit-based Free plan buys roughly 15 GB/month of transfer, which a 93 MiB cold load spends in a few hundred plays.
-  - **Cloudflare Pages and Workers static assets** cap a single file at 25 MiB, so neither can hold the pck or the wasm.
-  - **Vercel Hobby** is personal/non-commercial only and caps a CLI upload at 100 MB.
-  - **R2 custom domains** need the zone in the same Cloudflare account as the bucket; the `r2.dev` URL is rate-limited and is for smoke tests only.
-- `.netlify/` stays git-ignored for old checkouts, but nothing deploys there any more.
-- This machine's Chromium has no WebGL2, so the browser preview can only prove the page and assets load. Rendering has to be checked on the iPad or another GPU-backed browser.
-
-## The farmhouse interior
-
-- `scenes/farmhouse.tscn` is a fully furnished two-storey farmhouse: sitting room, kitchen, hall, study and boot room downstairs; two bedrooms, bathroom, landing and gallery upstairs. The clear footprint is 19.05 x 15.59 m (three times the old 11 x 9 m floor area per room), with 3.0 m ground ceilings and 2.88 m upstairs. It is entered from the fantasy house in `scenes/main.tscn` and returns there through its front door.
-- It is generated. `godot --headless --path . --script res://tools/build_farmhouse.gd` rewrites the scene, so change the plan tables at the top of that script (rooms, `WINDOWS`, `DOORS`, stair constants, the prop list, lamps) and not the `.tscn` by hand.
-- Windows and doors are declared once in those tables; the wall openings, frames, sills, glass and leaves are all derived from them, so a moved opening cannot drift from its hole. The scene publishes the built `windows` and `doors` arrays as metadata, and `check_farmhouse` reads them rather than a second hand-copied list.
-- There are no interior door leaves. The eight interior doorways are wide cased openings (1.6-1.8 m, heads at 2.45 m; 2.4 m between sitting room and kitchen); only the front and back exterior doors keep leaves. Do not reintroduce `scripts/interior_door.gd` into the house.
-- Assets are Kenney's Furniture Kit and Food Kit, Quaternius's Ultimate House Interior, Shapespark's textiles, and Poly Haven plaster/floor/detail textures in `Models/interior/` (all CC0); provenance is in `Models/interior/SOURCE.txt`. The kit's models are roughly half life size and their pivots are offset, so `_prop` measures, centres and drops each one — do not nudge props by hand in the scene. The Quaternius round carpets are authored upright, so floors use Kenney's flat rugs.
-- Furniture surfaces come from one shared material per real material, built by `_surface()` in the generator and saved once in the scene. The detail maps (`Models/interior/textures/detail_*`) are neutral-luminance greys at a 0.90 mean and are multiplied over the kit's own opaque colours, so the palette is unchanged; `_detail_gain` lifts the albedo by the reciprocal of the map's linear mean so the tone stays put. Kit materials are matched by name (`KIT_SURFACE`), Quaternius by name prefix (`_quat_surface`), and the Food Kit's 34 models all share the restored `kenney_food_kit/Textures/colormap.png` atlas. Do not go back to duplicating a material per prop, and do not give the furniture normal or ORM maps: this is the Compatibility renderer on a tablet, and one extra fetch per surface is the whole budget.
-- `_prop` flattens each downloaded model into its own nodes instead of instancing the GLB. Instancing plus a surface override makes Godot save a duplicate clone of the mesh beside the instance, which renders twice and doubles that prop's triangles; flattening also lets every copy of a model share one mesh resource. Merged groups (`"merge":` in the PROP calls) fold a whole place setting into one mesh per material, and keep their piece count in the `merged_parts` meta that `check_farmhouse` reads.
-- `tools/check_interior_cost.gd` is the speed budget: 980 mesh instances, 112k triangles, 115 materials, 60 textured materials, 20 textures and 20 MB of decoded texture memory for the house. It is deliberately tight; raise a number in the same change that needs it. `tools/check_editor_load.gd` guards the seven interior textures the house depends on (`INTERIOR_TEXTURES`: the four detail maps, the Food Kit atlas and the two 1k shell maps): lossless, mipmapped, with `detect_3d/compress_to` at 0. It loads every scene it finds under `res://scenes` instead of a hand-written list, because that list drifted and named two scenes that were never committed. The wall and floor maps are mipmapped on purpose even though the texture pass did not require it: they tile across the largest surfaces in the house and shimmer at a distance without mips, which is about 2.8 MB of decoded VRAM inside the 20 MB budget. Do not widen the check to sweep all of `Models/interior/`, and do not drop those two from the list without measuring first.
-- Seats and beds are `scripts/interior_spot.gd` nodes under `Seats`. Adding one means adding it to the generator and to `tools/check_farmhouse.gd`, which asserts the count.
-- The stair is L-shaped: lower flight up the east wall to a quarter landing, upper flight west along the south wall, finishing on the gallery. The stair constants at the top of the generator define both flights and the two well openings; `_walk_ramp` lays the walkable ramp for each flight, and the treads are decoration. The controller has no step-up logic, so no flight may pitch past 45 degrees and every ramp end must meet floor exactly — a lip stops the player dead.
-- Balustrades are shoe, spindles and handrail with an invisible solid barrier behind them. Add collision with any new guard: the check walks at the well edges and at the open side of the flight.
-- The front door is at z = 2.68 on the east wall, clear of the stair foot, and its inside spawn is `(8.35, 0.05, 2.68)` facing west. The study opening sits under the high end of the upper flight. Moving either means checking the stair geometry again.
-- Interiors carry camera metadata on their root (`camera_max_boom`, `camera_pivot_height`, `camera_shoulder`). Do not use a group for this: `PackedScene` drops groups added after the root is created, which is how the 3 m outdoor boom stayed active in the house. `_apply_camera_profile()` walks up from the player to the metadata. `player_controller.gd` resolves the on-foot camera with a `ShapeCast3D` sphere (0.28 m) against walls and furniture: direct shoulder line, then a lateral line within 35 degrees (chair/desk behind), then a 0.45-0.95 m look-down from above the head (wall corner or doorway, only while the normal boom is under 0.90 m; the lower lifts fit under a door head). When the clear line is around a blocker it steps onto that line at a 0.62 m radius before easing out; without that step the straight ease crosses the blocker and stays pinned at the head. The body hides only below 0.58 m. The ride camera resets its pitch when mounted. The outdoor camera keeps its 3 m boom. The old ray-and-lerp camera is gone, so do not add a second clip path.
-- The front door links both ways through `scripts/scene_door.gd`: the yard node is `FrontDoor` in `scenes/main.tscn`, the interior node is `FrontDoorExit` and comes from `_build_exit_door()` in the generator. Do not add it by hand to `farmhouse.tscn`. The interior leaf has its own collider, and the fantasy house has an invisible `5.9 x 3.5 x 5.9` shell so neither can be walked through.
-- If you change either link, use `GameState.request_player_spawn(position, yaw_degrees)`; `scripts/player_controller.gd` consumes it on load. Do not hardcode player positions in the scenes.
-- Checks: `godot --headless --path . --script res://tools/check_farmhouse.gd`, `res://tools/check_walkthrough.gd` and `res://tools/check_scene_doors.gd`. The first covers the ten room areas, no interior leaves, walkable cased openings, solid walls, all 32 windows, both stair flights walked on foot, furniture in every room, seats/resting and the indoor camera profile. `check_walkthrough` takes about two minutes and walks every route in motion, including both stair flights and camera sweeps into corners; it is the one that catches a doorway blocked by furniture or a camera that pops. Its settled floors are 1.0 m for a room and 0.90 m for a backed-into corner, with the body visible; do not lower them to the 0.35 m safety clamp, which is only for a true last resort. The door check in `check_farmhouse` sweeps a player-sized capsule, so a centre ray alone is not enough. `check_scene_doors` covers both links, the house shell, prompt, leaf collider and spawn handoff. `tools/check_editor_load.gd` also loads `farmhouse.tscn`.
-- Screenshots: `tools/screenshot_farmhouse.gd` renders eight views. Pass names after `--` to render only some (`-- plan_ground bathroom`); the `plan_*` views hide the ceiling and the storey above. They restore the original visibility before each plan view, so render the upper plan before the ground plan when rendering both. `tools/screenshot_camera.gd` renders the player's own camera at the sitting corner (backed in), study desk, bath and landing; it keeps the body visible, and writes `artifacts/camera_*.png`. Run both under `xvfb-run` with `--rendering-driver opengl3` and `--resolution 1280x720`.
+- **Every player-facing interaction needs a touch path in the same change:** a
+  CONTEXT offer (`touch_context()` on a node in the `touch_context` group) or a
+  gesture, plus a `Device.pick(keyboard, touch)` prompt. Never hardcode a key
+  name in prompt text.
+- `TouchControls` reads raw fingers, so do not route play-surface touch through
+  `Button`s: emulated mouse only follows the first finger.
+- **Ownership is `_stick_owned`, never the sign of `_stick_index`.** iOS touch
+  ids climb and overflow into negative int32; a real iPhone reported
+  `-410517893` and every `_stick_index < 0` test read a live stick as absent.
+- A stick holder that has gone quiet is claimable (`STICK_STALE_MS`, 250 ms):
+  iOS Safari cancels a touch instead of ending it, so `_touch_up` never runs.
+  Only the finger that owns the stick may release it.
+- **A pushed stick owns the movement frame.** `player.steer_yaw()` returns the
+  yaw captured at the push, and `horse._ride()` maps through the same frame.
+  Do not replace it with a live `transform.basis`; the right thumb starts
+  re-aiming the walk again.
+- **The root carries the view; the model carries the facing.** `rotation.y` is
+  the camera yaw and what every `tools/` aim means; `_body_yaw` eases toward
+  travel and is written as `_model_base_yaw + wrapf(_body_yaw - rotation.y, -PI, PI)`.
+- **Movement is the raw input vector rotated by the steering yaw:**
+  `Basis(Vector3.UP, steer_yaw()) * Vector3(input.x, 0, input.y)`. Building a
+  forward vector and multiplying by `input.y` applies Godot's forward-is-`-Z`
+  negation twice and swaps W and S. That inversion has been introduced once.
+- Touch look runs at `LOOK_GAIN` (0.55) of the mouse rate on purpose; movement is
+  camera-relative, so a 1:1 drag reads as spinning. Do not raise it toward 1.0.
+- Two-finger orbit is sampled **per frame** and only zooms once the gap changes
+  by more than `PINCH_TRIGGER` (10%). Below that it is pure orbit.
+- Touch grooming cleans **above** the thumb: `TOUCH_BRUSH_OFFSET` (0, -64) lifts
+  the paint point and its disk, falling back to the finger when the lifted ray
+  misses. The hoof pick stays on the finger. Touch painting must not consult
+  `_hud.is_pointer_over_ui()`.
+- The grooming session owns the player body (`set_model_hidden`), and
+  `_update_model_visibility()` must keep its early return or the camera rule
+  turns the body back on a frame later.
+- `?touchdebug=1` (`GROOM_TOUCH_DEBUG=1` locally) draws two lines: the layer's
+  state, then the player's `ctrl/mnt/seat/air`, `in`, `vel`, `pos`. `in` zero is
+  routing, `in` set with `vel` zero is a blocked body, low `fps` is the phone not
+  stepping physics. It is the only way to read a phone with no console.
 
 ## Horse progress
 
-- Progress lives in the `HorseState` autoload, never on the horse node. The horse sits inside a scene and every door is a full scene change, so a value kept on that node is lost by walking into the farmhouse or the showground - and because `SaveGame` used to read the horse in the current scene, a show entry fee wrote a pristine horse over the save. `horse._ready()` hydrates from the autoload; the horse records back at its own mutation points (`award_training`, `mark_hoof`, `apply_grooming_result`) plus `grooming_session.exit_session()`.
-- `record_from()` emits `changed`; `apply_to()` and `from_dict()` must not, or a load or a spawn queues another save behind itself. `record_from()` ignores an empty `export_mask()`, because that is what an unbaked surface returns.
-- The coat bake still has to run on every spawn even when a mask is restored: it is what builds the zone map and the paint-gating table the brush needs.
-- `tools/check_horse_state.gd` is the guard. It earns training and a groom, then walks main -> farmhouse case -> main -> showground and asserts the stats, the coat bytes and the rosette survive.
+- Progress lives in the `HorseState` autoload, never on the horse node. The horse
+  sits inside a scene and every door is a full scene change, so a value kept on
+  that node is lost by walking into the farmhouse or the showground; and because
+  `SaveGame` used to read the horse in the current scene, a show entry fee wrote
+  a pristine horse over the save.
+- `horse._ready()` hydrates from the autoload; the horse records back at its own
+  mutation points (`award_training`, `mark_hoof`, `apply_grooming_result`) plus
+  `grooming_session.exit_session()`.
+- `record_from()` emits `changed`; `apply_to()` and `from_dict()` must not, or a
+  load or a spawn queues another save behind itself. `record_from()` ignores an
+  empty `export_mask()`, because that is what an unbaked surface returns.
+- The coat bake still runs on every spawn even when a mask is restored: it builds
+  the zone map and the paint-gating table the brush needs.
+- `tools/check_horse_state.gd` walks main -> farmhouse case -> main -> showground
+  and asserts the stats, the coat bytes and the rosette survive.
 
-## Reusable commands
+## Camera
 
-Hyper‑linked references:
+- Interiors carry `camera_max_boom`, `camera_pivot_height` and `camera_shoulder`
+  on their root. Do not use a group: `PackedScene` drops groups added after the
+  root exists, which is how the 3 m outdoor boom stayed active in the house.
+- `player_controller.gd` resolves the on-foot camera with a `ShapeCast3D` sphere
+  (0.28 m): direct shoulder line, then a lateral line within 35 degrees, then a
+  0.45-0.95 m look-down from above the head (only while the normal boom is under
+  0.90 m). A clear line reached around a blocker is stepped onto at 0.62 m before
+  easing out. The body hides only below 0.58 m. Do not add a second clip path.
+- `check_walkthrough` floors are 1.0 m in a room and 0.90 m backed into a corner,
+  with the body visible. The 0.35 m safety clamp is a last resort, not a target.
 
-- [Images: Low-poly nature assets](./Models/low_poly_nature_assets_1_0.jpg) — the 1024×1024 JPEG
-- [Images: lowpoly trees](./Models/lowpoly_trees_0.png) — the 1024×1024 PNG
-- [Images: Horse rigged game ready 0](./Models/horse_riggedgame_ready_0.png) — the 1024×1024 PNG
+## Scenes that are generated
 
-The way to start editing here:
+- `scenes/farmhouse.tscn` is written by `godot --headless --path . --script
+  res://tools/build_farmhouse.gd`. Change the plan tables at the top (rooms,
+  `WINDOWS`, `DOORS`, stair constants, props, lamps), never the `.tscn`.
+- Windows and doors are declared once; wall openings, frames, sills, glass and
+  leaves are derived from them. The scene publishes the built `windows` and
+  `doors` arrays as metadata and `check_farmhouse` reads those.
+- No interior door leaves: the eight interior doorways are cased openings
+  1.6-1.8 m wide with heads at 2.45 m. Do not reintroduce `interior_door.gd`.
+- Props are measured, centred and dropped by `_prop`; do not nudge them by hand.
+  `_prop` flattens each GLB instead of instancing it, so a prop's mesh is shared
+  and a surface override cannot duplicate the mesh. Do not give furniture normal
+  or ORM maps on this renderer.
+- Furniture surfaces are one shared material per real material. Detail maps are
+  neutral-grey and multiplied in, with `_detail_gain` compensating the mean.
+- Seats and beds are `interior_spot.gd` under `Seats`; adding one means adding it
+  to the generator and to `check_farmhouse`, which asserts the count.
+- The stair is L-shaped and the treads are decoration over a walkable ramp. The
+  controller has no step-up logic: no flight may pitch past 45 degrees and every
+  ramp end must meet floor exactly. Balustrades need collision behind them.
+- The front door is at z = 2.68 on the east wall with inside spawn
+  `(8.35, 0.05, 2.68)`; moving either means re-checking the stair geometry.
+- Doors link through `scripts/scene_door.gd`; a scene change spawn is requested
+  with `GameState.request_player_spawn(position, yaw_degrees)`, never hardcoded
+  in a scene.
+- `tools/check_interior_cost.gd` is the speed budget: 980 mesh instances, 112k
+  triangles, 115 materials, 60 textured materials, 20 textures, 20 MB of decoded
+  texture memory. It is deliberately tight; raise a number in the same change
+  that needs it.
+- `Models/interior/SOURCE.txt` records provenance (Kenney, Quaternius,
+  Shapespark, Poly Haven, all CC0).
+
+## Web build and the R2 deploy
+
+- **Only deploy when the user explicitly asks.** Never deploy or re-export as a
+  side effect of another change. `tools/release.sh` is a deploy, not a
+  convenience.
+- The `Web` preset is single-threaded on purpose, so the host needs no COOP/COEP
+  headers. Browser builds go through `tools/export_web_mobile.py`.
+- Hosting is a Cloudflare R2 bucket behind `R2_HOST`. Response headers are object
+  metadata written by `tools/deploy_r2.py`; there is no hosting config file.
+- The two binaries are stored brotli-compressed (q9) and served with
+  `Content-Encoding: br`: 84.0 MiB pck -> 42.9 MiB, 37.7 MiB wasm -> 7.6 MiB, a
+  cold visit of about 50.9 MiB. Everything except the icons is `no-cache` and
+  revalidated, so a device never keeps a previous pck.
+- Two R2 behaviours that produce convincing false failures: the stored brotli
+  representation is only served to a client advertising `Accept-Encoding: br`,
+  and an unadvertised user agent is refused with `error code: 1010` and a 403.
+  `--check` sends a browser UA and `Accept-Encoding: br` for that reason.
+- `--check` has one expected failure on `r2.dev`: `/` answers 404 because a
+  public bucket has no index document. `tools/release.sh` exits 1 while that is
+  the only failure and says so. Do not swallow the status.
+- Every export stamps `build <UTC>  <short hash>[+local]` into the loading
+  screen and into the packed `project.godot`, and `--check` fails if the live
+  page is not serving the local stamp. Read that stamp before re-testing a
+  report of "the fix did not arrive". `?touchdebug=1` shows it first.
+- Credentials live in `.env` (`R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_HOST`,
+  `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`), git-ignored and mode 600. The tool
+  reads the `R2_` names only; a run with just `AWS_*` falls through to the `cf`
+  route, which cannot work. Never paste a token into a chat, an issue or a log.
+- Hosts already ruled out: Netlify (paused for 503 usage on the free plan),
+  Cloudflare Pages and Workers static assets (25 MiB per-file cap), Vercel Hobby
+  (non-commercial, 100 MB upload cap). R2 custom domains need the zone in the
+  same account as the bucket.
+- Cloudflare has no hard R2 spend cap; the kill switch is deleting the bucket.
+- `?touch=1` / `?touch=0` force the input mode in the browser.
+
+## Checks
+
+- `tools/check_all.sh` is the single manifest: `--fast` (skips the motion
+  walkthrough), `--only name[,name]`, `--list`. Every `tools/check_*.gd` belongs
+  in it; add new checks there and in this file's neighbours, not in prose lists.
+- CI (`.github/workflows/checks.yml`) runs `--fast` on every push and the
+  walkthrough on pull requests and nightly. Keep that set green; do not commit a
+  workflow that is red on arrival.
+- **A `--script` check cannot name an autoload global** (`SaveGame.foo` is a
+  compile error even though the node exists at `/root`). Resolve it by path
+  (`root.get_node("SaveGame")`) and leave the variable untyped so calls stay
+  dynamic. The tree is not live inside `_initialize()`, so `await process_frame`
+  before touching a `get_tree()`-dependent path.
+- A tool that must prove a fix should run the old code first and watch the new
+  assertion fail. `check_horse_state` and `check_touch` were both written that
+  way; keep restoring the tested file by checksum when you do it.
+
+## MCP and the editor
+
+- The editor plugin is `addons/godot_mcp/plugin.cfg`, registered in
+  `project.godot`. The `godot` MCP server (`@keeveeg/godot-mcp`) is a bridge to a
+  running editor, so **the editor must be open**. `godot-headless`
+  (`@coding-solo/godot-mcp`) is the fallback and has fewer tools.
+- Launch with `godot --editor --path .`, not a bare `godot`.
+
+## Commands
 
 ```bash
 cd /home/chrismills029/liv/groom
-godot --editor --path .
+godot --editor --path .                      # the editor, MCP available
+tools/check_all.sh --fast                    # every check but the walkthrough
+tools/check_all.sh --only check_horse_state  # one check
+godot --headless --editor --quit --path .    # (re)build the import cache
+tools/release.sh                             # export, brotli, upload, check (a deploy)
+tools/release.sh --dry-run                   # sizes only, uploads nothing
+tools/release.sh --skip-export               # publish build/web-mobile as it stands
+python3 tools/deploy_r2.py --check           # assert the live host
+grep -rE '^compress/mode=2' Models/          # should print nothing
 ```
 
-Before you pipe an MCP client (Claude Code, Cursor, etc.), make sure the editor is running. If you ever need to re-check the import settings on those three textures, they are line 1 of each `.import` file:
-
-Run against norms `grep -rE '^compress/mode=' Models` from the project root.
-
-## Checklist for anyone continuing this on the same machine
-
-- Keep those three textures on `compress/mode=0`, never VRAM compressed.
-- Keep `detect_3d/compress_to=0` everywhere in `.import` files, so that 3D texture switching cannot reintroduce the crash during import.
-- Normal-map detection may set `compress/normal_map=1`; keep such textures on `compress/mode=0` as well. `tools/check_editor_load.gd` now fails if a normal map is VRAM-compressed or still has `detect_3d` enabled.
-- Re‑import headlessly (`godot --headless ... --quit`) before opening the editor whenever the cache is cold.
-- If you are setting this up in another project, check image dimensions before enabling VRAM compression — 1024×1024 or larger with many such textures is the risk profile.
-- Prefer `godot --editor --path .` as the launch command, not a bare `godot`, and note that MCP is only available while the editor is running.
-
-## Files changed by the fixes
-
-- `Models/lowpoly_trees_0.png.import`
-- `Models/low_poly_nature_assets_1_0.jpg.import`
-- `Models/horse_riggedgame_ready_0.png.import`
-- every other `*.import` file in the project (detect_3d switch)
-- `scenes/stable.tscn` (the duplicate-name scene reload bug, exactly `PaddockCollision/%sShape`)
-- `tools/safe_editor.sh` (corrected comments)
-
-## If the crash ever comes back
-
-Run this immediately to get a fresh headless import cache, then open the editor:
-
-```bash
-cd /home/chrismills029/liv/groom
-godot --headless --editor --quit --path .
-godot --editor --path .
-```
-
-If it still crashes, use this as a pre‑flight check:
-
-```bash
-grep -rE '^compress/mode=2' Models/  # any texture left VRAM compressed?
-```
-
-If that shows anything, turn it back to 0. If it shows nothing and it still crashes, it may be a different crash and is worth reporting with the full Godot output.
-
-## MCP‑specific gotchas
-
-- The server is a bridge to the editor over localhost; it expects the editor to be open. If the editor is closed, the MCP tools will not work.
-- The connector registry in `~/.agents/mcp.json` is per‑machine and was rebuilt from what we know is in this project now. If the MCP tools are missing from your client, check the `godot` entry there and that the editor runs.
-- The headless fallback (`godot-headless`) uses a different server package (`@coding-solo/godot-mcp`). It does not expose 386 tools but it is the way to continue agent work when the editor cannot stay open.
-
----
-
-*End of notes.*
+Screenshots for review: `tools/screenshot_farmhouse.gd` (eight views, `plan_*`
+hide the storey above), `tools/screenshot_camera.gd`, `tools/screenshot_touch.gd`.
+Run them under `xvfb-run` with `--rendering-driver opengl3` and
+`--resolution 1280x720`; they write to `artifacts/`, which is git-ignored.

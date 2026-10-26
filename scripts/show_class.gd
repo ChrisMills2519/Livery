@@ -81,7 +81,7 @@ func request_entry() -> Dictionary:
 	if GameState.money < entry_fee:
 		return {"ok": false, "message": "The entry fee is £%d — you only have £%d." % [entry_fee, GameState.money]}
 	GameState.add_money(-entry_fee)
-	GameState.show_entries += 1
+	GameState.add_show_entry()
 	_entry_counter += 1
 	rider_number = 100 + _entry_counter
 	entered = true

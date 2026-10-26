@@ -866,4 +866,14 @@ State-machine review (no defects found in the horse or player code):
 - `check_character_select` no longer fails. The notes recorded a handoff timeout, but that check has allowed 9 s for the handoff and 20 s overall since the initial commit (its own comment measures the world load at close to six seconds here), and it passed three standalone runs plus the suite. No assertion was touched for this change; the note was stale, and `agents.md` now points at the runner instead of describing check status by hand.
 - Limitation: the workflow has not executed on GitHub from this machine. It is pinned to Godot 4.7-stable, and `GODOT_SHA256` is deliberately empty until a first run prints the archive hash - fill it in then.
 
+## One file of rules, one file of history
+
+2026-10-26
+
+- `agents.md` had grown to 4,800 words titled "devlog and troubleshooting notes" and retold the same stories as this file - the import crash, the Netlify move, the farmhouse - while being the only home of several invariants. It is now *invariants and gotchas*: the rules an agent must not break, the measured numbers inline, and a pointer to this file for the story. Nothing operational was dropped; the narrative was already here.
+- `TOUCH_CONTROLS_PLAN.md` is deleted. It opened with "There is no device detection and no touch support anywhere", which stopped being true weeks ago, and everything still useful in it now lives in the touch rules or in this log.
+- `GameState` gained `progress_changed`, emitted by a new `add_show_entry()` and by a new show best time. `show_entries` and `show_best_time` had no signal at all: they were saved only because an entry fee or a prize happened to move money 1.5 s earlier, a contract nobody had written down. `show_class.gd` calls `add_show_entry()` instead of `+= 1`, `SaveGame` listens to the new signal, and `check_save` asserts both emissions and the negative case.
+- Stale comments are gone with it. `game_state.gd` no longer says rosettes are not saved to disk or that save/load comes later, and `agents.md` no longer records check status by hand: `tools/check_all.sh --list` is the list, and CI is what enforces it.
+- Verification: `check_save` PASS (with the progress-signal case), `check_arena` PASS, `check_horse_state` PASS.
+
 <!-- end -->

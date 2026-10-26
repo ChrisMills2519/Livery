@@ -69,6 +69,7 @@ func _ready() -> void:
 	GameState.money_changed.connect(_on_progress)
 	GameState.best_time_changed.connect(_on_progress)
 	GameState.rosettes_changed.connect(_on_progress)
+	GameState.progress_changed.connect(_on_progress)
 	HorseState.changed.connect(_on_progress)
 
 	# Local first, then let the cloud copy win only if it is strictly newer.

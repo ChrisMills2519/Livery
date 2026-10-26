@@ -1,20 +1,27 @@
 extends Node
 
-## Session-level state for the first gameplay loop.
+## The yard's books: money, times, entries and rosettes.
 ##
-## Money and the best schooling-round time survive a scene reload so the
-## reward loop keeps meaning while the player rides again.  This is deliberately
-## small: save/load and the rest of the stable economy come later.
+## These are autoload values, so they survive a scene change and a reload, and
+## `SaveGame` mirrors them into a slot.  The horse's own progress lives in
+## `HorseState`; this file is what the player earned, not what the horse is.
 
 signal money_changed(money: int)
 signal best_time_changed(seconds: float)
 signal rosettes_changed(count: int)
+## Emitted when progress without a narrower signal changes.  `SaveGame` listens
+## to this as well as to the three above.
+##
+## `show_entries` and `show_best_time` had no signal at all, so they were saved
+## only because a prize or an entry fee moved money alongside them - a contract
+## nobody had written down.  It is written down now.
+signal progress_changed
 
 var money := 0
 var best_round_time := 0.0
 
-## Show-class rosettes won this session.  Each entry is
-## {class, place, colour}.  They are not saved to disk yet.
+## Show-class rosettes won so far.  Each entry is {class, place, colour}.
+## They are saved with the slot and re-pinned to the horse on spawn.
 var rosettes: Array[Dictionary] = []
 var show_best_time := 0.0
 var show_entries := 0
@@ -70,6 +77,14 @@ func add_money(amount: int) -> void:
 	money_changed.emit(money)
 
 
+## Records one class entry.  A function rather than `+= 1` so the save hears
+## about it, and returns the new count.
+func add_show_entry() -> int:
+	show_entries += 1
+	progress_changed.emit()
+	return show_entries
+
+
 ## Adds a show-class rosette and returns the new total.
 func award_rosette(class_label: String, place: int, colour: String) -> int:
 	rosettes.append({"class": class_label, "place": place, "colour": colour})
@@ -83,6 +98,7 @@ func record_show_time(seconds: float) -> bool:
 		return false
 	if show_best_time <= 0.0 or seconds < show_best_time:
 		show_best_time = seconds
+		progress_changed.emit()
 		return true
 	return false
 

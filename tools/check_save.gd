@@ -68,6 +68,7 @@ func _initialize() -> void:
 	_check_guest_writes_nothing()
 	_check_response_handling()
 	_check_mask_round_trip()
+	_check_progress_signal()
 	_finish()
 
 
@@ -312,6 +313,25 @@ func _check_mask_round_trip() -> void:
 	print("coat mask: %d bytes base64, exact round trip, bad input refused" % encoded.length())
 	source.free()
 	target.free()
+
+
+## The show-class fields had no signal of their own, so they were only saved when
+## a fee or a prize moved money 1.5 s earlier.  A contract that invisible is one
+## refactor away from silent data loss, so it is asserted here.
+func _check_progress_signal() -> void:
+	var seen := [0]
+	var on_progress := func() -> void: seen[0] += 1
+	_gs.progress_changed.connect(on_progress)
+	_gs.show_entries = 0
+	_gs.add_show_entry()
+	_check("an entry reports progress", seen[0] == 1)
+	_gs.show_best_time = 0.0
+	_gs.record_show_time(70.0)
+	_check("a show best time reports progress", seen[0] == 2)
+	_gs.record_show_time(80.0)
+	_check("a slower round reports nothing", seen[0] == 2)
+	_gs.progress_changed.disconnect(on_progress)
+	print("progress signal: entry and best time reported")
 
 
 func _finish() -> void:
