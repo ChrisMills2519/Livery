@@ -100,6 +100,9 @@ var last_paint_ms := 0.0
 
 var _mask_image: Image
 var _mask_data := PackedByteArray()
+## A mask decoded from a save.  Applied after the bake, because the bake also
+## builds the zone map and the paint-gating triangle table that painting needs.
+var _imported_data := PackedByteArray()
 var _zone_map := PackedByteArray()
 var _island_map := PackedInt32Array()
 var _pixel_tris := PackedInt32Array()
@@ -223,6 +226,11 @@ func _setup() -> void:
 	_build_islands()
 	_build_triangles()
 	_rasterise_mask()
+	# A coat restored from a save wins over the bake, which would otherwise put
+	# the horse back to dirty.  The bake still has to run first: it is what
+	# builds the zone map and the paint-gating triangle table.
+	if _imported_data.size() == MASK_SIZE * MASK_SIZE * 4:
+		_mask_data = _imported_data.duplicate()
 	_build_material()
 	_ready_done = true
 	last_bake_ms = float(Time.get_ticks_msec() - started)
@@ -925,6 +933,62 @@ func flush_texture() -> void:
 	_mask_image.set_data(MASK_SIZE, MASK_SIZE, false, Image.FORMAT_RGBA8, _mask_data)
 	mask_texture.update(_mask_image)
 	_dirty = false
+
+
+const BASE64_CHARS := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+
+
+func _looks_like_base64(text: String) -> bool:
+	if text.length() < 8 or text.length() % 4 != 0:
+		return false
+	for i in range(text.length()):
+		if BASE64_CHARS.find(text[i]) == -1:
+			return false
+	return true
+
+
+## Base64 PNG of the painted coat, for the save.  Empty before the bake, which
+## happens 0.2 s after the horse loads.
+func export_mask() -> String:
+	if _mask_data.size() != MASK_SIZE * MASK_SIZE * 4:
+		return ""
+	var image := Image.create_from_data(MASK_SIZE, MASK_SIZE, false, Image.FORMAT_RGBA8, _mask_data)
+	return Marshalls.raw_to_base64(image.save_png_to_buffer())
+
+
+## Restores a coat painted on an earlier visit.  Anything that is not a 256x256
+## PNG is refused, so a damaged save leaves the horse as it was rather than
+## blanking the coat.
+func import_mask(encoded: String) -> bool:
+	if encoded.is_empty():
+		return false
+	# Checked before the decoder: Marshalls.base64_to_raw logs an engine ERROR on
+	# malformed input, which reads as a failure in an otherwise clean log.
+	if not _looks_like_base64(encoded):
+		return false
+	var png := Marshalls.base64_to_raw(encoded)
+	if png.is_empty():
+		return false
+	var image := Image.new()
+	if image.load_png_from_buffer(png) != OK:
+		return false
+	if image.get_width() != MASK_SIZE or image.get_height() != MASK_SIZE:
+		return false
+	image.convert(Image.FORMAT_RGBA8)
+	var decoded := image.get_data()
+	if decoded.size() != MASK_SIZE * MASK_SIZE * 4:
+		return false
+	_imported_data = decoded
+	# Before the bake there is nothing to upload yet; _setup() applies it between
+	# the rasterise and the material build.
+	if _ready_done:
+		_mask_data = _imported_data.duplicate()
+		_mask_image = Image.create_from_data(MASK_SIZE, MASK_SIZE, false, Image.FORMAT_RGBA8, _mask_data)
+		mask_texture = ImageTexture.create_from_image(_mask_image)
+		if material != null:
+			material.set_shader_parameter("groom_mask", mask_texture)
+		_dirty = false
+	return true
 
 
 func reset_mask() -> void:

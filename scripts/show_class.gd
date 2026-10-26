@@ -289,56 +289,11 @@ func collect_rosette() -> Dictionary:
 
 
 func _attach_rosette_to_horse(colour: String) -> void:
-	if horse == null or horse.get_node_or_null("ShowRosette") != null:
+	if horse == null:
 		return
-	var colours := {
-		"red": Color(0.55, 0.09, 0.07),
-		"blue": Color(0.09, 0.18, 0.50),
-		"yellow": Color(0.80, 0.58, 0.09),
-	}
-	var body := StandardMaterial3D.new()
-	body.albedo_color = colours.get(colour, Color(0.8, 0.8, 0.8))
-	body.roughness = 0.6
-	var gold := StandardMaterial3D.new()
-	gold.albedo_color = Color(0.72, 0.55, 0.18)
-	gold.metallic = 0.7
-	gold.roughness = 0.35
-
-	var rosette := Node3D.new()
-	rosette.name = "ShowRosette"
-	rosette.position = Vector3(0.16, 1.66, 0.14)
-	rosette.rotation = Vector3(0.0, -0.6, 0.25)
-	horse.add_child(rosette)
-
-	var disc := MeshInstance3D.new()
-	var disc_mesh := CylinderMesh.new()
-	disc_mesh.top_radius = 0.055
-	disc_mesh.bottom_radius = 0.055
-	disc_mesh.height = 0.012
-	disc_mesh.radial_segments = 16
-	disc.mesh = disc_mesh
-	disc.rotation = Vector3(PI * 0.5, 0.0, 0.0)
-	disc.material_override = body
-	rosette.add_child(disc)
-
-	var centre := MeshInstance3D.new()
-	var centre_mesh := SphereMesh.new()
-	centre_mesh.radius = 0.018
-	centre_mesh.height = 0.036
-	centre.mesh = centre_mesh
-	centre.position = Vector3(0.0, 0.0, 0.01)
-	centre.material_override = gold
-	rosette.add_child(centre)
-
-	for side in [-1.0, 1.0]:
-		var tail := MeshInstance3D.new()
-		var tail_mesh := BoxMesh.new()
-		tail_mesh.size = Vector3(0.030, 0.10, 0.008)
-		tail.mesh = tail_mesh
-		tail.position = Vector3(side * 0.018, -0.085, 0.0)
-		tail.rotation = Vector3(0.0, 0.0, side * 0.22)
-		tail.material_override = body
-		rosette.add_child(tail)
+	# The horse owns the pin so it can put the last one back on after a scene
+	# change; see HorseState and `horse.attach_rosette()`.
+	horse.call("attach_rosette", colour)
 
 
 # ---------------------------------------------------------------------------

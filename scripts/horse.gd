@@ -130,6 +130,11 @@ func _ready() -> void:
 	# this overlay stands down.
 	if jump_pose != null and fsm != null and fsm.has_air_clip():
 		jump_pose.active = false
+	# The horse is a scene node and every door is a full scene change, so this
+	# spawn starts from the progress the player actually earned rather than from
+	# the defaults above.
+	HorseState.apply_to(self)
+	_restore_rosette()
 
 
 func _process(delta: float) -> void:
@@ -418,6 +423,7 @@ func jump() -> bool:
 func award_training(jump_xp: float, fitness_xp: float) -> void:
 	jumping_skill = minf(jumping_skill + jump_xp, max_jumping_skill)
 	fitness = minf(fitness + fitness_xp, max_jumping_skill)
+	HorseState.record_from(self)
 	training_awarded.emit(jumping_skill, fitness)
 
 
@@ -488,6 +494,7 @@ func mark_hoof(index: int) -> bool:
 	for done in groomed_hooves:
 		if done:
 			hooves_cleaned += 1
+	HorseState.record_from(self)
 	return true
 
 
@@ -507,6 +514,7 @@ func apply_grooming_result(clean: float, polish: float, hooves: int, complete: b
 	if groom_surface != null:
 		var dirt := 0.0 if complete else clampf(1.0 - cleanliness, 0.0, 1.0)
 		groom_surface.call("set_dirt_level", dirt)
+	HorseState.record_from(self)
 	return {
 		"clean": cleanliness,
 		"polish": grooming_polish,
@@ -516,6 +524,74 @@ func apply_grooming_result(clean: float, polish: float, hooves: int, complete: b
 		"trust_gain": trust_gain,
 		"happiness_gain": happiness_gain,
 	}
+
+
+## Pins a rosette at the withers.  Returns false when one is already there, so a
+## re-spawn cannot stack two.  This lives on the horse because the horse is what
+## wears it: the show class used to build the node itself, which meant the
+## rosette disappeared with the next scene change.
+func attach_rosette(colour: String) -> bool:
+	if get_node_or_null("ShowRosette") != null:
+		return false
+	var colours := {
+		"red": Color(0.55, 0.09, 0.07),
+		"blue": Color(0.09, 0.18, 0.50),
+		"yellow": Color(0.80, 0.58, 0.09),
+	}
+	var body := StandardMaterial3D.new()
+	body.albedo_color = colours.get(colour, Color(0.8, 0.8, 0.8))
+	body.roughness = 0.6
+	var gold := StandardMaterial3D.new()
+	gold.albedo_color = Color(0.72, 0.55, 0.18)
+	gold.metallic = 0.7
+	gold.roughness = 0.35
+
+	var rosette := Node3D.new()
+	rosette.name = "ShowRosette"
+	rosette.position = Vector3(0.16, 1.66, 0.14)
+	rosette.rotation = Vector3(0.0, -0.6, 0.25)
+	add_child(rosette)
+
+	var disc := MeshInstance3D.new()
+	var disc_mesh := CylinderMesh.new()
+	disc_mesh.top_radius = 0.055
+	disc_mesh.bottom_radius = 0.055
+	disc_mesh.height = 0.012
+	disc_mesh.radial_segments = 16
+	disc.mesh = disc_mesh
+	disc.rotation = Vector3(PI * 0.5, 0.0, 0.0)
+	disc.material_override = body
+	rosette.add_child(disc)
+
+	var centre := MeshInstance3D.new()
+	var centre_mesh := SphereMesh.new()
+	centre_mesh.radius = 0.018
+	centre_mesh.height = 0.036
+	centre.mesh = centre_mesh
+	centre.position = Vector3(0.0, 0.0, 0.01)
+	centre.material_override = gold
+	rosette.add_child(centre)
+
+	for side in [-1.0, 1.0]:
+		var tail := MeshInstance3D.new()
+		var tail_mesh := BoxMesh.new()
+		tail_mesh.size = Vector3(0.030, 0.10, 0.008)
+		tail.mesh = tail_mesh
+		tail.position = Vector3(side * 0.018, -0.085, 0.0)
+		tail.rotation = Vector3(0.0, 0.0, side * 0.22)
+		tail.material_override = body
+		rosette.add_child(tail)
+	return true
+
+
+## Rosettes are recorded on GameState, which survives a scene change; the pin
+## itself was a child of the horse and did not.  Wearing the last one won is how
+## the showground door stops undressing the horse.
+func _restore_rosette() -> void:
+	if GameState.rosettes.is_empty():
+		return
+	var last: Dictionary = GameState.rosettes[GameState.rosettes.size() - 1]
+	attach_rosette(str(last.get("colour", "")))
 
 
 func _face(dir: Vector3, delta: float, rate: float = -1.0) -> void:

@@ -397,6 +397,13 @@ func exit_session() -> void:
 	set_process(false)
 	set_process_unhandled_input(false)
 	_fade_to(0.0, 0.28)
+	# Trust, happiness and cleanliness change without a signal of their own, so
+	# leaving the bay is an explicit save point.  The state owner is refreshed
+	# first: the last strokes, the painted mask and the pick only exist in the
+	# horse node until they are recorded.
+	if _horse != null:
+		HorseState.record_from(_horse)
+	SaveGame.save_now("groom")
 	_exit_in_progress = false
 
 

@@ -30,3 +30,9 @@ res/shaders/_fp_probe.*
 # Publishing credentials for tools/deploy_r2.py and tools/release.sh: never commit
 .env
 .env.local
+
+# Agent skill bundles pulled by .agents/mcp.json; restorable from skills-lock.json
+.agents/skills/
+
+# Local agent/editor state
+.claude/
