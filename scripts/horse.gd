@@ -65,6 +65,21 @@ var health := 1.0
 @export var needs_report_seconds := 1.0
 var _needs_report := 0.0
 
+@export_group("Stable")
+## How soiled the bed is, 0.0 fresh to 1.0 a full muck-out.  It soils on the
+## clock the player is playing on - a little while the horse is in the world at
+## all, and faster while it is standing about the yard rather than being ridden,
+## because a horse spends that time in or beside its stall.  A boarded horse is
+## frozen by `board()` and does not tick, so its bed stops soiling while it is
+## put away.
+var stall_muck := 0.0
+@export var stall_muck_per_minute := 0.02
+@export var stall_muck_standing_per_minute := 0.06
+## True while the muck session owns the player.  The bed does not soil during
+## the chore: the session is removing exactly what is in it, and a rate running
+## underneath would fight the scoop.
+var mucking := false
+
 ## Saddle socket. The marker is placed on the back surface in the scene and
 ## this script makes it follow the animated spine so the rider rises and
 ## pitches with the gait instead of hovering at a fixed height.
@@ -385,7 +400,7 @@ func apply_fence_impact(speed_keep := 0.85) -> void:
 ## until release_from_stable() puts it back at the stall.  The player never
 ## leads or follows the horse, so this is the only way in and out of the yard.
 func board() -> bool:
-	if boarded or rider != null or grooming:
+	if boarded or rider != null or grooming or mucking:
 		return false
 	clear_leader()
 	boarded = true
@@ -464,14 +479,26 @@ func _tick_needs(delta: float) -> void:
 		energy = maxf(0.0, energy - energy_ride_per_minute * minutes)
 	elif boarded or absf(_ride_speed) < 0.05:
 		energy = minf(1.0, energy + energy_rest_per_minute * minutes)
-	# Health drifts toward what the horse's care adds up to.  It cannot be lost
-	# in a hurry and neglect alone does not take it to zero.
-	var target := clampf(0.35 + 0.35 * cleanliness + 0.2 * trust + 0.1 * hunger, 0.0, 1.0)
+	# The bed soils whether the horse is ridden or not, faster while it is
+	# standing about.  Riding does not soil it, because the horse is not in it.
+	if not mucking:
+		var muck_rate := stall_muck_per_minute
+		if not working and absf(_ride_speed) < 0.05:
+			muck_rate = stall_muck_standing_per_minute
+		stall_muck = minf(1.0, stall_muck + muck_rate * minutes)
+	# Health drifts toward what the horse's care adds up to, and a soiled bed is
+	# the one thing that holds it back.  It cannot be lost in a hurry and neglect
+	# alone does not take it to zero.
+	var target := clampf(
+		0.35 + 0.30 * cleanliness + 0.15 * trust + 0.1 * hunger + 0.1 * (1.0 - stall_muck),
+		0.0, 1.0
+	)
 	health = move_toward(health, target, health_per_minute * minutes)
 	_needs_report += delta
 	if _needs_report >= needs_report_seconds:
 		_needs_report = 0.0
 		HorseState.set_needs(hunger, energy, health)
+		HorseState.set_stall_muck(stall_muck)
 
 
 ## Eats one bale from the yard's supplies.  The trough consumes the bale when
@@ -496,7 +523,7 @@ func feed() -> Dictionary:
 ## is baked against the posed skeleton, so the mask zones and the picker must
 ## both see the same pose.
 func begin_grooming(anchor: Transform3D) -> bool:
-	if grooming or rider != null or boarded:
+	if grooming or rider != null or boarded or mucking:
 		return false
 	clear_leader()
 	grooming = true
@@ -528,6 +555,21 @@ func begin_grooming(anchor: Transform3D) -> bool:
 	if groom_surface != null:
 		groom_surface.call("prepare_for_grooming")
 	return true
+
+
+## The muck session works the stall rather than the horse, so nothing is frozen
+## and no pose changes: the horse keeps standing wherever it is, and only the
+## soiling pauses.  The mount prompt is left alone, because the stable door
+## already suppresses it for anyone standing at that end of the yard.
+func begin_mucking() -> bool:
+	if mucking or grooming:
+		return false
+	mucking = true
+	return true
+
+
+func end_mucking() -> void:
+	mucking = false
 
 
 func end_grooming() -> void:

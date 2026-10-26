@@ -21,6 +21,10 @@ extends Node
 
 signal changed
 
+## Below this the bed is not worth mucking out, and the station says so rather
+## than offering the chore.  A tenth of a bed is a couple of minutes of stabling.
+const MUCK_MIN := 0.10
+
 var trust := 0.0
 var happiness := 0.5
 var cleanliness := 0.0
@@ -36,6 +40,11 @@ var jumping_skill := 1.0
 var hunger := 1.0
 var energy := 1.0
 var health := 1.0
+## How soiled the stable bed is: 0.0 a fresh bed, 1.0 a full muck-out.  It lives
+## with the rest of the care progress because the stable is reached through a
+## scene change like everywhere else, and because `SaveGame` serialises this
+## object rather than whichever horse the current scene happens to hold.
+var stall_muck := 0.0
 ## Base64 PNG of the painted coat.  Empty until a mask has been exported.
 var coat_mask := ""
 
@@ -60,6 +69,7 @@ func apply_to(horse: Node) -> void:
 	horse.set("hunger", hunger)
 	horse.set("energy", energy)
 	horse.set("health", health)
+	horse.set("stall_muck", stall_muck)
 	# The shader mixes a global dirt level with the local mask, so both halves
 	# have to be restored: the mask alone leaves the whole coat dark, the level
 	# alone erases the painted clean patches.
@@ -95,6 +105,7 @@ func record_from(horse: Node) -> void:
 	hunger = clampf(float(horse.get("hunger")), 0.0, 1.0)
 	energy = clampf(float(horse.get("energy")), 0.0, 1.0)
 	health = clampf(float(horse.get("health")), 0.0, 1.0)
+	stall_muck = clampf(float(horse.get("stall_muck")), 0.0, 1.0)
 	var surface: Node = horse.get("groom_surface")
 	if surface != null and surface.has_method("export_mask"):
 		var exported := str(surface.call("export_mask"))
@@ -112,6 +123,20 @@ func set_needs(new_hunger: float, new_energy: float, new_health: float) -> void:
 	health = clampf(new_health, 0.0, 1.0)
 
 
+## The bed soils on the horse's own clock and is cleaned by the muck session,
+## both far too often for `changed` (which queues a save).  A plain write, like
+## `set_needs()`.
+func set_stall_muck(value: float) -> void:
+	stall_muck = clampf(value, 0.0, 1.0)
+
+
+## True when the bed is dirty enough to be worth mucking out.  The station, the
+## session and the check all ask this one rule rather than repeating the
+## threshold.
+func needs_mucking() -> bool:
+	return stall_muck >= MUCK_MIN
+
+
 func to_dict() -> Dictionary:
 	return {
 		"trust": trust,
@@ -126,6 +151,7 @@ func to_dict() -> Dictionary:
 		"hunger": hunger,
 		"energy": energy,
 		"health": health,
+		"stall_muck": stall_muck,
 		"coat_mask": coat_mask,
 	}
 
@@ -146,6 +172,7 @@ func from_dict(data: Dictionary) -> void:
 	hunger = clampf(float(data.get("hunger", hunger)), 0.0, 1.0)
 	energy = clampf(float(data.get("energy", energy)), 0.0, 1.0)
 	health = clampf(float(data.get("health", health)), 0.0, 1.0)
+	stall_muck = clampf(float(data.get("stall_muck", stall_muck)), 0.0, 1.0)
 	var hooves: Variant = data.get("groomed_hooves", [])
 	if hooves is Array and (hooves as Array).size() == 4:
 		groomed_hooves = (hooves as Array).duplicate()

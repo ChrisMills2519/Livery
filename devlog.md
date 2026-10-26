@@ -953,4 +953,37 @@ The care loop itself is compact on purpose (it is a phone game and `check_care`/
 - `tools/check_save.gd` gained `_check_starting_money`: a fresh process holds £15, an older-shaped payload of £3 is raised and marked, the same wallet with the marker is left at £3, and a floor never claws back £240. The check was proved to bite by disabling the top-up - "an older save is topped up to the floor" failed, then the file was restored and verified by sha256.
 - `hud.gd`'s wallet label no longer carries a `£0` placeholder that disagrees with the balance.
 
+## Mucking out the stable, the third care chore
+
+2026-10-26
+
+- Feeding and grooming existed; the bed the horse actually stands in did not. `HorseState.stall_muck` is now part of the care progress (0.0 a fresh bed, 1.0 a full muck-out), because the stable is reached through a doorway like everywhere else and `SaveGame` serialises the state owner rather than whichever horse the current scene holds. `MUCK_MIN` (0.10) and `needs_mucking()` are the one threshold the station, the session and the check all ask.
+- **The bed soils on the player's clock, not the wall clock.** `horse._tick_needs()` adds 0.02/min while the horse is in the world and 0.06/min while it is standing about, because a horse spends that time in or beside its stall; a boarded horse does not tick at all, so putting it away stops the bed. The clock pauses during the chore, because the session is removing exactly what is in the bed and a rate underneath would fight the scoop. A clean bed at the standing rate reaches the threshold in under two minutes, and a full one in about seventeen.
+- **A soiled bed is what holds health back.** The drift target was `0.35 + 0.35 clean + 0.2 trust + 0.1 hunger` with nothing to separate a horse kept in a filthy box from a well-kept one; it is now `0.35 + 0.30 clean + 0.15 trust + 0.10 hunger + 0.10 clean bed`. Still a drift, so neglect alone cannot take health to zero.
+- **The station stands at the middle bay and offers the chore.** `scenes/stable.tscn` gained a `MuckStation` at (-8.9, 0, -19.85) with its `Session` child: 3.2 m of `player_range`, a 14 m horse rule matching the stable door's, a `MUCK OUT  (60% SOILED)` prompt, and refusals on its own prompt for `DISMOUNT TO MUCK OUT`, `BRING YOUR HORSE TO THE STABLE` and `THE BED IS CLEAN`. A flash is feedback, not permission, so the gate is computed separately from the text.
+- **The stable door and the muck point are one cluster.** They stand a couple of metres apart with overlapping ranges, and one `interact` event is claimed by one node, so both join `stable_station` and only the nearer offers, for the prompt as well as the press. The rule that already ordered the feed store and the trough moved into `scripts/station_proximity.gd` and both stations now share it, so there is one answer to "who owns this spot" rather than three copies.
+- **The session is a working view of the bed.** `scripts/muck_session.gd` parks the player's camera at the bay, hides the gameplay HUD and the player body, lays eight heaps (one scoop each) on the apron in front of the middle bay, and moves a pitchfork along the scoop ray. Leaving early keeps the work - each heap writes its share of the bed to `HorseState` as it goes - and only an emptied bed pays, `TRUST_PER_MUCK` 0.06 and `HAPPINESS_PER_MUCK` 0.10, against the mess that was there at entry so re-scooping a clean bed cannot farm trust.
+- `scripts/muck_hud.gd` carries `BED CLEAN %`, a `Barrow n / 8` counter, the prompt line and a `STALL MUCKED OUT` result card with `BACK TO THE YARD`. `hud.gd`'s needs panel gained a fourth bar, `STABLE`, filled from `1 - stall_muck` so a full bar means the same good thing the other three do.
+
+### Three bugs the chore exposed
+
+- **The stable door never joined a station group.** `stable.gd` declared `STATION_GROUP` but only added itself to `touch_context`, so the muck point had nothing to compare against and the pair could both offer. The point of the shared rule is that the group is real, so the membership is now asserted by the chore rather than assumed from the constant being declared.
+- **A station's spot is not its node origin.** The stable door offers from `UseAnchor` at the stall end; its node origin is the middle of the building 4.7 m away, which made it "nearer" than a player standing at the muck point. A station can now answer `claim_point()`, and the comparison uses that.
+- **The heap grid was geometrically impossible.** Four columns across 82% of a 3 m bed put neighbouring heaps closer together than the spacing the placement loop demanded, so it stopped early and a bed could be laid with fewer than eight heaps - and the chore would then need a scoop that was never placed. The spacing and the spread were fitted to the bed, and `check_muck` pins the count.
+
+### Verification
+
+- New `tools/check_muck.gd`, in the manifest: the bed soiling standing, riding and paused in the chore, the mirror into the state owner, the threshold both ways, the station's offer and all three refusals, the nearest-station rule against the stable door, the session taking and returning the camera, the HUD, the player body and the gameplay HUD, one scoop clearing exactly one heap, the reward paid against the mess at entry, leaving early keeping the work, and the bed surviving a doorway and a save round trip.
+- The station, the session and the stable door are the real nodes in `scenes/stable.tscn`, so the check drives the shipped prompts and gates rather than copies of them.
+- Proved to bite by widening `player_range` so the muck point claimed the stable door's spot; `check_muck` failed and the file was restored byte-identically (checked against the backup).
+- `tools/screenshot_muck.gd` renders four views into `artifacts/muck_*.png`: the approach prompt in the yard, a full bed, three heaps scooped, and the result card. They were inspected: the bed reads dark and heaps legible on a phone-sized frame, the scooped patch turns green, and the card sits clear of the bed.
+- `tools/check_all.sh --fast`: 30/30 PASS in 781 s, with `check_muck` at 66 s. `check_dog` took its documented retry under load and passed on the second attempt. `check_walkthrough`, which `--fast` skips, took its documented retry too and passed in 287 s.
+
+### Limitations
+
+- The bed is the apron in front of the middle bay, not the box behind it: the five bays sit inside the building's collision box, so the part a player can see and work from the yard is the apron. The stable's interior is still not walkable.
+- The barrow is dressing. Scooping removes a heap and increments the count; nothing has to be carried to it, and there is no trip with a full barrow.
+- The chore has no time limit and no failure; it is a job to do, like the other two.
+- Seen in renders only - no device or touch pass on the scoop gesture yet.
+
 <!-- end -->

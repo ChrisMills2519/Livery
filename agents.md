@@ -121,11 +121,18 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
   horse works at zero and health only drifts toward what the care adds up to.
 - Hay is `GameState.hay`. `buy_hay()` owns the £5 price and the refusal, and
   `use_hay()` takes one back; the trough lets the horse eat first and spends the
-  bale afterwards, so a refusal never costs one.- **The feed store and the trough are both in the `feed_station` group, and the nearest one wins** the prompt and the interact event. One `interact` event is
-  claimed by one node: without this rule the later node in the tree swallowed the
-  press and FEED silently did nothing. The store now stands clear of the trough
-  (it used to be ~4 m away, in the lane's mouth); the rule stays because it is
-  what made the overlap safe.
+  bale afterwards, so a refusal never costs one.- **A station cluster shares one "who owns this spot" rule.**
+  `scripts/station_proximity.gd` holds it; every station that can overlap another
+  joins that cluster's group (`feed_station`, `stable_station`), and only the
+  nearest offers - for the prompt as well as the press. One `interact` event is
+  claimed by one node, so without this the later node in the tree swallowed the
+  press and the nearer station's action silently did nothing. The store and the
+  trough need it; so do the stable door and the muck-out point.
+- **A station's spot is not its node origin.** The stable door offers from
+  `UseAnchor`, 4.7 m from the middle of the building. A station whose prompt
+  stands at a marker answers `claim_point()`, and the proximity rule uses that;
+  adding the node to the group is a real line in `_ready()`, not just declaring
+  the constant.
 - A flash message is feedback, not permission. The offer is gated separately
   from the text, so "out of hay" cannot leave a CONTEXT button on screen.
 - **A station has to be somewhere the player can walk.** The stable paddock is a
@@ -133,7 +140,16 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
   sitting inside it, unreachable. Check placement against the collision shapes,
   not against a render.
 - `tools/check_care.gd` covers the needs, both stations, the refusal paths, the
-  nearest-station rule and the save.
+  nearest-station rule and the save. `tools/check_muck.gd` covers the bed: the
+  soiling rates, the threshold, the station and its refusals, the session taking
+  and returning the camera and HUD, the reward, and the bed across a doorway and
+  a save.
+- **`stall_muck` is care progress, not scene state.** It lives in `HorseState`
+  beside the needs and is mirrored by the same once-a-second tick with a plain
+  write, so it survives a doorway and rides in the save. The soiling clock stops
+  while the horse is boarded (`board()` freezes the tick) and while the muck
+  session is running; a muck session must set `horse.mucking` or its scoops
+  fight the rate.
 
 ## Money
 
@@ -276,6 +292,11 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
 - A tool that must prove a fix should run the old code first and watch the new
   assertion fail. `check_horse_state` and `check_touch` were both written that
   way; keep restoring the tested file by checksum when you do it.
+- **A new `class_name` cannot be used by a `--script` check on this machine.**
+  The headless editor scan produces no global class cache entries, so the name is
+  "Identifier not declared in the current scope" for every check. Helpers that
+  checks must reach preload instead: `const StationProximity := preload(...)`,
+  as `station_proximity.gd` explains at the top of the file.
 
 ## MCP and the editor
 
@@ -301,6 +322,8 @@ grep -rE '^compress/mode=2' Models/          # should print nothing
 ```
 
 Screenshots for review: `tools/screenshot_farmhouse.gd` (eight views, `plan_*`
-hide the storey above), `tools/screenshot_camera.gd`, `tools/screenshot_touch.gd`.
+hide the storey above), `tools/screenshot_camera.gd`, `tools/screenshot_touch.gd`,
+`tools/screenshot_layout.gd` (the level's routes) and `tools/screenshot_muck.gd`
+(the chore: approach, full bed, part-scooped, result card).
 Run them under `xvfb-run` with `--rendering-driver opengl3` and
 `--resolution 1280x720`; they write to `artifacts/`, which is git-ignored.

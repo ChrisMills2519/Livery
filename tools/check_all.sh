@@ -50,6 +50,7 @@ CHECKS=(
   "check_lead               180  0"
   "check_livery_logo        120  0"
   "check_mount              240  0"
+  "check_muck               240  0"
   "check_player_models      180  0"
   "check_save               180  0"
   "check_scene_doors        180  0"

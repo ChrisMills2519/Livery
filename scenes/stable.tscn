@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/stable.gd" id="1_stable_script"]
 [ext_resource type="PackedScene" path="res://Models/horse_stable_animal.glb" id="stable_model"]
@@ -8,6 +8,8 @@
 [ext_resource type="PackedScene" path="res://scenes/stable_yard_props.tscn" id="yard_props"]
 [ext_resource type="Script" path="res://scripts/feed_trough.gd" id="feed_trough_script"]
 [ext_resource type="Script" path="res://scripts/feed_store.gd" id="feed_store_script"]
+[ext_resource type="Script" path="res://scripts/muck_station.gd" id="muck_station_script"]
+[ext_resource type="Script" path="res://scripts/muck_session.gd" id="muck_session_script"]
 [sub_resource type="BoxShape3D" id="stable_col_shape"]
 size = Vector3(8.940, 3.970, 3.900)
 [sub_resource type="BoxShape3D" id="paddock_col_x"]
@@ -139,6 +141,13 @@ surface_material_override/0 = SubResource("store_hay")
 [node name="Shape" type="CollisionShape3D" parent="FeedStore/StoreCollision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
 shape = SubResource("store_shape")
+
+[node name="MuckStation" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.9, 0, -19.85)
+script = ExtResource("muck_station_script")
+
+[node name="Session" type="Node" parent="MuckStation"]
+script = ExtResource("muck_session_script")
 
 [node name="StableHorses" type="Node3D" parent="."]
 

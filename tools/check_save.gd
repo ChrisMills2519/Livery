@@ -31,6 +31,7 @@ class StubHorse:
 	var hunger := 1.0
 	var energy := 1.0
 	var health := 1.0
+	var stall_muck := 0.0
 	var groom_surface: Node = null
 
 

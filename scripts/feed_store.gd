@@ -8,6 +8,8 @@ extends Node3D
 ## it returns is shown on this station's own prompt - a refusal needs no second
 ## UI path and works the same on a phone.
 
+const StationProximity := preload("res://scripts/station_proximity.gd")
+
 @export var player_range := 3.0
 @export var prompt_height := 1.45
 
@@ -95,15 +97,7 @@ func _refresh() -> bool:
 
 
 func _is_nearest_station() -> bool:
-	if _player == null:
-		return true
-	var mine := _player.global_position.distance_to(global_position)
-	for other in get_tree().get_nodes_in_group("feed_station"):
-		if other == self or not (other as Node3D).is_inside_tree():
-			continue
-		if _player.global_position.distance_to((other as Node3D).global_position) < mine - 0.05:
-			return false
-	return true
+	return StationProximity.is_nearest(_player, self, "feed_station")
 
 
 func _input(event: InputEvent) -> void:

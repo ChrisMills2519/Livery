@@ -78,6 +78,29 @@ func _check_needs() -> void:
 	_horse.call("_tick_needs", 600.0)
 	_check("health drifts toward full care", float(_horse.get("health")) > 0.65)
 
+	# The bed is the one part of the care the horse sleeps in, so a soiled one
+	# holds health back.  The bed is frozen here (mucking) so this measures the
+	# drift target rather than the soiling that runs on the same tick, and hunger
+	# is left to run out in both cases so the bed is the only difference between
+	# them.
+	_horse.set("mucking", true)
+	_horse.set("cleanliness", 1.0)
+	_horse.set("trust", 1.0)
+	_horse.set("hunger", 0.0)
+	_horse.set("stall_muck", 1.0)
+	_horse.set("health", 0.5)
+	_horse.call("_tick_needs", 6000.0)
+	var soiled_health := float(_horse.get("health"))
+	_horse.set("stall_muck", 0.0)
+	_horse.set("health", 0.5)
+	_horse.call("_tick_needs", 6000.0)
+	var clean_bed_health := float(_horse.get("health"))
+	_check("a soiled bed holds health back", soiled_health < 0.85)
+	_check("an unsoiled bed holds health higher", clean_bed_health > soiled_health + 0.05)
+	_horse.set("mucking", false)
+	_horse.set("health", 1.0)
+	_horse.set("hunger", 1.0)
+
 	# The second-by-second mirror into the state owner, which is what a doorway
 	# and a save travel through.
 	_horse.call("_tick_needs", 60.0)
@@ -91,7 +114,8 @@ func _check_needs() -> void:
 		panel = (hud as Node).find_child("NeedsPanel", true, false)
 	_check("the HUD has a needs panel", panel != null)
 	if panel != null:
-		_check("the panel shows hay and three bars", panel.get_child_count() == 4)
+		_check("the panel shows hay and four bars", panel.get_child_count() == 5)
+		_check("the panel has a stable bar", (panel as Node).find_child("StableFill", true, false) != null)
 	print("needs: decay, rest, health drift, state mirror, HUD panel")
 
 

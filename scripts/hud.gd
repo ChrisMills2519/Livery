@@ -29,6 +29,9 @@ var _timer_label: Label
 var _progress_label: Label
 var _toast_label: Label
 var _hay_label: Label
+## The stable bed's bar: filled from `1 - stall_muck`, because a clean bed is
+## the good end of this bar just as a full belly is for FOOD.
+var _stable_fill: ColorRect
 ## Keyed by the horse property name: hunger, energy, health.
 var _need_fills: Dictionary = {}
 var _result_panel: PanelContainer
@@ -173,23 +176,36 @@ func _build_needs(parent: Node) -> void:
 		["energy", "ENERGY", Color(0.55, 0.82, 1.0, 1.0)],
 		["health", "HEALTH", Color(0.72, 1.0, 0.62, 1.0)],
 	]:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		box.add_child(row)
-		var caption := _label(row, String(entry[1]), 13, DIM_COLOR)
-		caption.custom_minimum_size = Vector2(56, 0)
-		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		var track := ColorRect.new()
-		track.color = Color(0.10, 0.13, 0.10, 0.85)
-		track.custom_minimum_size = Vector2(NEED_BAR_WIDTH, 7)
-		track.clip_contents = true
-		row.add_child(track)
-		var fill := ColorRect.new()
-		fill.color = entry[2]
-		fill.position = Vector2.ZERO
-		fill.size = Vector2(NEED_BAR_WIDTH, 7)
-		track.add_child(fill)
-		_need_fills[String(entry[0])] = fill
+		_need_fills[String(entry[0])] = _need_row(box, String(entry[1]), entry[2], String(entry[0]).capitalize())
+	# The bed is the one bar that is the player's own work rather than the horse's
+	# appetite, and it reads *clean*, so a full bar means the same good thing the
+	# other three do.
+	_stable_fill = _need_row(box, "STABLE", Color(0.74, 0.68, 0.46, 1.0), "Stable")
+
+
+## One caption and track, with the fill returned for `_refresh_needs`.  Named so
+## a check can find the row it is asserting about.
+func _need_row(parent: Node, caption_text: String, colour: Color, node_name: String) -> ColorRect:
+	var row := HBoxContainer.new()
+	row.name = "%sRow" % node_name
+	row.add_theme_constant_override("separation", 6)
+	parent.add_child(row)
+	var caption := _label(row, caption_text, 13, DIM_COLOR)
+	caption.custom_minimum_size = Vector2(56, 0)
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var track := ColorRect.new()
+	track.name = "%sTrack" % node_name
+	track.color = Color(0.10, 0.13, 0.10, 0.85)
+	track.custom_minimum_size = Vector2(NEED_BAR_WIDTH, 7)
+	track.clip_contents = true
+	row.add_child(track)
+	var fill := ColorRect.new()
+	fill.name = "%sFill" % node_name
+	fill.color = colour
+	fill.position = Vector2.ZERO
+	fill.size = Vector2(NEED_BAR_WIDTH, 7)
+	track.add_child(fill)
+	return fill
 
 
 func _label(parent: Node, text: String, size: int, color: Color) -> Label:
@@ -243,6 +259,10 @@ func _refresh_needs() -> void:
 		var value := clampf(float(raw), 0.0, 1.0)
 		var fill: ColorRect = _need_fills[key]
 		fill.size = Vector2(NEED_BAR_WIDTH * value, fill.size.y)
+	if _stable_fill != null:
+		var raw_muck: Variant = _horse.get("stall_muck")
+		var muck := clampf(float(raw_muck), 0.0, 1.0) if raw_muck != null else 0.0
+		_stable_fill.size = Vector2(NEED_BAR_WIDTH * (1.0 - muck), _stable_fill.size.y)
 
 
 func _update_objective() -> void:

@@ -8,6 +8,8 @@ extends Node3D
 ## and the record back into `HorseState` stay in one place, and a bale is only
 ## taken from the yard when the horse actually ate it.
 
+const StationProximity := preload("res://scripts/station_proximity.gd")
+
 @export var player_range := 3.0
 @export var horse_range := 3.5
 @export var prompt_height := 1.15
@@ -131,15 +133,7 @@ func _apply_suppression(on: bool) -> void:
 
 
 func _is_nearest_station() -> bool:
-	if _player == null:
-		return true
-	var mine := _player.global_position.distance_to(global_position)
-	for other in get_tree().get_nodes_in_group("feed_station"):
-		if other == self or not (other as Node3D).is_inside_tree():
-			continue
-		if _player.global_position.distance_to((other as Node3D).global_position) < mine - 0.05:
-			return false
-	return true
+	return StationProximity.is_nearest(_player, self, "feed_station")
 
 
 func _input(event: InputEvent) -> void:

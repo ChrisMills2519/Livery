@@ -157,6 +157,7 @@ func _check_stations(main: Node3D) -> void:
 		"stable stall": "Stable/HorseStall",
 		"feed trough": "Stable/FeedTrough",
 		"feed store": "Stable/FeedStore",
+		"muck point": "Stable/MuckStation",
 		"grooming bay": "GroomingBay/HorseAnchor",
 		"groomer's spot": "GroomingBay/GroomerAnchor",
 		"mounting block": "Stable/YardProps/MountingBlock",
