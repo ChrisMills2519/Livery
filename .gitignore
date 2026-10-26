@@ -13,10 +13,11 @@ _respdump/
 *.blend
 *.blend1
 
-# Exported builds (see netlify.toml)
+# Exported builds, published by tools/deploy_r2.py
 build/
 
-# Netlify CLI state, including the linked site id
+# Netlify CLI state from the old host; nothing deploys there any more, but an
+# old checkout may still have the linked site id here
 .netlify/
 
 # Review renders and other throwaway artifacts
@@ -25,3 +26,7 @@ artifacts/
 # Temporary debug renders and shaders
 artifacts/_dbg_*
 res/shaders/_fp_probe.*
+
+# Publishing credentials for tools/deploy_r2.py and tools/release.sh: never commit
+.env
+.env.local

@@ -38,11 +38,12 @@ Usage
 
 The default output is `build/web-mobile`; the known-good `build/web` is never
 overwritten.  The build log, `build-stats.json` and `OPTIMISATION.txt` are
-written to a sibling folder (`build/web-mobile-report`) because Netlify uploads
-every file in the deploy directory, and a 1 MB build log has no business on a
-public URL.  Deploy with the usual Netlify command after checking the result:
+written to a sibling folder (`build/web-mobile-report`) because the publish step
+uploads every file in the deploy directory, and a 1 MB build log has no business
+on a public URL.  Publish with `tools/deploy_r2.py` after checking the result:
 
-    netlify deploy --prod --dir=build/web-mobile --site=66c08511-2b84-47e1-98e2-1a96e0aebd05
+    python3 tools/deploy_r2.py --dry-run
+    python3 tools/deploy_r2.py
 
 The terrain shader reconstructs the blue channel of its normal maps from
 red/green.  VRAM-compressed normal maps (RGTC/ETC2) store only two channels;
@@ -76,9 +77,9 @@ STAGE_PREFIX = "groom-web-mobile-"
 def report_dir(out_dir: Path) -> Path:
     """Where the log, stats and optimisation report live.
 
-    Deliberately beside the deploy folder, not inside it: `netlify deploy --dir`
-    uploads everything it finds, so `export.log` and `OPTIMISATION.txt` used to
-    be downloadable from the public site root.
+    Deliberately beside the publish folder, not inside it: a directory upload
+    takes everything it finds, so `export.log` and `OPTIMISATION.txt` used to be
+    downloadable from the public site root.
     """
     return out_dir.with_name(out_dir.name + "-report")
 
@@ -616,7 +617,7 @@ def transfer_sizes(out_dir: Path) -> list[str]:
         rows.append(line)
     if rows:
         rows.append(f"  wire total (compressed pck + wasm): {wire:7.1f} MiB")
-        rows.append("  served raw today: both files are binary, so the CDN sends them uncompressed")
+        rows.append("  served on the wire: tools/deploy_r2.py stores both with content-encoding: br")
     return rows
 
 
@@ -742,7 +743,8 @@ def write_report(
         "\n\n" + verified if verified else "",
         "",
         "Redeploy:",
-        "  netlify deploy --prod --dir=build/web-mobile --site=66c08511-2b84-47e1-98e2-1a96e0aebd05",
+        "  tools/release.sh            one command: export, upload, check the host",
+        "  python3 tools/deploy_r2.py --check    assert the live host (from .env)",
         "  (check it on a real iPad/iPhone the first time it goes live)",
         "",
         "The working project's .import files and .godot cache were not modified.",

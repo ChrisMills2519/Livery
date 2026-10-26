@@ -89,21 +89,32 @@ The `ERROR: Attempting to parent and popup a dialog that already has a parent.` 
 - Every new interaction also gets a case in `tools/check_touch.gd`. Keyboard-only tests should say so.
 - Known check status before the touch work: `check_character_select` already failed (handoff timeout), and `check_lead` was flaky. `check_dog` also fails occasionally on timing.
 
-## Web build and the Netlify deploy
+## Web build and the R2 deploy
 
-- **Only deploy when the user explicitly asks.** Never deploy or re-deploy as a side effect of another change (a gameplay fix, a doc edit, a "while I'm here" upload), and never export-and-push to refresh the site on your own initiative. Build and test locally as much as you like; wait for the word before anything reaches Netlify. When they do ask, deploy only what they asked for and say which site and URL you touched.
+- **Only deploy when the user explicitly asks.** Never deploy or re-deploy as a side effect of another change (a gameplay fix, a doc edit, a "while I'm here" upload), and never export-and-push to refresh the site on your own initiative. Build and test locally as much as you like; wait for the word before anything reaches the bucket. When they do ask, deploy only what they asked for and say which objects and host you touched. `tools/release.sh` is a deploy, not a convenience: running it needs the same word.
 - Browser builds go through the `Web` preset in `export_presets.cfg`. It is single-threaded on purpose, so the host needs no `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers.
-- Export, then deploy the folder (hosting config lives in `netlify.toml`):
+- Export, then publish. There is no hosting config file any more: the response headers live in `tools/deploy_r2.py`, because R2 serves them from object metadata.
+- `tools/release.sh` is the release, so a new version is one command and no secret is typed: export, brotli, upload, then assert the live host. `--dry-run` stops after the wire sizes, `--skip-export` publishes the export already in `build/web-mobile`. It exits 1 while the game is on its `r2.dev` address, because the check's one expected failure is `/` -> 404; the script says so on the way out and the custom domain clears it. Do not add a flag to swallow that status.
 
 ```bash
 cd /home/chrismills029/liv/groom
-godot --headless --path . --export-release "Web" build/web/index.html
-netlify deploy --prod --dir=build/web --site=66c08511-2b84-47e1-98e2-1a96e0aebd05
+tools/release.sh                    # export, brotli, upload, check the host
+tools/release.sh --dry-run          # the same, but report the sizes and upload nothing
+tools/release.sh --skip-export      # publish build/web-mobile exactly as it stands
+python3 tools/deploy_r2.py --only index.pck   # refresh a single object
 ```
 
-- Live site: <https://groom-769.netlify.app>. Add `?touch=1` or `?touch=0` to the URL to force an input mode; without it the build decides from the touchscreen and `mobile` features, which an iPad reports as touch.
-- The export is about 250 MB (212 MB `index.pck` + 39 MB `index.wasm`), so the first load on a tablet is slow over cellular. `build/` and `.netlify/` are git-ignored.
-- Vercel is not an option on the current Hobby plan: it caps a deployment upload at 100 MB.
+- The two binaries are stored brotli-compressed and served with `Content-Encoding: br`, which is the reason for this host: 84.0 MiB pck -> 42.9 MiB and 37.7 MiB wasm -> 7.6 MiB. Godot asks for `index.pck` by name, so the object keeps its name; the encoding does the work, not a renamed file. A cold visit is about 50.9 MiB instead of the ~93 MiB Netlify was sending, because it never compressed the pck.
+- Credentials live in `.env` beside the repo root: an R2 API token with *Object Read & Write* scoped to the bucket as `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`, plus `R2_ACCOUNT_ID`, `R2_BUCKET` (default `livery-web`) and `R2_HOST`. `tools/deploy_r2.py` loads that file before it builds its argument parser, and a variable already set in the real environment wins, so an override on the command line still works. The file is git-ignored and mode 600 (check with `git check-ignore -v .env`, do not assume); never commit it and never paste its values into a chat, an issue or a log. The tool reads the `R2_` names only — `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` are ignored, and a run given only those falls through to the `cf` route, which cannot work: minting one-hour keys needs `--parent-access-key-id`, a parent key that does not exist, and `cf accounts tokens permission-groups list` answers `403 [9109]`. If `cf` complains that it needs Node.js v22 or newer, put the nvm bin directory first on `PATH` — it resolves `node` through `/usr/bin/env`.
+- Two R2 behaviours the host checks depend on, both of which produce convincing false failures if removed. **The stored brotli representation is only returned to a client that advertises `Accept-Encoding: br`** — curl or urllib without it gets the edge's decoded copy (`Transfer-Encoding: chunked`, no encoding header, the full 84 MiB), which reads as an upload that did not happen. **A request carrying an unadvertised user agent is refused with `error code: 1010` and a 403**, which is what urllib's default UA gets on this host. `--check` therefore sends a browser UA and `Accept-Encoding: br`; it reported every object as a mismatch until it did.
+- `--check` has exactly one expected failure while the game runs on its `r2.dev` address: `/` answers 404, because a public bucket has no index document. That clears once the bucket has a custom domain and a Redirect Rule from `/` to `/index.html`.
+- Add `?touch=1` or `?touch=0` to the game URL to force an input mode; without it the build decides from the touchscreen and `mobile` features, which an iPad reports as touch.
+- Hosts already ruled out, so nobody spends an afternoon rediscovering them:
+  - **Netlify** paused the site on 26 Oct 2026 with `503 usage_exceeded`. Its credit-based Free plan buys roughly 15 GB/month of transfer, which a 93 MiB cold load spends in a few hundred plays.
+  - **Cloudflare Pages and Workers static assets** cap a single file at 25 MiB, so neither can hold the pck or the wasm.
+  - **Vercel Hobby** is personal/non-commercial only and caps a CLI upload at 100 MB.
+  - **R2 custom domains** need the zone in the same Cloudflare account as the bucket; the `r2.dev` URL is rate-limited and is for smoke tests only.
+- `.netlify/` stays git-ignored for old checkouts, but nothing deploys there any more.
 - This machine's Chromium has no WebGL2, so the browser preview can only prove the page and assets load. Rendering has to be checked on the iPad or another GPU-backed browser.
 
 ## The farmhouse interior
