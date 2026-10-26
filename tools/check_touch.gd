@@ -9,6 +9,11 @@ extends SceneTree
 ## InputEventScreenDrag handlers call) and then verifies what gameplay does with
 ## the results: prompts, the analog stick, run hysteresis, look, the CONTEXT
 ## button, grooming gestures and the select-screen swipe.
+##
+## It also covers the ways a real phone loses the stick: a touch-up the OS never
+## delivered (iOS cancels a touch rather than ending it), a late touch-up from
+## the finger that used to own it, and the same presses arriving as real
+## InputEventScreenTouch / ScreenDrag events through _input().
 
 const MAIN := "res://scenes/main.tscn"
 
@@ -54,6 +59,10 @@ func _run() -> void:
 		and _device._parse_touch_query("?touch=2") == ""
 		and _device._parse_touch_query("?touchy=1") == "",
 		"a missing or malformed touch parameter falls back to detection")
+	_check(
+		_device._parse_query("?touch=1&touchdebug=1", "touchdebug") == "1"
+		and _device._parse_query("?touch=1", "touchdebug") == "",
+		"a web URL can ask for the touch debug readout")
 	_device.set_touch_mode(0)
 	_check(_device.pick("E  MOUNT", "TAP  MOUNT") == "E  MOUNT", "keyboard mode picks keyboard prompt text")
 	_check(not _touch.feed_touch(90, Vector2(200, 500), true), "keyboard mode ignores touches")
@@ -77,6 +86,12 @@ func _run() -> void:
 	await _check_simultaneous_thumbs()
 	await _check_steer_frame()
 	await _check_look()
+	await _check_lost_release()
+	await _check_push_reclaim()
+	await _check_live_thumb_keeps_stick()
+	await _check_stick_self_heal()
+	await _check_negative_index()
+	await _check_raw_events()
 	await _check_keyboard_still_works()
 	await _check_context_mount()
 	await _check_grooming_gestures()
@@ -215,6 +230,151 @@ func _check_look() -> void:
 		"a touch drag applies its own gain, not the mouse rate (%.3f vs %.3f rad)" % [turned, raw])
 
 
+# --- Ride: a touch-up the OS never delivered --------------------------------
+
+func _check_lost_release() -> void:
+	# The reported phone fault.  iOS cancels a touch instead of ending it (a
+	# back-swipe at the edge, Safari's toolbar moving, a system gesture), and
+	# Godot's web input has no event for that, so the touch-up never arrives
+	# while the stick is pushed.  The next thumb must still get a stick.
+	var base := Vector2(200, 500)
+	_touch.feed_touch(70, base, true)
+	_touch.feed_drag(70, base + Vector2(0, -90), Vector2(0, -90))
+	_check(_touch.is_stick_active() and _touch.is_stick_pushing(),
+		"a pushed stick is held before its release is lost")
+	# No touch-up for 70: the OS dropped it.
+	await _wait_ms(400)
+
+	var yaw_before: float = _player.rotation.y
+	_touch.feed_touch(71, base + Vector2(30, 20), true)
+	_check(int(_touch._stick_index) == 71, "a lost touch-up does not lock the next thumb out")
+	_touch.feed_drag(71, base + Vector2(30, -50), Vector2(0, -70))
+	_check(_touch.get_move_input().y < -0.4, "the thumb that took over steers")
+	var start := _player.global_position
+	await _physics_frames(30)
+	var walked := Vector2(_player.global_position.x - start.x, _player.global_position.z - start.z).length()
+	_check(walked > 0.2, "the player walks again after a cancelled touch (moved %.2f m)" % walked)
+	_check(is_equal_approx(_player.rotation.y, yaw_before),
+		"taking the stick over does not turn the view")
+
+	# The stale finger's touch-up can still turn up later; it must not kill the
+	# thumb that took over from it.
+	_touch.feed_touch(70, base + Vector2(0, -90), false)
+	await _frames(2)
+	_check(int(_touch._stick_index) == 71 and _touch.is_stick_active(),
+		"a late touch-up from the stale finger leaves the new stick alone")
+	_touch.feed_touch(71, base + Vector2(30, -50), false)
+	await _frames(2)
+	_check(not _touch.is_stick_active(), "lifting the new thumb ends the stick")
+
+
+# --- Ride: recovering the stick by pushing -----------------------------------
+
+func _check_push_reclaim() -> void:
+	# A press that lands before the stale holder times out is filed idle, so the
+	# push is what has to recover the stick.  Without it the player would have to
+	# lift and press again to move at all.
+	var base := Vector2(200, 500)
+	_touch.feed_touch(75, base, true)
+	_touch.feed_drag(75, base + Vector2(0, -80), Vector2(0, -80))
+	_touch.feed_touch(76, base + Vector2(50, 30), true)
+	_check(int(_touch._stick_index) == 75, "inside the window the old holder keeps the stick")
+	# 75 is dead now; 76 pushes past the resting distance and takes over.
+	await _wait_ms(400)
+	_touch.feed_drag(76, base + Vector2(50, -40), Vector2(0, -70))
+	_check(int(_touch._stick_index) == 76, "a push takes a stick whose holder went quiet")
+	_check(_touch.get_move_input().y < -0.4, "the recovered stick steers")
+	_touch.feed_touch(76, base + Vector2(50, -40), false)
+	_touch.feed_touch(75, base + Vector2(0, -80), false)
+	await _frames(2)
+	_check(not _touch.is_stick_active(), "the stick is free once the stale finger finally lifts")
+
+
+# --- Ride: a live thumb keeps the stick --------------------------------------
+
+func _check_live_thumb_keeps_stick() -> void:
+	var base := Vector2(200, 500)
+	_touch.feed_touch(72, base, true)
+	_touch.feed_drag(72, base + Vector2(0, -70), Vector2(0, -70))
+	_touch.feed_touch(73, base + Vector2(40, 40), true)
+	_check(int(_touch._stick_index) == 72, "a resting second contact does not steal a live stick")
+	_touch.feed_touch(73, base + Vector2(40, 40), false)
+
+	# The holder goes quiet, exactly as it does while walking a straight line.
+	await _wait_ms(400)
+	_touch.feed_touch(74, base + Vector2(60, 30), true)
+	_check(int(_touch._stick_index) == 74, "a thumb that lands after the holder goes quiet takes the stick")
+	_touch.feed_touch(74, base + Vector2(60, 30), false)
+	_touch.feed_touch(72, base + Vector2(0, -70), false)
+	await _frames(2)
+	_check(not _touch.is_stick_active(), "the stick is free after both fingers lift")
+
+
+# --- Ride: an index with no finger left --------------------------------------
+
+func _check_stick_self_heal() -> void:
+	_touch._stick_index = 999
+	_touch._stick_owned = true
+	await _frames(2)
+	_check(int(_touch._stick_index) == -1, "a stick index with no finger behind it is dropped")
+	_check(not _touch.is_stick_active(), "the dropped index is not left marked as owned")
+	_touch.feed_touch(77, Vector2(200, 500), true)
+	_check(int(_touch._stick_index) == 77, "the stick arms again after the dead index is cleared")
+	_touch.feed_touch(77, Vector2(200, 500), false)
+	await _frames(2)
+
+
+# --- Ride: a touch index that is negative ------------------------------------
+
+## iOS Safari's touch identifiers climb for the life of the page and overflow
+## into a negative int32; a real device reported -410517893.  The layer kept -1
+## as its "no stick" sentinel and tested the sign, so a live stick read as
+## absent: the ring was not drawn, the steering frame stayed on the camera, and
+## `get_move_input()` returned bare keyboard input, which left both the walk and
+## the horse with nothing.  Any test of ownership belongs on `_stick_owned`.
+func _check_negative_index() -> void:
+	var id := -410517893
+	var base := Vector2(210, 510)
+	_touch.feed_touch(id, base, true)
+	_check(_touch.is_stick_active(), "a negative touch index arms the stick")
+	_touch.feed_drag(id, base + Vector2(0, -70), Vector2(0, -70))
+	_check(_touch.get_move_input().y < -0.4, "a negative index steers the stick")
+	_check(_touch.is_stick_pushing(), "a negative index owns the movement frame")
+	var start := _player.global_position
+	await _physics_frames(30)
+	var walked := Vector2(_player.global_position.x - start.x, _player.global_position.z - start.z).length()
+	_check(walked > 0.2, "the player walks from a negative index (moved %.2f m)" % walked)
+	_touch.feed_touch(id, base + Vector2(0, -70), false)
+	await _frames(2)
+	_check(
+		not _touch.is_stick_active() and _touch.get_move_input().length() < 0.01,
+		"lifting a negative index releases the stick")
+
+
+# --- Ride: real touch events through _input() --------------------------------
+
+func _check_raw_events() -> void:
+	# This is the path the phone actually uses: the event reaches _input(), which
+	# claims the finger before the GUI and marks it handled.  The other cases call
+	# feed_touch() directly, so they cannot see a fault in that layer.
+	var base := Vector2(220, 520)
+	Input.parse_input_event(_touch_event(0, _window_point(base), true))
+	await _frames(2)
+	_check(int(_touch._stick_index) == 0, "a real touch event claims the stick through _input")
+	Input.parse_input_event(
+		_drag_event(0, _window_point(base + Vector2(0, -70)), Vector2(0, -70))
+	)
+	await _frames(2)
+	_check(_touch.get_move_input().y < -0.4, "a real drag event steers the stick")
+	var start := _player.global_position
+	await _physics_frames(30)
+	var walked := Vector2(_player.global_position.x - start.x, _player.global_position.z - start.z).length()
+	_check(walked > 0.2, "the player walks from a real touch event (moved %.2f m)" % walked)
+	Input.parse_input_event(_touch_event(0, _window_point(base + Vector2(0, -70)), false))
+	await _frames(2)
+	_check(not _touch.is_stick_active(), "a real touch-up releases the stick")
+
+
 # --- Keyboard stays live with touch on -------------------------------------
 
 func _check_keyboard_still_works() -> void:
@@ -339,6 +499,30 @@ func _check_simultaneous_thumbs() -> void:
 
 
 # --- Helpers ----------------------------------------------------------------
+
+## Window-space point for a viewport-space position.  The viewport maps an
+## OS touch into canvas coordinates with the inverse of its final transform, so a
+## test that parses its own event has to apply that transform forward first - the
+## same trip a phone's touch makes before _input() sees it.
+func _window_point(pos: Vector2) -> Vector2:
+	return get_root().get_final_transform() * pos
+
+
+func _touch_event(index: int, pos: Vector2, pressed: bool) -> InputEventScreenTouch:
+	var event := InputEventScreenTouch.new()
+	event.index = index
+	event.position = pos
+	event.pressed = pressed
+	return event
+
+
+func _drag_event(index: int, pos: Vector2, relative: Vector2) -> InputEventScreenDrag:
+	var event := InputEventScreenDrag.new()
+	event.index = index
+	event.position = pos
+	event.relative = relative
+	return event
+
 
 func _action(action_name: String) -> InputEventAction:
 	var event := InputEventAction.new()
