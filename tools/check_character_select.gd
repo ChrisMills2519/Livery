@@ -71,9 +71,12 @@ func _process(_delta: float) -> bool:
 		4:
 			# The main scene now carries the grooming bay and its baked coat
 			# mask, so the synchronous world load runs close to six seconds on
-			# the test machine.  The assertion here is the mounted player and a
-			# cleared fade, not a 5.5-second stopwatch.
-			if now - _state_ms > 9000:
+			# the test machine, and 18 s when the full check suite is running
+			# beside it (measured 2026-10-26: 8 s standalone, 18 s under load).
+			# The assertion here is the mounted player and a cleared fade, not a
+			# stopwatch, so the window is generous and the cap below still
+			# catches a genuine hang.
+			if now - _state_ms > 25000:
 				_fail("timed out waiting for the mounted handoff")
 				_finish()
 				return true
@@ -100,7 +103,7 @@ func _process(_delta: float) -> bool:
 			_check_mounted(player)
 			_finish()
 			return true
-	if now - _start_ms > 20000:
+	if now - _start_ms > 45000:
 		_fail("timed out")
 		_finish()
 		return true

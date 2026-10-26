@@ -102,6 +102,32 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
 - `tools/check_horse_state.gd` walks main -> farmhouse case -> main -> showground
   and asserts the stats, the coat bytes and the rosette survive.
 
+## The care loop
+
+- The horse's daily needs (`hunger`, `energy`, `health`) belong to
+  `HorseState` and are mirrored once a second by `horse._tick_needs()` through
+  `HorseState.set_needs()`. That call is a plain write and must stay one: it runs
+  every second, and `record_from()` emits `changed`, which queues a save.
+- The rates are exported on the horse: `hunger_per_minute`, the two energy
+  rates, `health_per_minute`, `hay_feed_gain`. Nothing here is a fail state - the
+  horse works at zero and health only drifts toward what the care adds up to.
+- Hay is `GameState.hay`. `buy_hay()` owns the £5 price and the refusal, and
+  `use_hay()` takes one back; the trough lets the horse eat first and spends the
+  bale afterwards, so a refusal never costs one.
+- **The feed store and the trough are both in the `feed_station` group, and the
+  nearest one wins** the prompt and the interact event. Their ranges overlap (they
+  are about 4 m apart) and one `interact` event is claimed by one node: without
+  this rule the later node in the tree swallowed the press and FEED silently did
+  nothing.
+- A flash message is feedback, not permission. The offer is gated separately
+  from the text, so "out of hay" cannot leave a CONTEXT button on screen.
+- **A station has to be somewhere the player can walk.** The stable paddock is a
+  closed collision box on all four sides, and the decorative `FeedTrough` had been
+  sitting inside it, unreachable. Check placement against the collision shapes,
+  not against a render.
+- `tools/check_care.gd` covers the needs, both stations, the refusal paths, the
+  nearest-station rule and the save.
+
 ## Camera
 
 - Interiors carry `camera_max_boom`, `camera_pivot_height` and `camera_shoulder`

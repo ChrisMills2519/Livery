@@ -47,6 +47,24 @@ signal training_awarded(new_skill: float, new_fitness: float)
 var jumping_skill := 1.0
 var fitness := 1.0
 
+@export_group("Needs")
+## Daily needs, 1.0 = content.  Hunger takes a little over an hour of play to
+## empty, so a session ends with a horse that still looks cared for and a
+## skipped day is noticeable rather than punishing.  Nothing here is a fail
+## state: the horse keeps working at zero, and health only drifts.
+var hunger := 1.0
+var energy := 1.0
+var health := 1.0
+@export var hunger_per_minute := 0.011
+@export var energy_rest_per_minute := 0.05
+@export var energy_ride_per_minute := 0.04
+@export var health_per_minute := 0.02
+## How much of the bowl one bale fills.  Two bales take a hungry horse to full.
+@export var hay_feed_gain := 0.5
+## Seconds between need values being mirrored into `HorseState`.
+@export var needs_report_seconds := 1.0
+var _needs_report := 0.0
+
 ## Saddle socket. The marker is placed on the back surface in the scene and
 ## this script makes it follow the animated spine so the rider rises and
 ## pitches with the gait instead of hovering at a fixed height.
@@ -427,6 +445,46 @@ func award_training(jump_xp: float, fitness_xp: float) -> void:
 	training_awarded.emit(jumping_skill, fitness)
 
 
+## Needs decay over real minutes and are mirrored into `HorseState` once a
+## second, so a doorway, a reload or a save carries them along.  The mirror is a
+## plain write rather than a `record_from()`: the latter emits `changed`, and a
+## save queued every second is not what any of this is for.
+func _tick_needs(delta: float) -> void:
+	var minutes := delta / 60.0
+	hunger = maxf(0.0, hunger - hunger_per_minute * minutes)
+	var working := rider != null and absf(_ride_speed) > 0.2
+	if working:
+		energy = maxf(0.0, energy - energy_ride_per_minute * minutes)
+	elif boarded or absf(_ride_speed) < 0.05:
+		energy = minf(1.0, energy + energy_rest_per_minute * minutes)
+	# Health drifts toward what the horse's care adds up to.  It cannot be lost
+	# in a hurry and neglect alone does not take it to zero.
+	var target := clampf(0.35 + 0.35 * cleanliness + 0.2 * trust + 0.1 * hunger, 0.0, 1.0)
+	health = move_toward(health, target, health_per_minute * minutes)
+	_needs_report += delta
+	if _needs_report >= needs_report_seconds:
+		_needs_report = 0.0
+		HorseState.set_needs(hunger, energy, health)
+
+
+## Eats one bale from the yard's supplies.  The trough consumes the bale when
+## this answers ok, so a full horse cannot waste one.
+func feed() -> Dictionary:
+	if hunger >= 0.995:
+		return {"ok": false, "message": "Your horse is not hungry."}
+	var before := hunger
+	hunger = minf(1.0, hunger + hay_feed_gain)
+	energy = minf(1.0, energy + 0.1)
+	happiness = minf(1.0, happiness + 0.05)
+	trust = minf(1.0, trust + 0.02)
+	HorseState.record_from(self)
+	return {
+		"ok": true,
+		"hunger_gain": hunger - before,
+		"message": "Your horse eats the hay and settles.",
+	}
+
+
 ## Freeze the horse in a quiet standing pose at the bay.  The grooming mask
 ## is baked against the posed skeleton, so the mask zones and the picker must
 ## both see the same pose.
@@ -608,6 +666,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= gravity * delta
 
+	_tick_needs(delta)
 	if rider != null:
 		_ride(delta)
 	elif leader != null:

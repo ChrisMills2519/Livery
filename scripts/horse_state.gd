@@ -30,6 +30,12 @@ var groomed_hooves: Array = [false, false, false, false]
 var care_reward_score := 0.0
 var fitness := 1.0
 var jumping_skill := 1.0
+## Daily needs, 1.0 = content.  They decay slowly while the horse is in the
+## world (see `horse.gd`), so they are part of the state rather than the scene:
+## a horse that walked into the stable hungry comes back out hungry.
+var hunger := 1.0
+var energy := 1.0
+var health := 1.0
 ## Base64 PNG of the painted coat.  Empty until a mask has been exported.
 var coat_mask := ""
 
@@ -51,6 +57,9 @@ func apply_to(horse: Node) -> void:
 	horse.set("care_reward_score", care_reward_score)
 	horse.set("fitness", fitness)
 	horse.set("jumping_skill", jumping_skill)
+	horse.set("hunger", hunger)
+	horse.set("energy", energy)
+	horse.set("health", health)
 	# The shader mixes a global dirt level with the local mask, so both halves
 	# have to be restored: the mask alone leaves the whole coat dark, the level
 	# alone erases the painted clean patches.
@@ -83,12 +92,24 @@ func record_from(horse: Node) -> void:
 	care_reward_score = maxf(0.0, float(horse.get("care_reward_score")))
 	fitness = maxf(1.0, float(horse.get("fitness")))
 	jumping_skill = maxf(1.0, float(horse.get("jumping_skill")))
+	hunger = clampf(float(horse.get("hunger")), 0.0, 1.0)
+	energy = clampf(float(horse.get("energy")), 0.0, 1.0)
+	health = clampf(float(horse.get("health")), 0.0, 1.0)
 	var surface: Node = horse.get("groom_surface")
 	if surface != null and surface.has_method("export_mask"):
 		var exported := str(surface.call("export_mask"))
 		if not exported.is_empty():
 			coat_mask = exported
 	changed.emit()
+
+
+## The needs tick every second from the horse, which is far too often to go
+## through `changed` (that queues a save) and too fine for anything to listen
+## to.  It is a plain write; the save points pick the values up.
+func set_needs(new_hunger: float, new_energy: float, new_health: float) -> void:
+	hunger = clampf(new_hunger, 0.0, 1.0)
+	energy = clampf(new_energy, 0.0, 1.0)
+	health = clampf(new_health, 0.0, 1.0)
 
 
 func to_dict() -> Dictionary:
@@ -102,6 +123,9 @@ func to_dict() -> Dictionary:
 		"care_reward_score": care_reward_score,
 		"fitness": fitness,
 		"jumping_skill": jumping_skill,
+		"hunger": hunger,
+		"energy": energy,
+		"health": health,
 		"coat_mask": coat_mask,
 	}
 
@@ -119,6 +143,9 @@ func from_dict(data: Dictionary) -> void:
 	care_reward_score = maxf(0.0, float(data.get("care_reward_score", care_reward_score)))
 	fitness = maxf(1.0, float(data.get("fitness", fitness)))
 	jumping_skill = maxf(1.0, float(data.get("jumping_skill", jumping_skill)))
+	hunger = clampf(float(data.get("hunger", hunger)), 0.0, 1.0)
+	energy = clampf(float(data.get("energy", energy)), 0.0, 1.0)
+	health = clampf(float(data.get("health", health)), 0.0, 1.0)
 	var hooves: Variant = data.get("groomed_hooves", [])
 	if hooves is Array and (hooves as Array).size() == 4:
 		groomed_hooves = (hooves as Array).duplicate()

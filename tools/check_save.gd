@@ -13,8 +13,10 @@ extends SceneTree
 ## `check_horse_state` covers what that arrangement exists for: progress
 ## surviving a scene change and a spawn that did not earn it.
 
-## Stand-in for the real horse: the save only reads and writes these nine
-## properties, so a stub keeps this check off the GLB and the skeleton.
+## Stand-in for the real horse: `HorseState` only reads and writes these
+## properties, so a stub keeps this check off the GLB and the skeleton.  Adding
+## a field to the state means adding it here too, which is the point of a double
+## that mirrors the contract rather than the node.
 class StubHorse:
 	extends Node
 	var trust := 0.0
@@ -26,6 +28,9 @@ class StubHorse:
 	var care_reward_score := 0.0
 	var fitness := 1.0
 	var jumping_skill := 1.0
+	var hunger := 1.0
+	var energy := 1.0
+	var health := 1.0
 	var groom_surface: Node = null
 
 
@@ -165,7 +170,7 @@ func _check_round_trip() -> void:
 	_check("painted coat restored", String(_horse.groom_surface.get("imported")) == "MASK-PNG")
 	_check("dirt level follows cleanliness",
 		is_equal_approx(float(_horse.groom_surface.get("dirt")), 0.28))
-	print("round trip: money, times, rosettes, nine horse fields")
+	print("round trip: money, times, rosettes, twelve horse fields")
 
 
 ## A scene with no horse in it (the farmhouse) must not drop the horse half: the

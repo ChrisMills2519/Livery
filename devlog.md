@@ -876,4 +876,27 @@ State-machine review (no defects found in the horse or player code):
 - Stale comments are gone with it. `game_state.gd` no longer says rosettes are not saved to disk or that save/load comes later, and `agents.md` no longer records check status by hand: `tools/check_all.sh --list` is the list, and CI is what enforces it.
 - Verification: `check_save` PASS (with the progress-signal case), `check_arena` PASS, `check_horse_state` PASS.
 
+## Hay, hunger, and a reason to spend money
+
+2026-10-26
+
+- The GDD's MVP lists "feeding ... and purchasing supplies" and neither existed for the horse: the only feed bowl in the game belongs to the dog, and money only ever left the wallet as a £20 show entry. The horse now carries `hunger`, `energy` and `health`, the yard has a feed store that sells hay at £5 a bale, and the trough spends a bale to fill the horse. That is the loop the design asked for: earn at the show, spend on hay, feed the horse, train it, go back.
+- The needs are gentle on purpose. Hunger empties over about ninety minutes of play, riding spends a little energy, standing still or being stabled restores it, and health eases toward `0.35 + 0.35 * cleanliness + 0.2 * trust + 0.1 * hunger` at 0.02/min. Nothing dies, nothing stalls, and a missed visit is noticeable rather than punishing - the GDD's "avoid heavy punishment mechanics". The five rates are exported on the horse and are the only knobs.
+- The needs change every frame, which is far too often for `HorseState.record_from()`: that emits `changed`, and `changed` queues a save. They are mirrored once a second through `HorseState.set_needs()`, a plain write, and the existing save points carry them.
+- `GameState.hay` is the first real supply. `buy_hay()` owns the price and the refusal, `use_hay()` takes one back out, and hay is in the snapshot - a child who buys bales and closes the tab finds them again.
+- **Both stations had to be placed twice.** The first attempt put them inside the stable paddock, which is a *closed* collision box on all four sides; the pre-existing `FeedTrough` had been decorative and unreachable, and a station the player cannot walk to is not a station. A proximity audit (every mesh within 2 m, printed from a throwaway probe) moved the feed corner into the corridor between the stable and the paddock, clear of the fence, the props and the bush.
+- **Two stations inside one another's range is a real fault, not a test artifact.** A single `interact` event is claimed by one node, and the store, later in the tree, swallowed every press meant for the trough: FEED did nothing while the player stood between them. Both are in the `feed_station` group now and the nearest one wins the prompt as well as the press, so a thumb never sees two offers for one spot and the keyboard cannot press the wrong one.
+- A flash message used to grant permission: "NO HAY" was shown while the CONTEXT offer stayed up for its 2.5 s. The text and the gate are computed separately on both stations now, so feedback is never mistaken for an offer.
+- Verification: new `tools/check_care.gd` PASS (36 assertions) - decay, rest, health drift, the mirror into the owner, the HUD panel, the price and the broke refusal, the spend-and-fill cycle, a full horse refusing without costing a bale, an empty yard offering nothing, the horse having to be at the trough, the nearest-station rule, the snapshot and the doorway. `check_save` failed first on the new fields because its stub horse mirrors the contract rather than the node; the stub was updated and it passes. `tools/check_all.sh` then ran the whole suite: PASS 29/29 in 436 s, with no retries needed.
+- Limitation: the four rates are arithmetic, not play-tested; the HUD bars and both prompts have only been rendered under xvfb. The CONTEXT label on a phone is exercised by the routing in `check_touch`, not by a device. Feeding has no animation or sound of its own yet - the horse eats and the needs move.
+
+## The three checks that only fail under load
+
+2026-10-26
+
+- The first full run of the suite after the care loop failed three checks: `check_character_select` (timed out waiting for the mounted handoff at 18 s), `check_dog` (the followed dog covered 0.86 m) and `check_walkthrough` (two camera clips inside the farmhouse). All three pass on their own, and all three had passed in two earlier `--fast` runs and a standalone walkthrough run that day, so this is load: the full suite runs 29 Godot processes back to back on a 2.7 GB machine, and these three measure motion or a heavy synchronous scene load.
+- `tools/check_all.sh` gained a documented retry-once list rather than a skip: a listed check that fails is run again, a pass on the second attempt is reported `ok (retried)`, and a failure twice is still a failure. A deterministic regression fails both times, so nothing is hidden by this; a flaky check that fails twice still turns the suite red.
+- `check_character_select` was the one with a magic number to fix: it now allows 25 s for the handoff (measured 8 s standalone, 18 s under load) with a 45 s overall cap, which still catches a hang. The property under test - a mounted player behind a cleared fade - is unchanged, and no assertion was relaxed.
+- `check_dog` and `check_walkthrough` were left alone: their thresholds are the properties, and both pass reliably when they are not sharing the machine with the rest of the suite.
+
 <!-- end -->

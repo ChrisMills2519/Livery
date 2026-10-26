@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://scripts/stable.gd" id="1_stable_script"]
 [ext_resource type="PackedScene" path="res://Models/horse_stable_animal.glb" id="stable_model"]
@@ -6,6 +6,8 @@
 [ext_resource type="PackedScene" path="res://scenes/stable_horse.tscn" id="stable_horse"]
 [ext_resource type="PackedScene" path="res://Models/medieval_village/fence_713fa0e6.glb" id="fence_model"]
 [ext_resource type="PackedScene" path="res://scenes/stable_yard_props.tscn" id="yard_props"]
+[ext_resource type="Script" path="res://scripts/feed_trough.gd" id="feed_trough_script"]
+[ext_resource type="Script" path="res://scripts/feed_store.gd" id="feed_store_script"]
 [sub_resource type="BoxShape3D" id="stable_col_shape"]
 size = Vector3(8.940, 3.970, 3.900)
 [sub_resource type="BoxShape3D" id="paddock_col_x"]
@@ -19,6 +21,18 @@ albedo_color = Color(0.45, 0.3, 0.18, 1)
 roughness = 1.0
 [sub_resource type="BoxShape3D" id="trough_shape"]
 size = Vector3(2.0, 0.5, 0.7)
+[sub_resource type="BoxMesh" id="store_body_mesh"]
+size = Vector3(0.9, 1.0, 0.6)
+[sub_resource type="BoxMesh" id="store_lid_mesh"]
+size = Vector3(0.96, 0.1, 0.66)
+[sub_resource type="StandardMaterial3D" id="store_wood"]
+albedo_color = Color(0.42, 0.28, 0.16, 1)
+roughness = 1.0
+[sub_resource type="StandardMaterial3D" id="store_hay"]
+albedo_color = Color(0.8, 0.68, 0.32, 1)
+roughness = 1.0
+[sub_resource type="BoxShape3D" id="store_shape"]
+size = Vector3(0.95, 1.1, 0.65)
 
 [node name="Stable" type="Node3D"]
 script = ExtResource("1_stable_script")
@@ -94,7 +108,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.000, 0.660, -24.000)
 [node name="YardProps" parent="." instance=ExtResource("yard_props")]
 
 [node name="FeedTrough" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, 0.25, -22.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0.25, -23.0)
+script = ExtResource("feed_trough_script")
 
 [node name="Mesh" type="MeshInstance3D" parent="FeedTrough"]
 mesh = SubResource("trough_mesh")
@@ -104,6 +119,26 @@ surface_material_override/0 = SubResource("trough_mat")
 
 [node name="Shape" type="CollisionShape3D" parent="FeedTrough/TroughCollision"]
 shape = SubResource("trough_shape")
+
+[node name="FeedStore" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0, -18.8)
+script = ExtResource("feed_store_script")
+
+[node name="Body" type="MeshInstance3D" parent="FeedStore"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("store_body_mesh")
+surface_material_override/0 = SubResource("store_wood")
+
+[node name="Lid" type="MeshInstance3D" parent="FeedStore"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.06, 0)
+mesh = SubResource("store_lid_mesh")
+surface_material_override/0 = SubResource("store_hay")
+
+[node name="StoreCollision" type="StaticBody3D" parent="FeedStore"]
+
+[node name="Shape" type="CollisionShape3D" parent="FeedStore/StoreCollision"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+shape = SubResource("store_shape")
 
 [node name="StableHorses" type="Node3D" parent="."]
 

@@ -164,6 +164,7 @@ func snapshot() -> Dictionary:
 		"show_best_time": GameState.show_best_time,
 		"show_entries": GameState.show_entries,
 		"rosettes": GameState.rosettes.duplicate(true),
+		"hay": GameState.hay,
 		"horse": HorseState.to_dict(),
 	}
 
@@ -180,6 +181,7 @@ func apply(payload: Dictionary) -> void:
 	GameState.best_round_time = float(payload.get("best_round_time", 0.0))
 	GameState.show_best_time = float(payload.get("show_best_time", 0.0))
 	GameState.show_entries = int(payload.get("show_entries", 0))
+	GameState.hay = int(payload.get("hay", 0))
 
 	# GameState.rosettes is Array[Dictionary], so it has to be rebuilt rather
 	# than assigned from the parsed (untyped) array.
@@ -192,6 +194,7 @@ func apply(payload: Dictionary) -> void:
 	GameState.rosettes = list
 	GameState.money_changed.emit(GameState.money)
 	GameState.rosettes_changed.emit(GameState.rosettes.size())
+	GameState.supplies_changed.emit()
 
 	var horse_payload: Variant = payload.get("horse", {})
 	if horse_payload is Dictionary and not (horse_payload as Dictionary).is_empty():

@@ -32,6 +32,7 @@ CHECKS=(
   "check_arena              180  0"
   "check_character_select   180  0"
   "check_character_swap     240  0"
+  "check_care               180  0"
   "check_chihuahua_animations 180 0"
   "check_dog                240  0"
   "check_editor_load        300  0"
@@ -105,6 +106,31 @@ if [ ! -d .godot/imported ]; then
   fi
 fi
 
+# Checks that measure wall-clock motion or a heavy synchronous scene load.  On
+# this 2.7 GB machine they have each failed once while the full suite ran them
+# back to back and passed on their own: the assertions are untouched, and a
+# genuine regression fails both attempts, so a failure is retried once before it
+# counts.  Anything not listed here fails on the first try.
+FLAKY=(check_character_select check_dog check_walkthrough)
+
+is_flaky() {
+  local name="$1"
+  local entry
+  for entry in "${FLAKY[@]}"; do
+    [ "$entry" = "$name" ] && return 0
+  done
+  return 1
+}
+
+run_check() {
+  local name="$1" secs="$2" out="$3"
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$secs" "$GODOT_BIN" --headless --path . --script "res://tools/${name}.gd" >"$out" 2>&1
+  else
+    "$GODOT_BIN" --headless --path . --script "res://tools/${name}.gd" >"$out" 2>&1
+  fi
+}
+
 wanted() {
   local name="$1"
   [ -z "$ONLY" ] && return 0
@@ -135,19 +161,21 @@ for entry in "${CHECKS[@]}"; do
   total=$((total + 1))
   out="$(mktemp)"
   started=$(date +%s)
-  if command -v timeout >/dev/null 2>&1; then
-    timeout "$secs" "$GODOT_BIN" --headless --path . --script "res://tools/${name}.gd" >"$out" 2>&1
-    status=$?
-  else
-    "$GODOT_BIN" --headless --path . --script "res://tools/${name}.gd" >"$out" 2>&1
+  run_check "$name" "$secs" "$out"
+  status=$?
+  retried=""
+  if [ "$status" -ne 0 ] && is_flaky "$name"; then
+    retried="  (retried)"
+    printf 'retry %-28s first attempt failed\n' "$name"
+    run_check "$name" "$secs" "$out"
     status=$?
   fi
   elapsed=$(( $(date +%s) - started ))
 
   if [ "$status" -eq 0 ]; then
     passed=$((passed + 1))
-    printf 'ok    %-28s %4ss\n' "$name" "$elapsed"
-    echo "ok    $name  ${elapsed}s" >>"$REPORT"
+    printf 'ok    %-28s %4ss%s\n' "$name" "$elapsed" "$retried"
+    echo "ok    $name  ${elapsed}s${retried}" >>"$REPORT"
   else
     failed=$((failed + 1))
     failed_names+=("$name")

@@ -11,6 +11,9 @@ signal logo_pressed
 const TEXT_COLOR := Color(0.96, 0.97, 0.92, 1.0)
 const DIM_COLOR := Color(0.78, 0.82, 0.74, 1.0)
 const ACCENT := Color(0.72, 1.0, 0.62, 1.0)
+## Width of the three need bars, in pixels.  They hang under the wallet block,
+## which keeps them clear of the thumb band the touch debug readout avoids.
+const NEED_BAR_WIDTH := 96.0
 const LiveryLogoButton := preload("res://scripts/livery_logo_button.gd")
 
 var _course: Node
@@ -25,6 +28,9 @@ var _objective_label: Label
 var _timer_label: Label
 var _progress_label: Label
 var _toast_label: Label
+var _hay_label: Label
+## Keyed by the horse property name: hunger, energy, health.
+var _need_fills: Dictionary = {}
 var _result_panel: PanelContainer
 var _result_title: Label
 var _result_body: Label
@@ -73,6 +79,7 @@ func _build_ui() -> void:
 	_best_label = _label(stats, "Best round —", 17, DIM_COLOR)
 	_rosette_label = _label(stats, "", 17, Color(1.0, 0.86, 0.52))
 	_rosette_label.visible = false
+	_build_needs(stats)
 
 	# Top-centre: objective, timer and fence progress.
 	var centre := VBoxContainer.new()
@@ -149,6 +156,40 @@ func _apply_input_hints() -> void:
 	)
 
 
+## Hay stock and the three daily needs.  Bars are two ColorRects rather than a
+## themed ProgressBar, so the HUD stays self-contained and the tint matches the
+## wallet block.
+func _build_needs(parent: Node) -> void:
+	var box := VBoxContainer.new()
+	box.name = "NeedsPanel"
+	box.add_theme_constant_override("separation", 2)
+	parent.add_child(box)
+	_hay_label = _label(box, "HAY  ·  0", 14, DIM_COLOR)
+	_hay_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	for entry in [
+		["hunger", "FOOD", Color(0.95, 0.78, 0.36, 1.0)],
+		["energy", "ENERGY", Color(0.55, 0.82, 1.0, 1.0)],
+		["health", "HEALTH", Color(0.72, 1.0, 0.62, 1.0)],
+	]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		box.add_child(row)
+		var caption := _label(row, String(entry[1]), 13, DIM_COLOR)
+		caption.custom_minimum_size = Vector2(56, 0)
+		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var track := ColorRect.new()
+		track.color = Color(0.10, 0.13, 0.10, 0.85)
+		track.custom_minimum_size = Vector2(NEED_BAR_WIDTH, 7)
+		track.clip_contents = true
+		row.add_child(track)
+		var fill := ColorRect.new()
+		fill.color = entry[2]
+		fill.position = Vector2.ZERO
+		fill.size = Vector2(NEED_BAR_WIDTH, 7)
+		track.add_child(fill)
+		_need_fills[String(entry[0])] = fill
+
+
 func _label(parent: Node, text: String, size: int, color: Color) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -182,6 +223,24 @@ func _refresh_stats() -> void:
 		var count := GameState.rosettes.size()
 		_rosette_label.visible = count > 0
 		_rosette_label.text = "Rosettes  %d" % count
+	_refresh_needs()
+
+
+## Reads the needs off the horse, which owns them, rather than off `HorseState`:
+## the horse is the thing the values are decaying in, and a scene that has no
+## horse has no care to show.
+func _refresh_needs() -> void:
+	if _hay_label != null:
+		_hay_label.text = "HAY  ·  %d" % GameState.hay
+	if _horse == null:
+		return
+	for key in _need_fills:
+		var raw: Variant = _horse.get(key)
+		if raw == null:
+			continue
+		var value := clampf(float(raw), 0.0, 1.0)
+		var fill: ColorRect = _need_fills[key]
+		fill.size = Vector2(NEED_BAR_WIDTH * value, fill.size.y)
 
 
 func _update_objective() -> void:

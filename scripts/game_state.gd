@@ -9,6 +9,7 @@ extends Node
 signal money_changed(money: int)
 signal best_time_changed(seconds: float)
 signal rosettes_changed(count: int)
+signal supplies_changed
 ## Emitted when progress without a narrower signal changes.  `SaveGame` listens
 ## to this as well as to the three above.
 ##
@@ -25,6 +26,12 @@ var best_round_time := 0.0
 var rosettes: Array[Dictionary] = []
 var show_best_time := 0.0
 var show_entries := 0
+
+## Price of one bale at the feed store.
+const HAY_PRICE := 5
+## Bales in the yard.  Hay is the first thing money buys, so the economy has a
+## sink that is not a competition entry.
+var hay := 0
 
 ## Character-select handoff.  The selected profile survives the scene change
 ## into main.tscn; auto_mount asks the player to start in the saddle instead
@@ -83,6 +90,27 @@ func add_show_entry() -> int:
 	show_entries += 1
 	progress_changed.emit()
 	return show_entries
+
+
+## Buys one bale.  The feed store is the only caller; the message comes back so
+## the store can show a refusal on its own prompt without a second UI path.
+func buy_hay() -> Dictionary:
+	if money < HAY_PRICE:
+		return {"ok": false, "message": "A bale is £%d — you only have £%d." % [HAY_PRICE, money]}
+	add_money(-HAY_PRICE)
+	hay += 1
+	supplies_changed.emit()
+	return {"ok": true, "message": "Bought a bale — %d in the yard." % hay}
+
+
+## Takes one bale from the yard.  False when there is none, so the trough can
+## refuse before the horse changes.
+func use_hay() -> bool:
+	if hay <= 0:
+		return false
+	hay -= 1
+	supplies_changed.emit()
+	return true
 
 
 ## Adds a show-class rosette and returns the new total.
