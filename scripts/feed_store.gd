@@ -68,8 +68,9 @@ func _refresh() -> bool:
 	var to_player := _player.global_position - global_position
 	to_player.y = 0.0
 	var player_near := to_player.length() <= player_range
-	# The trough stands inside this station's range and one interact event is
-	# claimed by one node, so the nearest station wins the prompt and the press.
+	# The trough is the other feed station and one interact event is claimed by
+	# one node, so the nearest station wins the prompt and the press.  The two
+	# stand apart now, but the rule is what keeps FEED from being swallowed.
 	if player_near and not _is_nearest_station():
 		player_near = false
 	_prompt.visible = player_near

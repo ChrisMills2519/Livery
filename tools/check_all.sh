@@ -46,6 +46,7 @@ CHECKS=(
   "check_interior_cost      180  0"
   "check_jump_and_loop      240  0"
   "check_knockdown          180  0"
+  "check_layout             180  0"
   "check_lead               180  0"
   "check_livery_logo        120  0"
   "check_mount              240  0"

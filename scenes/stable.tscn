@@ -121,7 +121,7 @@ surface_material_override/0 = SubResource("trough_mat")
 shape = SubResource("trough_shape")
 
 [node name="FeedStore" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0, -18.8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, 0, -19.4)
 script = ExtResource("feed_store_script")
 
 [node name="Body" type="MeshInstance3D" parent="FeedStore"]

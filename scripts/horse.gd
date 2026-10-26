@@ -222,14 +222,14 @@ func _update_tack() -> void:
 		var spine_global := _skeleton.global_transform * _skeleton.get_bone_global_pose(_seat_bone)
 		var stable := _stable_delta(spine_global, _spine_rest)
 		saddle.global_transform = _pivot_transform(
-			spine_global.origin, _spine_rest.origin, stable, _saddle_rest.basis
+			spine_global.origin, _spine_rest.origin, stable, _saddle_rest.basis, _saddle_rest.origin
 		)
 		rider_seat.global_transform = saddle.global_transform * _seat_in_saddle
 	if _head_bone >= 0 and bridle != null:
 		var head_global := _skeleton.global_transform * _skeleton.get_bone_global_pose(_head_bone)
 		var stable := _stable_delta(head_global, _head_rest)
 		bridle.global_transform = _pivot_transform(
-			head_global.origin, _head_rest.origin, stable, _bridle_rest.basis
+			head_global.origin, _head_rest.origin, stable, _bridle_rest.basis, _bridle_rest.origin
 		)
 
 
@@ -244,11 +244,18 @@ func _stable_delta(now: Transform3D, rest: Transform3D) -> Basis:
 	return horse_basis * stable_local * horse_basis.inverse()
 
 
-## Rotate the rigid tack around the bone's rest pivot, then carry it with the
-## bone's translation.  The mesh is authored in model space, so its root stays
-## at the origin when the bone is at rest.
-func _pivot_transform(now: Vector3, rest: Vector3, rotation: Basis, rest_basis: Basis) -> Transform3D:
-	var origin := (now - rest) + rest - rotation * rest
+## Places a rest-authored prop so it rides its bone: the prop's rest offset from
+## the bone is rotated about the bone, and the bone's translation is followed.
+##
+## The old form was `(now - rest)`, the bone's displacement from its rest pose,
+## which is the prop's absolute position only while the horse stands at the world
+## origin.  As soon as a scene placed the horse off the origin the saddle (and
+## the rider seat inside it) sat at the world origin instead of on the horse,
+## which silently broke `can_mount()`'s seat distance and the live reins.
+func _pivot_transform(
+	now: Vector3, rest: Vector3, rotation: Basis, rest_basis: Basis, rest_origin: Vector3
+) -> Transform3D:
+	var origin := now + rotation * (rest_origin - rest)
 	return Transform3D(rotation * rest_basis, origin)
 
 

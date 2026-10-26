@@ -47,7 +47,9 @@ const ROOF_Y := 4.35
 const WARM_MIN := Vector2(40.0, -6.0)
 const WARM_MAX := Vector2(62.0, 14.0)
 const ENTRANCE := Vector3(34.0, 0.0, 6.0)
-const EXIT_SPAWN_MAIN := Vector3(-12.5, 0.05, -1.5)
+## The yard side of the showground gate: just north of the arch on the south
+## lane, facing back up the lane toward the stable.
+const EXIT_SPAWN_MAIN := Vector3(1.5, 0.05, 22.4)
 
 const CROWD_SCENES := [
 	"spectator_seated_a", "spectator_seated_b", "spectator_seated_c",
@@ -864,5 +866,5 @@ func _build_door() -> void:
 	door.set("prompt_height", 2.6)
 	door.set("reach", 2.4)
 	door.set("spawn_position", EXIT_SPAWN_MAIN)
-	door.set("spawn_yaw_degrees", -90.0)
+	door.set("spawn_yaw_degrees", 0.0)
 	_root.add_child(door)

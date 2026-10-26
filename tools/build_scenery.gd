@@ -24,6 +24,15 @@ const NATURE_PATH := "res://scenes/nature_props.tscn"
 const YARD_PATH := "res://scenes/stable_yard_props.tscn"
 const COURSE_PATH := "res://scenes/arena_course.tscn"
 const ARENA_FENCE_PATH := "res://scenes/arena_fence.tscn"
+const TURNOUT_PATH := "res://scenes/turnout_paddock.tscn"
+
+## The turnout field between the lane and the arena rail.  Walloped on three
+## sides with the arena fence module, with a gate gap facing the arena spur.
+const TURNOUT_MIN := Vector2(-13.0, 4.0)
+const TURNOUT_MAX := Vector2(-4.0, 20.0)
+const TURNOUT_GATE_MIN_X := -10.0
+const TURNOUT_GATE_MAX_X := -6.5
+const TURNOUT_FENCE_HEIGHT := 1.32
 
 const SPLIT := "res://Models/split/"
 const PROPS := "res://Models/props/"
@@ -94,16 +103,18 @@ const FENCES := {
 ## prop (stacked crate, blanket on the rack, hanging net); `collide` adds a
 ## measured box collider so the player cannot walk through the big items.
 const YARD_LAYOUT := [
-	# Hay and feed beside the paddock's south fence.
-	{"name": "HayRoundA", "asset": "stable/hay_round.glb", "pos": Vector3(3.4, 0.0, -18.4), "yaw": 12.0, "collide": true},
-	{"name": "HayRoundB", "asset": "stable/hay_round.glb", "pos": Vector3(4.7, 0.0, -18.9), "yaw": 74.0, "collide": true},
-	{"name": "HaySquare", "asset": "stable/hay_square.glb", "pos": Vector3(3.5, 0.0, -16.95), "yaw": -18.0, "collide": true},
-	{"name": "BarrelA", "asset": "yard/barrel.glb", "pos": Vector3(5.9, 0.0, -19.2), "yaw": 0.0, "collide": true},
-	{"name": "BarrelB", "asset": "yard/barrel.glb", "pos": Vector3(6.55, 0.0, -18.55), "yaw": 40.0, "collide": true},
-	# Crates and the barrow on the west side of the yard.
-	{"name": "CrateA", "asset": "yard/crate.glb", "pos": Vector3(-3.9, 0.0, -18.95), "yaw": 12.0, "collide": true},
-	{"name": "CrateB", "asset": "yard/crate.glb", "pos": Vector3(-3.85, 0.0, -19.0), "yaw": 32.0, "lift": 0.64, "collide": true},
-	{"name": "Wheelbarrow", "asset": "yard/wheelbarrow.glb", "pos": Vector3(-5.9, 0.0, -18.35), "yaw": -38.0, "collide": true},
+	# Hay and feed stored along the yard's west boundary, clear of the working
+	# square and of the lane that arrives from the south.  These used to stand in
+	# the middle of the yard between the paddock and the well.
+	{"name": "HayRoundA", "asset": "stable/hay_round.glb", "pos": Vector3(-13.8, 0.0, -16.4), "yaw": 12.0, "collide": true},
+	{"name": "HayRoundB", "asset": "stable/hay_round.glb", "pos": Vector3(-14.3, 0.0, -17.9), "yaw": 74.0, "collide": true},
+	{"name": "HaySquare", "asset": "stable/hay_square.glb", "pos": Vector3(-13.2, 0.0, -19.0), "yaw": -18.0, "collide": true},
+	{"name": "BarrelA", "asset": "yard/barrel.glb", "pos": Vector3(-12.6, 0.0, -16.6), "yaw": 0.0, "collide": true},
+	{"name": "BarrelB", "asset": "yard/barrel.glb", "pos": Vector3(-12.4, 0.0, -17.4), "yaw": 40.0, "collide": true},
+	# Crates and the barrow below the feed store, still against the west wall.
+	{"name": "CrateA", "asset": "yard/crate.glb", "pos": Vector3(-13.9, 0.0, -20.8), "yaw": 12.0, "collide": true},
+	{"name": "CrateB", "asset": "yard/crate.glb", "pos": Vector3(-13.85, 0.0, -20.85), "yaw": 32.0, "lift": 0.64, "collide": true},
+	{"name": "Wheelbarrow", "asset": "yard/wheelbarrow.glb", "pos": Vector3(-14.2, 0.0, -22.2), "yaw": -38.0, "collide": true},
 	{"name": "Bench", "asset": "yard/bench.glb", "pos": Vector3(-9.8, 0.0, -20.7), "yaw": 90.0, "collide": true},
 	{"name": "Well", "asset": "yard/well.glb", "pos": Vector3(12.9, 0.0, -17.8), "yaw": 15.0, "scale": 0.9, "collide": true},
 	# Stable kit: trough, mounting block, hitching post, saddle rack and tools.
@@ -141,6 +152,7 @@ func _initialize() -> void:
 	_build_nature()
 	_build_yard()
 	_build_arena_fence()
+	_build_turnout()
 	_build_course()
 	print("=== DONE ===")
 	quit(0)
@@ -193,18 +205,50 @@ func _build_forest() -> void:
 		["dead", -16.0, -36.0, 135.0, 1.00],
 		["sapling", 20.0, 22.0, 225.0, 1.20],
 	], TREES))
+	# Middle ground.  The belts above sit 50-75 m out, which is why the site used
+	# to read as one clump of props on a lawn: nothing framed the eye between the
+	# 15 m the camera can see and the horizon.  These sit 8-35 m away.
+	items.append_array(_zone("Midground", [
+		# Behind the stable and paddock; they read over the roofs from the yard.
+		["a", -14.0, -33.0, 20.0, 1.05],
+		["f", -4.0, -35.0, 95.0, 1.10],
+		["b", 5.0, -33.0, 160.0, 1.00],
+		["h", 13.0, -36.0, 250.0, 1.10],
+		# The yard approach between the arena rail and the lane.
+		["c", -11.0, -6.0, 40.0, 1.00],
+		["autumn", -13.0, 2.0, 310.0, 1.00],
+		# The lane's east verge, on the walk to the showground gate.
+		["d", 9.0, 12.0, 15.0, 1.00],
+		["g", 10.0, 20.0, 200.0, 1.05],
+		# Framing the schooling ground.
+		["b", 17.0, -17.5, 130.0, 1.00],
+		["a", 18.0, 18.0, 260.0, 1.10],
+		["f", 58.0, 2.0, 60.0, 1.05],
+		# A loose orchard in the south meadow.
+		["c", 12.0, 30.0, 10.0, 1.10],
+		["c", 20.0, 26.0, 70.0, 1.05],
+		["c", 27.0, 30.0, 190.0, 1.10],
+		["autumn", 24.0, 20.0, 300.0, 1.00],
+		# The house garden, either side of the new drive.
+		["b", 33.5, -27.4, 35.0, 1.00],
+		["g", 40.8, -27.2, 220.0, 1.05],
+		["d", 34.0, -38.0, 120.0, 1.15],
+		["a", 43.0, -37.0, 280.0, 1.10],
+	], TREES))
 	_build_scene(FOREST_PATH, "Forest", items)
 
 
 func _build_nature() -> void:
 	var items: Array = []
+	# Verge dressing follows the lane, which now bends west to meet the stable
+	# door instead of running dead straight into the paddock fence.
 	items.append_array(_zone("Path", [
-		["n0", -2.7, -17.0, 0.0, 1.4],
-		["n4", 2.7, -14.0, 60.0, 1.0],
-		["n5", -2.8, -10.0, 120.0, 1.1],
-		["n0", 2.8, -7.0, 180.0, 1.3],
-		["n4", -2.7, -3.0, 240.0, 1.1],
-		["n8", 2.7, 2.0, 300.0, 1.0],
+		["n0", -7.6, -8.0, 0.0, 1.4],
+		["n4", -1.4, -5.0, 60.0, 1.0],
+		["n5", 3.2, 2.0, 120.0, 1.1],
+		["n0", -3.6, 12.0, 180.0, 1.3],
+		["n4", 3.4, 16.0, 240.0, 1.1],
+		["n8", -3.4, 21.0, 300.0, 1.0],
 	], NATURE))
 	items.append_array(_zone("Yard", [
 		["n6", -11.5, -28.5, 30.0, 1.0],
@@ -229,6 +273,42 @@ func _build_nature() -> void:
 		["n5", 16.0, 2.0, 110.0, 1.1],
 		["n4", 16.0, 12.0, 200.0, 1.0],
 		["n7", 54.0, -13.0, 290.0, 1.0],
+	], NATURE))
+	# Hedge lines are the cheapest way to bound open ground: they stop the eye at
+	# 10-20 m and turn bare grass into fields.
+	items.append_array(_zone("Hedgerows", [
+		# The lane's east verge, on the way to the showground gate.
+		["n7", 4.4, 10.0, 0.0, 1.1],
+		["n6", 4.6, 13.0, 40.0, 1.4],
+		["n7", 4.3, 16.0, 90.0, 1.2],
+		["n6", 4.7, 19.0, 135.0, 1.5],
+		["n7", 4.4, 22.0, 180.0, 1.1],
+		# The turnout field's south boundary.
+		["n7", -12.0, 21.3, 20.0, 1.2],
+		["n6", -9.3, 21.6, 70.0, 1.5],
+		["n7", -6.6, 21.2, 110.0, 1.2],
+		["n6", -4.6, 21.5, 160.0, 1.4],
+		# Between the house drive and the schooling ground.
+		["n7", 20.0, -20.0, 15.0, 1.2],
+		["n6", 23.5, -20.4, 55.0, 1.5],
+		["n7", 27.0, -20.0, 95.0, 1.2],
+		["n6", 30.5, -20.5, 140.0, 1.4],
+		# The house frontage: flowering hedges and beds either side of the door.
+		["n11", 33.6, -25.8, 30.0, 1.3],
+		["n11", 40.4, -25.6, 80.0, 1.2],
+		["n4", 33.9, -29.6, 20.0, 1.1],
+		["n4", 40.1, -29.4, 140.0, 1.0],
+	], NATURE))
+	# The south meadow, west of the orchard.
+	items.append_array(_zone("Meadow", [
+		["n0", 10.0, 24.0, 10.0, 1.3],
+		["n4", 14.0, 28.0, 70.0, 1.0],
+		["n1", 22.0, 32.0, 130.0, 1.5],
+		["n4", 28.0, 24.0, 190.0, 1.1],
+		["n6", 31.0, 29.0, 250.0, 1.2],
+		["n0", 16.0, 19.0, 310.0, 1.2],
+		["n3", 33.0, 33.0, 20.0, 1.0],
+		["n1", 26.0, 17.0, 280.0, 1.3],
 	], NATURE))
 	_build_scene(NATURE_PATH, "NatureProps", items)
 
@@ -405,6 +485,163 @@ func _add_collision_box(body: StaticBody3D, owner_root: Node, shape_name: String
 	node.position = pos
 	body.add_child(node)
 	node.owner = owner_root
+
+
+## Builds the turnout field as its own scene: three fenced runs with a gate gap
+## facing the arena spur, an open gate leaf, a water trough and a hay ring.
+## Fence modules come from the same measured model the arena uses, so the two
+## paddocks on the site read as one hand.
+func _build_turnout() -> void:
+	var packed := load(ARENA_FENCE_MODEL) as PackedScene
+	if packed == null:
+		push_error("cannot load arena fence model")
+		quit(1)
+		return
+	var probe := packed.instantiate() as Node3D
+	if probe == null:
+		push_error("cannot instantiate arena fence model")
+		quit(1)
+		return
+	var module_length := _aabb_of(probe).size.x * ARENA_FENCE_SCALE
+	probe.free()
+	if module_length <= 0.001:
+		push_error("turnout fence module has no length")
+		quit(1)
+		return
+
+	var root := Node3D.new()
+	root.name = "TurnoutPaddock"
+
+	var body := StaticBody3D.new()
+	body.name = "TurnoutCollision"
+	root.add_child(body)
+	body.owner = root
+
+	# start x, start z, end x, end z, label, runs along X.
+	var runs := [
+		[TURNOUT_MIN.x, TURNOUT_MAX.y, TURNOUT_MAX.x, TURNOUT_MAX.y, "South", true],
+		[TURNOUT_MIN.x, TURNOUT_MIN.y, TURNOUT_MIN.x, TURNOUT_MAX.y, "West", false],
+		[TURNOUT_MAX.x, TURNOUT_MIN.y, TURNOUT_MAX.x, TURNOUT_MAX.y, "East", false],
+		[TURNOUT_MIN.x, TURNOUT_MIN.y, TURNOUT_GATE_MIN_X, TURNOUT_MIN.y, "NorthWest", true],
+		[TURNOUT_GATE_MAX_X, TURNOUT_MIN.y, TURNOUT_MAX.x, TURNOUT_MIN.y, "NorthEast", true],
+	]
+	var modules := 0
+	for row in runs:
+		var a := Vector2(float(row[0]), float(row[1]))
+		var b := Vector2(float(row[2]), float(row[3]))
+		var label := String(row[4])
+		var horizontal := bool(row[5])
+		var span := b - a
+		var length := span.length()
+		var count := maxi(1, ceili(length / module_length))
+		var step := length / float(count)
+		var dir := span / length
+		for i in range(count):
+			var centre := a + dir * (step * (i + 0.5))
+			var inst := _make_instance(
+				ARENA_FENCE_MODEL,
+				Vector3(centre.x, 0.0, centre.y),
+				0.0 if horizontal else 90.0,
+				ARENA_FENCE_SCALE
+			)
+			if inst == null:
+				root.free()
+				return
+			inst.name = "Fence%s%d" % [label, i]
+			root.add_child(inst)
+			inst.owner = root
+			modules += 1
+		var mid := (a + b) * 0.5
+		var centre_y := TURNOUT_FENCE_HEIGHT * 0.5
+		if horizontal:
+			_add_collision_box(body, root, "%sShape" % label,
+				Vector3(length + 0.3, TURNOUT_FENCE_HEIGHT, 0.30),
+				Vector3(mid.x, centre_y, mid.y))
+		else:
+			_add_collision_box(body, root, "%sShape" % label,
+				Vector3(0.30, TURNOUT_FENCE_HEIGHT, length + 0.3),
+				Vector3(mid.x, centre_y, mid.y))
+
+	# A five-bar gate standing open against the west edge of the gap, so the
+	# field can be entered from the arena spur without a gate script.
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.34, 0.24, 0.14, 1.0)
+	wood.roughness = 0.9
+	for i in range(3):
+		var rail := MeshInstance3D.new()
+		rail.name = "GateRail%d" % i
+		var rail_mesh := BoxMesh.new()
+		rail_mesh.size = Vector3(0.07, 0.09, 2.90)
+		rail.mesh = rail_mesh
+		rail.material_override = wood
+		rail.position = Vector3(TURNOUT_GATE_MIN_X - 0.05, 0.34 + i * 0.32, TURNOUT_MIN.y + 1.55)
+		root.add_child(rail)
+		rail.owner = root
+	for i in range(2):
+		var stile := MeshInstance3D.new()
+		stile.name = "GateStile%d" % i
+		var stile_mesh := BoxMesh.new()
+		stile_mesh.size = Vector3(0.09, 1.10, 0.09)
+		stile.mesh = stile_mesh
+		stile.material_override = wood
+		stile.position = Vector3(
+			TURNOUT_GATE_MIN_X - 0.05,
+			0.55,
+			TURNOUT_MIN.y + 0.12 + i * 2.86
+		)
+		root.add_child(stile)
+		stile.owner = root
+
+	# Field furniture: a trough and a hay ring in the far corner, away from the
+	# gate and the hedge line.
+	var trough_slot := Node3D.new()
+	trough_slot.name = "WaterTrough"
+	trough_slot.position = Vector3(-11.4, 0.0, 17.2)
+	root.add_child(trough_slot)
+	trough_slot.owner = root
+	var trough := _make_instance(PROPS + "stable/water_trough.glb", Vector3.ZERO, 90.0, 1.0)
+	if trough == null:
+		root.free()
+		return
+	trough.name = "Model"
+	trough_slot.add_child(trough)
+	trough.owner = root
+	var trough_bounds := _aabb_of(trough)
+	var trough_body := StaticBody3D.new()
+	trough_body.name = "Body"
+	trough_slot.add_child(trough_body)
+	trough_body.owner = root
+	_add_collision_box(trough_body, root, "Shape",
+		Vector3(
+			maxf(0.05, trough_bounds.size.x - 0.02),
+			maxf(0.05, trough_bounds.size.y - 0.02),
+			maxf(0.05, trough_bounds.size.z - 0.02)
+		),
+		trough_bounds.get_center())
+
+	var hay := _make_instance(PROPS + "stable/hay_round.glb", Vector3(-6.4, 0.0, 17.0), 20.0, 1.0)
+	if hay == null:
+		root.free()
+		return
+	hay.name = "HayRing"
+	root.add_child(hay)
+	hay.owner = root
+
+	var scene := PackedScene.new()
+	var err := scene.pack(root)
+	if err != OK:
+		push_error("pack failed for %s (error %d)" % [TURNOUT_PATH, err])
+		root.free()
+		quit(1)
+		return
+	err = ResourceSaver.save(scene, TURNOUT_PATH)
+	if err != OK:
+		push_error("save failed for %s (error %d)" % [TURNOUT_PATH, err])
+		root.free()
+		quit(1)
+		return
+	print("  wrote %s (%d fence modules, %d runs)" % [TURNOUT_PATH, modules, runs.size()])
+	root.free()
 
 
 func _build_course() -> void:

@@ -81,9 +81,10 @@ func _refresh() -> bool:
 	var to_player := _player.global_position - global_position
 	to_player.y = 0.0
 	var player_near := to_player.length() <= player_range
-	# The store stands close enough that its range overlaps this one, and a
-	# single interact event is claimed by one node, so the nearest station wins
-	# the prompt and the press.  Without this the store swallowed FEED.
+	# The store is the other feed station and a single interact event is claimed
+	# by one node, so the nearest station wins the prompt and the press.  The two
+	# stand apart now; the rule stays because it is what stopped the store
+	# swallowing FEED when their ranges overlapped.
 	if player_near and not _is_nearest_station():
 		player_near = false
 	var horse_near := _horse.global_position.distance_to(global_position) <= horse_range

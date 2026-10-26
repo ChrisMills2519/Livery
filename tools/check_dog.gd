@@ -158,7 +158,9 @@ func _check_scene() -> void:
 	_check(absf(top - 0.225) < 0.035, "dog model height %.3f m" % top)
 	_check(bottom > -0.02, "dog mesh sits on the origin (min y %.3f)" % bottom)
 	var home: Vector3 = _dog.call("get_home_position")
-	_check(home.distance_to(Vector3(-3.5, 0.0, -16.5)) < 0.1, "dog home in the stable yard")
+	# The dog lives by the well in the yard's east corner, clear of the lane the
+	# player arrives on and of the horse's standing spot.
+	_check(home.distance_to(Vector3(13.5, 0.0, -15.5)) < 0.1, "dog home in the stable yard")
 	_check(_state() == "idle", "dog starts idle (got %s)" % _state())
 
 

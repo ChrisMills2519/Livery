@@ -9,9 +9,10 @@ extends SceneTree
 ## if a scene is missing, or if main.tscn still references the merged GLBs.
 
 const SCENES := {
-	"res://scenes/forest.tscn": 30,
-	"res://scenes/nature_props.tscn": 22,
+	"res://scenes/forest.tscn": 49,
+	"res://scenes/nature_props.tscn": 47,
 	"res://scenes/arena_course.tscn": 21,
+	"res://scenes/turnout_paddock.tscn": 19,
 }
 const BASE_TOLERANCE := 0.02
 const GROUND_SNAP := 0.001

@@ -91,6 +91,14 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
   that node is lost by walking into the farmhouse or the showground; and because
   `SaveGame` used to read the horse in the current scene, a show entry fee wrote
   a pristine horse over the save.
+- **The horse can be placed anywhere in a scene, so the tack must use absolute
+  positions.** `_pivot_transform` places the saddle and bridle at
+  `now + rotation * (rest_origin - rest)` — the bone's position plus its rotated
+  rest offset. The old `(now - rest)` form was a displacement, which only equals
+  an absolute position while the horse stands at the world origin; moving the
+  horse into the yard put the saddle, and the rider seat inside it, at (0, 0, 0),
+  which silently broke `can_mount()`'s seat distance and the live reins. Do not
+  reintroduce a rest-relative origin there.
 - `horse._ready()` hydrates from the autoload; the horse records back at its own
   mutation points (`award_training`, `mark_hoof`, `apply_grooming_result`) plus
   `grooming_session.exit_session()`.
@@ -113,12 +121,11 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
   horse works at zero and health only drifts toward what the care adds up to.
 - Hay is `GameState.hay`. `buy_hay()` owns the £5 price and the refusal, and
   `use_hay()` takes one back; the trough lets the horse eat first and spends the
-  bale afterwards, so a refusal never costs one.
-- **The feed store and the trough are both in the `feed_station` group, and the
-  nearest one wins** the prompt and the interact event. Their ranges overlap (they
-  are about 4 m apart) and one `interact` event is claimed by one node: without
-  this rule the later node in the tree swallowed the press and FEED silently did
-  nothing.
+  bale afterwards, so a refusal never costs one.- **The feed store and the trough are both in the `feed_station` group, and the nearest one wins** the prompt and the interact event. One `interact` event is
+  claimed by one node: without this rule the later node in the tree swallowed the
+  press and FEED silently did nothing. The store now stands clear of the trough
+  (it used to be ~4 m away, in the lane's mouth); the rule stays because it is
+  what made the overlap safe.
 - A flash message is feedback, not permission. The offer is gated separately
   from the text, so "out of hay" cannot leave a CONTEXT button on screen.
 - **A station has to be somewhere the player can walk.** The stable paddock is a
@@ -127,6 +134,33 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
   not against a render.
 - `tools/check_care.gd` covers the needs, both stations, the refusal paths, the
   nearest-station rule and the save.
+
+## The main level's layout
+
+- The site is **painted, then dressed**: `tools/build_ground_control.py` owns the
+  yard, the lane network, the house track and the worn patches;
+  `tools/build_scenery.gd` owns the yard props, the tree belts, the hedgerows and
+  the turnout field; `scenes/main.tscn` owns the fixtures and the doors.
+  `tools/check_layout.gd` is the guard that keeps all three agreed, and it is in
+  `tools/check_all.sh`.
+- **Routes are data.** Moving a lane is a change to `LANES`/`DRIVE` in the
+  generator plus the samples in `check_terrain_blend.gd`, never a nudged node.
+- **A station has to stand on its own painted ground.** Sampling the control map
+  at each station's world position is what caught the grooming mat hanging off the
+  dirt at z = -14, and the yard props spilling 3 m onto grass at both ends.
+- **No station's range may cover another station's spot, or the horse's.** The
+  feed store sat 3.06 m from the horse's start with a 3.0 m `player_range`, so
+  standing beside the horse to mount offered `BUY HAY` and the store swallowed
+  the `interact` press. `check_touch` catches this; it is spacing, not priority -
+  the CONTEXT priority list only orders offers that are legitimately in range.
+- **One gate, one meaning.** The showground arch stands on the south lane at
+  (1.5, 0, 25) and the arena's east gate at (-15, -1.5) is only the arena mouth.
+  `check_layout.gd` fails if any two destination doors come within 6 m, and if the
+  showground's return spawn drifts away from its arch.
+- The dog lives by the well at (13.5, 0, -15.5), clear of the lane the player
+  arrives on and of the horse's standing spot. `check_dog` pins its home and
+  expects it to start `idle`; a dog inside `greet_radius` of the player start
+  greets on its first brain tick.
 
 ## Camera
 
@@ -170,9 +204,14 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
 - `tools/check_interior_cost.gd` is the speed budget: 980 mesh instances, 112k
   triangles, 115 materials, 60 textured materials, 20 textures, 20 MB of decoded
   texture memory. It is deliberately tight; raise a number in the same change
-  that needs it.
-- `Models/interior/SOURCE.txt` records provenance (Kenney, Quaternius,
-  Shapespark, Poly Haven, all CC0).
+  that needs it.- `Models/interior/SOURCE.txt` records provenance (Kenney, Quaternius, Shapespark, Poly Haven, all CC0).
+- `scenes/turnout_paddock.tscn` is written by `tools/build_scenery.gd`
+  (`_build_turnout`). Its fence modules come from the measured arena fence, so
+  the stable paddock, the arena rail and the turnout field read as one hand.
+- `scenes/competition_arena.tscn` is written by `tools/build_arena.gd`, but
+  regenerating re-rolls every node's `unique_id`: a spawn-only change is patched
+  into the `.tscn` and the generator is updated in the same change, rather than
+  re-running it (that produced 1,119 lines of id churn for a two-line edit).
 
 ## Web build and the R2 deploy
 

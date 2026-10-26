@@ -899,4 +899,48 @@ State-machine review (no defects found in the horse or player code):
 - `check_character_select` was the one with a magic number to fix: it now allows 25 s for the handoff (measured 8 s standalone, 18 s under load) with a 45 s overall cap, which still catches a hang. The property under test - a mounted player behind a cleared fade - is unchanged, and no assertion was relaxed.
 - `check_dog` and `check_walkthrough` were left alone: their thresholds are the properties, and both pass reliably when they are not sharing the machine with the rest of the suite.
 
+## Main level layout pass: routes and middle ground
+
+2026-10-26
+
+### What the audit found
+
+- The play area is 105 x 70 m; 44% of it was unpainted grass with no prop in it, and the tree belts only start 50-75 m out, so the eye had about 15 m of detail and then lawn to the horizon.
+- The yard dirt was 24 x 16 m centred (0, -22) while the dressed yard ran x -14.1...14.9: the well, the second lantern, the saddle rack, the signpost and the firewood stood on grass. The grooming bay's whole 3.2 x 2.4 m mat sat south of the paint edge at z = -14, on grass.
+- One 4 m wide, 26 m straight path at x = 0 arrived at the paddock's south fence corner, with the feed store standing in its mouth at (-0.4, -18.8). The only path in the level ended in furniture.
+- The showground arch and its door sat on the arena's east gate at (-13.2, -1.5): one spot, two destinations, 13 m from the yard on bare grass. The arch's sign faced west, into the arena, so it was unreadable from the yard.
+- The farmhouse door at (37, -31.2) was 25 m from the nearest dressed ground, with no drive or garden.
+- The horse and player started at (0, 0, 0) and (0, 0, 6): a horse alone in the middle of a path, 25 m from the stable, facing the fence corner.
+
+The care loop itself is compact on purpose (it is a phone game and `check_care`/`check_stable` assume the stations stay beside the stable), so the pass spent the space on frame - routes, field boundaries and depth layers - rather than stretching the chores.
+
+### What changed
+
+- **Ground** (`tools/build_ground_control.py`): added a capsule-chain `polyline_sdf`, so a lane can bend. New yard at centre (0, -19), half (16, 9); a gravel lane spine (0, 26) -> (0, 8) -> (-4, -2) -> (-5, -13) that now arrives at the stable door; an arena spur from the spine to the gate at (-15.5, -1.5); a school spur to (15, 10); a 4 m house drive from the yard's north-east corner to the front door; and eight worn patches at the stations and the gate. Painted grass dropped 83% -> 69%.
+- **Scenery** (`tools/build_scenery.gd`, plus the store node itself in `scenes/stable.tscn`): the feed store left the lane mouth for the corridor between the stable and the paddock - first at (-3.6, -18.4), then to (-1.2, -19.4) to clear the horse's mounting spot, see below; hay, barrels, crates and the barrow moved to the west wall, clearing the yard's working square; the turnout field (x -13...-4, z 4...20) is generated into the new `scenes/turnout_paddock.tscn` with 17 fence modules, an open five-bar gate, a trough and a hay ring; 19 mid-ground trees at 8-35 m, 15 hedge props, 8 meadow props and two garden beds; the lane's verge props follow the new bend; the schooling ground's `Fence_02` moved from (41.4, -18.3) - 3 m off the sand - onto it at (41.4, -12.5).
+- **Fixtures** (`scenes/main.tscn`): the bay moved to (-12, -13), fully on hardstanding; the showground arch and door moved to (1.5, 0, 25) and rotated so the arch spans the lane and the sign faces north; the turnout field is instanced; a lane fingerpost at (2, 0, 3) carries four directions and a `STABLE` label hangs over the stable front; the horse starts at (-6, 0, -16.5) in the yard and the player at (-5, 0, -13) at the lane's arrival; the dog moved to the well corner at (13.5, 0, -15.5).
+- `scenes/competition_arena.tscn`: the showground's exit spawn moved to (1.5, 0.05, 22.4), yaw 0, and `build_arena.gd`'s `EXIT_SPAWN_MAIN` followed. Regenerating that scene re-rolls every node's `unique_id` (1,119 changed lines for a two-line edit), so the spawn is patched into the `.tscn` with the generator kept in step; `arena_fence.tscn` was regenerated with no semantic change and was restored to HEAD for the same reason.
+
+### Two layout bugs the move exposed
+
+- **`horse._pivot_transform` placed the tack by displacement.** It returned the bone's `now - rest` movement as the saddle's absolute origin, which only equals a position while the horse stands at the world origin. Moving the horse into the yard put the saddle, and the rider seat inside it, at (0, 0, 0): `can_mount()` measured 4.8 m to a seat on the floor at the origin, so `check_mount`, `check_character_swap` and `check_tack` all failed. Fixed to `now + rotation * (rest_origin - rest)` with the prop's rest origin passed in; seat error is back to 0.000 m and the bridle follows the same path.
+- **The dog stood where the horse and player now start.** `_check_player_arrival` alerts within `greet_radius` (10.5 m) on the first brain tick, so `check_dog` saw `alert` at spawn. The dog now lives by the well, and `check_dog` pins the new home.
+- **The feed store's range covered the horse's mounting spot.** The store went to (-3.6, -18.4), which is 3.06 m from the horse's new start at (-6, 0, -16.5) - and the store's `player_range` is 3.0 m. `check_touch` failed deterministically on it: standing the player beside the horse, which the check does to mount, had the store's `BUY HAY` claim the CONTEXT offer instead of `MOUNT`, and the feed store's `_input` then swallowed the `interact` press. That is a real fault and not a test artifact: a player could not mount the horse where it starts without stepping away from it first. The store moved east along the same corridor to (-1.2, -19.4), 5.6 m from the horse and 2.3 m from the nearest prop (`PlanterA`), still on the yard's dirt and clear of the lane. `check_touch`, `check_feed`, `check_care` and `check_layout` all pass again.
+
+### Verification
+
+- New `tools/check_layout.gd`, in the manifest: 13 stations on painted ground, all 32 yard props on hardstanding and none in the lane, the grooming mat's four corners on dirt, the spine/arena spur/school spur/drive continuous, doors at least 6 m apart, the arch off the arena gate, the horse start within 12 m of the stable, and the showground's return spawn within 6 m of its arch. It was proved to bite: putting the bay back at (-8, -12.5) fails with "the grooming mat corner (-6.4, -13.5) is not on the yard (dirt 0.11, gravel 0.86)", then it was restored.
+- `check_terrain_blend` samples updated for the lane, the drive and the showground hardstanding: PASS, 69% grass, max weight sum 1.00.
+- `verify_scenery`: 92 props / 55,244 tris before the pass, 136 props / 81,528 tris after (+44 props, +26,284 tris), 13.6% of its 600k budget.
+- `tools/check_all.sh --fast`: 29/29 PASS in 581 s. `check_dog` needed its documented retry under load.
+- `check_walkthrough` (the slow one, skipped by `--fast`): first attempt failed with 4 clipped frames, all at one repeated sample (5.5, 0.001, -5.545) - the load flake already recorded above; the immediate retry passed with 6,960 samples and 0 clipped frames.
+- `tools/screenshot_layout.gd` renders nine views into `artifacts/layout_*.png`; they were inspected at the yard, lane, junction, turnout field, arena approach, schooling ground, house drive and from above.
+
+### Limitations
+
+- The lanes are painted, not modelled: no kerbs or camber, and the ground is still flat at y = 0.
+- The turnout field is dressing only - no gate interaction - and the arch signs are readable from the north only.
+- The arena's western 8 m strip and both ends still carry no fence. Adding to `ArenaJumps` changes the round's fence count, which `check_jump_and_loop` pins, so that was deliberately left alone.
+- The 46 m walk from the stable to the showground gate, and the lane widths, have only been seen in renders; no device or touch pass yet.
+
 <!-- end -->
