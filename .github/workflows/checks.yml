@@ -1,0 +1,139 @@
+name: checks
+
+# The suite has always existed; nothing ran it.  `tools/check_all.sh` is the one
+# manifest, so CI and a local run cannot disagree about what "the checks" are.
+#
+# A cold runner has no import cache, and every check loads a scene, so the
+# runner builds it first.  That step (395 GLBs, 235 textures) is the slow part,
+# hence the cache below.
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # The motion walkthrough runs nightly rather than on every push.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7-stable"
+  # Pin this once the first run prints the real hash; until then the download is
+  # verified against the archive's own listing only.
+  GODOT_SHA256: ""
+
+jobs:
+  fast:
+    name: fast checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache the Godot binary
+        id: godot-bin
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/godot
+          key: godot-${{ env.GODOT_VERSION }}
+
+      - name: Install Godot
+        if: steps.godot-bin.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.local/godot
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          curl -fsSL "$url" -o /tmp/godot.zip
+          if [ -n "${GODOT_SHA256}" ]; then
+            echo "${GODOT_SHA256}  /tmp/godot.zip" | sha256sum -c -
+          else
+            echo "no GODOT_SHA256 pinned; archive hash is $(sha256sum /tmp/godot.zip | cut -d' ' -f1)"
+          fi
+          unzip -q -o /tmp/godot.zip -d ~/.local/godot
+          chmod +x ~/.local/godot/Godot_v*
+          ls -la ~/.local/godot
+
+      - name: Put Godot on the path
+        run: |
+          set -euo pipefail
+          bin="$(find ~/.local/godot -maxdepth 1 -type f -name 'Godot_v*' -perm -u+x | head -1)"
+          [ -n "$bin" ] || { echo "no Godot binary found" >&2; exit 1; }
+          echo "$(dirname "$bin")" >> "$GITHUB_PATH"
+          printf 'GODOT=%s\n' "$bin" >> "$GITHUB_ENV"
+
+      - name: Cache the import cache
+        uses: actions/cache@v4
+        with:
+          path: .godot
+          key: godot-import-${{ env.GODOT_VERSION }}-${{ hashFiles('project.godot', '**/*.import') }}
+          restore-keys: |
+            godot-import-${{ env.GODOT_VERSION }}-
+
+      - name: Run the fast checks
+        run: tools/check_all.sh --fast
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-report-fast
+          path: artifacts/check-report.txt
+          if-no-files-found: warn
+
+  walkthrough:
+    name: motion walkthrough
+    # Every push already runs the fast set; the two-minute walkthrough rides on
+    # pull requests and the nightly, where the extra time buys real coverage of
+    # doorways blocked by furniture and cameras that pop.
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache the Godot binary
+        id: godot-bin
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/godot
+          key: godot-${{ env.GODOT_VERSION }}
+
+      - name: Install Godot
+        if: steps.godot-bin.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.local/godot
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          curl -fsSL "$url" -o /tmp/godot.zip
+          unzip -q -o /tmp/godot.zip -d ~/.local/godot
+          chmod +x ~/.local/godot/Godot_v*
+
+      - name: Put Godot on the path
+        run: |
+          set -euo pipefail
+          bin="$(find ~/.local/godot -maxdepth 1 -type f -name 'Godot_v*' -perm -u+x | head -1)"
+          [ -n "$bin" ] || { echo "no Godot binary found" >&2; exit 1; }
+          echo "$(dirname "$bin")" >> "$GITHUB_PATH"
+          printf 'GODOT=%s\n' "$bin" >> "$GITHUB_ENV"
+
+      - name: Cache the import cache
+        uses: actions/cache@v4
+        with:
+          path: .godot
+          key: godot-import-${{ env.GODOT_VERSION }}-${{ hashFiles('project.godot', '**/*.import') }}
+          restore-keys: |
+            godot-import-${{ env.GODOT_VERSION }}-
+
+      - name: Walk every route in motion
+        run: tools/check_all.sh --only check_walkthrough
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-report-walkthrough
+          path: artifacts/check-report.txt
+          if-no-files-found: warn

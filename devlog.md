@@ -855,4 +855,15 @@ State-machine review (no defects found in the horse or player code):
 - Verification: new `tools/check_horse_state.gd` PASS (23 assertions). It earns training and a full groom in `main.tscn`, pays an entry fee, frees the scene, covers the farmhouse case (a scene with no horse still snapshots the horse), re-spawns `main.tscn` and then `competition_arena.tscn` and checks the stats and the parked coat bytes on each, then wins a rosette and checks it is worn after the door. The hydration line was then disabled and the check re-run first: 10 assertions fail exactly as the old code behaved, including "training survives the doorway", "the showground horse inherits the trained jump bonus" and "the showground horse is handed the painted coat"; the file was restored and verified by sha256. Also PASS: `check_save` (rewritten for the new owner, including a horse-less snapshot), `check_mount`, `check_groom`, `check_tack`, `check_jump_and_loop`, `check_editor_load`.
 - Limitation: `HorseState` holds one horse's progress, which matches the GDD's one-horse MVP. A second horse needs it keyed by horse id rather than a second copy of this class.
 
+## One command runs the checks, and CI runs the command
+
+2026-10-26
+
+- The suite had 27 checks and no runner. `agents.md` named ten of them in prose, so the other seventeen existed only for whoever remembered them; `tools/check_all.sh` is the single manifest now. `--fast` skips the motion walkthrough, `--only name[,name]` runs a subset, `--list` prints the manifest, each entry carries its own timeout, and each check's own exit status is what decides pass or fail. A timeout is reported as a timeout rather than as a failed assertion, only the FAIL/ERROR lines are echoed, and `artifacts/check-report.txt` keeps the same lines for CI.
+- It builds the import cache first when `.godot/imported` is missing, because a cold clone has no cache and every check loads a scene. That is the same `--headless --editor --quit` step the notes have always used.
+- `.github/workflows/checks.yml` runs `--fast` on every push and the walkthrough on pull requests and the nightly, caching both the Godot binary and the import cache. It is committed now that the set is green rather than before: a pipeline that arrives red teaches everyone to ignore it.
+- Baseline on this machine: `--fast` PASS 27/27 in 277 s, `check_walkthrough` PASS in 140 s. The two checks the notes called flaky (`check_lead`, `check_dog`) passed in that run.
+- `check_character_select` no longer fails. The notes recorded a handoff timeout, but that check has allowed 9 s for the handoff and 20 s overall since the initial commit (its own comment measures the world load at close to six seconds here), and it passed three standalone runs plus the suite. No assertion was touched for this change; the note was stale, and `agents.md` now points at the runner instead of describing check status by hand.
+- Limitation: the workflow has not executed on GitHub from this machine. It is pinned to Godot 4.7-stable, and `GODOT_SHA256` is deliberately empty until a first run prints the archive hash - fill it in then.
+
 <!-- end -->
