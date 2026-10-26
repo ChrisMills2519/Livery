@@ -943,4 +943,14 @@ The care loop itself is compact on purpose (it is a phone game and `check_care`/
 - The arena's western 8 m strip and both ends still carry no fence. Adding to `ArenaJumps` changes the round's fence count, which `check_jump_and_loop` pins, so that was deliberately left alone.
 - The 46 m walk from the stable to the showground gate, and the lane widths, have only been seen in renders; no device or touch pass yet.
 
+## The game starts a player on £15, and pays it once
+
+2026-10-26
+
+- The wallet started at £0, so the only early purchase - a £5 bale at the feed store - was a formality and the first visit had nothing to decide. `GameState.STARTING_MONEY` is £15 now: three bales, or part of the £20 show entry, with the arena round as the free route to the rest.
+- **A floor paid on every load is a money tap, not a starting balance.** `max(money, 15)` in the load path would mean spending £15 on hay, reloading, and being rich again. The snapshot therefore carries `money_floor_version`, and `SaveGame.apply()` raises a payload written by an older floor to the current one and marks it; a payload already at this version is applied exactly as it stands, so spending down to £3 stays at £3. Because it is a raise rather than an addition, a local load followed by a cloud load cannot pay twice.
+- A returning player is unaffected in every other respect: the top-up only raises a balance below the floor, and the two existing tablet saves keep the money they earned.
+- `tools/check_save.gd` gained `_check_starting_money`: a fresh process holds £15, an older-shaped payload of £3 is raised and marked, the same wallet with the marker is left at £3, and a floor never claws back £240. The check was proved to bite by disabling the top-up - "an older save is topped up to the floor" failed, then the file was restored and verified by sha256.
+- `hud.gd`'s wallet label no longer carries a `£0` placeholder that disagrees with the balance.
+
 <!-- end -->

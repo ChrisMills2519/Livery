@@ -74,7 +74,9 @@ func _build_ui() -> void:
 	stats.position = Vector2(24, 18)
 	stats.add_theme_constant_override("separation", 2)
 	root.add_child(stats)
-	_money_label = _label(stats, "£0", 27, ACCENT)
+	# The wallet is refreshed below, but the placeholder reads the real balance so
+	# the file carries no stale default.
+	_money_label = _label(stats, "£%d" % GameState.money, 27, ACCENT)
 	_skill_label = _label(stats, "Jumping 1.0 / 10", 17, DIM_COLOR)
 	_best_label = _label(stats, "Best round —", 17, DIM_COLOR)
 	_rosette_label = _label(stats, "", 17, Color(1.0, 0.86, 0.52))

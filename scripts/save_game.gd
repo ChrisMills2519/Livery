@@ -160,6 +160,7 @@ func snapshot() -> Dictionary:
 	return {
 		"version": SAVE_VERSION,
 		"money": GameState.money,
+		"money_floor_version": GameState.money_floor_version,
 		"best_round_time": GameState.best_round_time,
 		"show_best_time": GameState.show_best_time,
 		"show_entries": GameState.show_entries,
@@ -178,6 +179,14 @@ func apply(payload: Dictionary) -> void:
 	_applying = true
 
 	GameState.money = int(payload.get("money", 0))
+	# The wallet has a floor, and it is paid once.  A save written by a build with
+	# an older floor is raised to the current one; a save already at this version
+	# keeps exactly the money it holds, so spending down to £3 and reloading does
+	# not refill the wallet.  The marker then travels with the next save.
+	var floor_version := int(payload.get("money_floor_version", 0))
+	if floor_version < GameState.MONEY_FLOOR_VERSION:
+		GameState.adopt_starting_money()
+	GameState.money_floor_version = GameState.MONEY_FLOOR_VERSION
 	GameState.best_round_time = float(payload.get("best_round_time", 0.0))
 	GameState.show_best_time = float(payload.get("show_best_time", 0.0))
 	GameState.show_entries = int(payload.get("show_entries", 0))

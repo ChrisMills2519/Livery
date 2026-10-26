@@ -135,6 +135,18 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
 - `tools/check_care.gd` covers the needs, both stations, the refusal paths, the
   nearest-station rule and the save.
 
+## Money
+
+- The wallet starts at `GameState.STARTING_MONEY` (£15: three bales, or part of a
+  show entry), and the floor is **paid once per wallet, never on every load**.
+  `MONEY_FLOOR_VERSION` travels in the snapshot, and `SaveGame.apply()` raises a
+  payload written by an older floor and then marks it. A plain
+  `max(money, STARTING_MONEY)` in the load path would be a money tap: spend down
+  to £3, reload, and the wallet refills.
+- `check_save` pins both directions (an older save is topped up; a marked one is
+  left at £3) and was proved by disabling the top-up and watching the first
+  assertion fail.
+
 ## The main level's layout
 
 - The site is **painted, then dressed**: `tools/build_ground_control.py` owns the

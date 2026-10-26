@@ -18,7 +18,16 @@ signal supplies_changed
 ## nobody had written down.  It is written down now.
 signal progress_changed
 
-var money := 0
+## What a fresh wallet starts with.  £15 is three bales at the yard's price, or
+## part of a show entry, so the first purchase is a decision rather than a
+## formality.
+const STARTING_MONEY := 15
+## The version of that floor.  A save written by a build with an older floor is
+## raised to the current one once and marked; see `SaveGame.apply()`.
+const MONEY_FLOOR_VERSION := 1
+
+var money := STARTING_MONEY
+var money_floor_version := MONEY_FLOOR_VERSION
 var best_round_time := 0.0
 
 ## Show-class rosettes won so far.  Each entry is {class, place, colour}.
@@ -82,6 +91,20 @@ func add_money(amount: int) -> void:
 		return
 	money += amount
 	money_changed.emit(money)
+
+
+## Raises a wallet that predates the current floor up to it, and returns true
+## when it paid.  A floor raises; it never takes money back, and it is the
+## caller's job to call it once per wallet rather than on every load - a
+## `max(money, STARTING_MONEY)` in the load path would be a money tap, not a
+## starting balance, because a child who spent down to £3 would be refilled by
+## the next reload.
+func adopt_starting_money() -> bool:
+	if money >= STARTING_MONEY:
+		return false
+	money = STARTING_MONEY
+	money_changed.emit(money)
+	return true
 
 
 ## Records one class entry.  A function rather than `+= 1` so the save hears

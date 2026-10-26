@@ -68,6 +68,7 @@ func _initialize() -> void:
 	_gs = root.get_node("GameState")
 	_hs = root.get_node("HorseState")
 	_check_identity()
+	_check_starting_money()
 	_check_round_trip()
 	_check_local_file()
 	_check_guest_writes_nothing()
@@ -104,6 +105,34 @@ func _check_identity() -> void:
 		_check("slot for '%s' was %d, expected %d" % [entry["search"], parsed["slot"], entry["slot"]],
 			int(parsed["slot"]) == int(entry["slot"]))
 	print("identity rules: %d cases" % cases.size())
+
+
+## The wallet's floor is paid once and marked, so a save from an older build is
+## topped up while a save that has already been marked is left alone.  The fresh
+## assertion has to run first, while the wallet is still untouched this process.
+func _check_starting_money() -> void:
+	_check("a fresh wallet holds the starting money",
+		int(_gs.money) == int(_gs.STARTING_MONEY))
+	_check("the game starts a player on £15", int(_gs.STARTING_MONEY) == 15)
+
+	# A save written before the floor existed: raised once, then marked.
+	_gs.money = 3
+	_save.apply({"money": 3})
+	_check("an older save is topped up to the floor",
+		int(_gs.money) == int(_gs.STARTING_MONEY))
+	_check("the top-up marks the wallet",
+		int(_save.snapshot().get("money_floor_version", 0)) == int(_gs.MONEY_FLOOR_VERSION))
+
+	# The same wallet after the marker exists: applied exactly as it stands.
+	_gs.money = 3
+	_save.apply({"money": 3, "money_floor_version": _gs.MONEY_FLOOR_VERSION})
+	_check("a marked wallet is never refilled", _gs.money == 3)
+
+	# A floor raises; it does not claw back a balance above it.
+	_gs.money = 0
+	_save.apply({"money": 240})
+	_check("a floor never takes money away", _gs.money == 240)
+	print("starting money: £15 once, marked, never refilled")
 
 
 func _check_round_trip() -> void:
