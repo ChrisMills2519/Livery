@@ -320,7 +320,40 @@ def set_cfg_key(text: str, section: str, key: str, value: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def patch_project(stage: Path) -> None:
+def build_version() -> str:
+    """The string stamped on the loading screen and inside the pack.
+
+    It has to answer "is this the build I just published?" without trusting a
+    cache, so it carries the commit, whether the tree had uncommitted edits, and
+    the UTC time the export ran.  The time is what separates two builds of the
+    same commit.
+    """
+    short = ""
+    local = False
+    try:
+        short = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        local = subprocess.run(
+            ["git", "diff", "--quiet", "HEAD", "--", "."],
+            cwd=str(ROOT),
+            capture_output=True,
+        ).returncode != 0
+    except OSError:
+        pass
+    stamp = time.strftime("%Y-%m-%d %H:%M", time.gmtime())
+    parts = [f"build {stamp} UTC"]
+    if short:
+        parts.append(f"{short}+local" if local else short)
+    # Plain ASCII on purpose: this string is written into project.godot as well,
+    # and the config parser must not have to deal with escapes.
+    return "  ".join(parts)
+
+
+def patch_project(stage: Path, version: str) -> None:
     project = stage / "project.godot"
     text = project.read_text(encoding="utf-8")
     text = set_cfg_key(text, "rendering", "textures/vram_compression/import_etc2_astc", "true")
@@ -333,8 +366,11 @@ def patch_project(stage: Path) -> None:
         "1",
     )
     text = set_cfg_key(text, "application", "run/max_fps", "60")
+    # The pack carries the same string the loading screen shows, so a page and a
+    # pack from different builds can be told apart instead of agreeing wrongly.
+    text = set_cfg_key(text, "application", "config/version", json.dumps(version))
     project.write_text(text, encoding="utf-8")
-    log("[setup] project settings patched for mobile")
+    log(f"[setup] project settings patched for mobile ({version})")
 
 
 def patch_export_preset(stage: Path) -> None:
@@ -368,6 +404,33 @@ def patch_export_preset(stage: Path) -> None:
         text = text.replace("[preset.0.options]\n\n", "[preset.0.options]\n\n" + replacement + "\n", 1)
     preset.write_text(text, encoding="utf-8")
     log("[setup] export preset patched (ETC2 only, DPR cap)")
+
+
+def patch_index_version(out_dir: Path, version: str) -> None:
+    """Stamp the loading screen with the build it belongs to.
+
+    The shell is the only thing on screen before the engine starts, so it is
+    where a stale page gets caught: if the line reads older than the build just
+    published, the browser is still on the previous one.  The div is absolutely
+    positioned so it cannot disturb the splash image or the progress bar.
+    """
+    index = out_dir / "index.html"
+    if not index.exists():
+        return
+    text = index.read_text(encoding="utf-8")
+    text = re.sub(r'<div id="build-version".*?</div>\n?', "", text, flags=re.S)
+    marker = '\t\t\t<div id="status-notice"></div>\n'
+    if marker not in text:
+        log("[stamp] no status block in index.html; the version is not shown")
+        return
+    label = (
+        '<div id="build-version" style="position:absolute;left:0;right:0;'
+        "bottom:2.2rem;text-align:center;font-family:'Noto Sans','Droid Sans',"
+        'Arial,sans-serif;font-size:1rem;letter-spacing:0.04em;color:#c9d2c2;'
+        'opacity:0.95;">' + version + "</div>\n"
+    )
+    index.write_text(text.replace(marker, marker + label, 1), encoding="utf-8")
+    log(f"[stamp] loading screen shows {version}")
 
 
 def texture_policy(rel: str) -> tuple[int, int] | None:
@@ -664,6 +727,7 @@ def write_report(
     removed: list[str],
     verified: str = "",
     baseline: int = 0,
+    version: str = "",
 ) -> list[str]:
     original = ROOT / "build" / "web" / "index.pck"
     optimized = out_dir / "index.pck"
@@ -688,6 +752,7 @@ def write_report(
         f"Source: {ROOT}",
         f"Stage:  {stage}",
         f"Output: {out_dir}",
+        *([f"Build:  {version}"] if version else []),
         "",
         f"Original pck:  {orig_size / 1048576:8.1f} MiB{orig_note}" if orig_size else "Original pck:  (not present)",
         f"Optimised pck: {opt_size / 1048576:8.1f} MiB",
@@ -732,6 +797,7 @@ def write_report(
         "  devicePixelRatio capped at 2 in the web shell",
         "  outgoing selection scene freed before the world load",
         "  build/, _respdump/, artifacts/ excluded",
+        "  loading screen and pack stamped with the build version",
         "",
         "Pruned entries:",
     ]
@@ -772,6 +838,8 @@ def main() -> int:
     args = parser.parse_args()
 
     out = ROOT / (args.out if not args.in_place else "build/web")
+    version = build_version()
+    log(f"[setup] {version}")
     if args.report_only:
         stats_path = report_dir(out) / "build-stats.json"
         stats = json.loads(stats_path.read_text(encoding="utf-8")) if stats_path.exists() else {}
@@ -781,6 +849,7 @@ def main() -> int:
             stats.get("counts", {"compressed": 0, "lossless": 0, "untouched": 0}),
             stats.get("removed", []),
             baseline=int(stats.get("original_pck", 0)),
+            version=str(stats.get("version", "")),
         )
         log(f"[report] wrote {report_dir(out) / 'OPTIMISATION.txt'}")
         return 1 if over else 0
@@ -794,7 +863,7 @@ def main() -> int:
         log("[setup] building reference index")
         reference_text = read_text_files(stage)
         removed = [] if args.no_prune else prune_assets(stage, reference_text)
-        patch_project(stage)
+        patch_project(stage, version)
         patch_export_preset(stage)
         counts = patch_texture_imports(stage)
         clear_texture_cache(stage)
@@ -842,6 +911,7 @@ def main() -> int:
                 shutil.copytree(item, target)
             else:
                 shutil.copy2(item, target)
+        patch_index_version(out, version)
 
         (report_dir(out) / "build-stats.json").write_text(
             json.dumps(
@@ -849,6 +919,7 @@ def main() -> int:
                     "stage": str(stage),
                     "counts": counts,
                     "removed": removed,
+                    "version": version,
                     "original_pck": (
                         (ROOT / "build" / "web" / "index.pck").stat().st_size
                         if (ROOT / "build" / "web" / "index.pck").exists()
@@ -860,7 +931,7 @@ def main() -> int:
             encoding="utf-8",
         )
 
-        over = write_report(out, stage, counts, removed, previous_verification)
+        over = write_report(out, stage, counts, removed, previous_verification, version=version)
         if over:
             log(f"[audit] {len(over)} obstacle/fence textures are still above 512 px:")
             for item in over[:10]:

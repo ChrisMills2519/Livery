@@ -55,6 +55,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -74,17 +75,23 @@ OBJECTS: dict[str, tuple[str, str, bool]] = {
     "index.audio.worklet.js": ("text/javascript; charset=utf-8", "no-cache", False),
     "index.audio.position.worklet.js": ("text/javascript; charset=utf-8", "no-cache", False),
     # The two big binaries: stored compressed, so the browser downloads 50.5 MiB
-    # instead of 121.7 and decodes on the fly.
-    "index.pck": ("application/octet-stream", "public, max-age=3600", True),
-    "index.wasm": ("application/wasm", "public, max-age=3600", True),
+    # instead of 121.7 and decodes on the fly.  Revalidated, not cached blind:
+    # an hour of max-age meant a phone that had played kept the previous pck
+    # after a gameplay fix shipped, so a device test could silently run the old
+    # build.  R2 answers If-None-Match with 304, so a repeat visit still costs no
+    # download, and a deploy lands on the next load.
+    "index.pck": ("application/octet-stream", "no-cache", True),
+    "index.wasm": ("application/wasm", "no-cache", True),
     "index.png": ("image/png", "public, max-age=86400", False),
     "index.icon.png": ("image/png", "public, max-age=86400", False),
     "index.apple-touch-icon.png": ("image/png", "public, max-age=86400", False),
 }
 
-# index.html, the loader and the worklets change with every build and must be
-# revalidated; the pck and wasm are large and change rarely, so they get an hour
-# of blind reuse (the same TTL the old Netlify config used).
+# Everything except the icons is revalidated.  The pck and wasm are large, so an
+# hour of blind reuse looked economical, but it meant a phone kept the previous
+# build after a gameplay fix shipped: the device test then measured code that
+# was already replaced.  A conditional request is one round trip and a 304, and
+# the icons stay on a day of blind reuse because they cannot change.
 PFX = "[deploy]"
 
 # Cloudflare's bot protection answers an unadvertised UA (urllib's default) with
@@ -313,6 +320,23 @@ def check(args, names: list[str], compressed: dict[str, Path]) -> int:
             log(f"FAIL {name:18s} " + "; ".join(problems))
         else:
             log(f"ok   {name:18s} {mib(got_len)}  {got_type}" + (f"  {got_enc}" if got_enc else ""))
+
+    # The loading screen is stamped with the build it belongs to, so the live
+    # page can be held against the export on disk.  This is the check that
+    # answers "am I actually playing the build I just published" instead of
+    # trusting that an upload replaced what a browser cached.
+    if "index.html" in names:
+        local_index = (args.dir / "index.html").read_text(encoding="utf-8", errors="replace")
+        stamp = re.search(r'id="build-version"[^>]*>([^<]+)<', local_index)
+        _, _, live_body = probe("index.html")
+        live_html = live_body.decode("utf-8", "replace")
+        if stamp is None:
+            log("warn index.html has no build stamp (export predates the stamp)")
+        elif stamp.group(1).strip() and stamp.group(1).strip() in live_html:
+            log(f"ok   index.html build stamp {stamp.group(1).strip()}")
+        else:
+            failures += 1
+            log(f"FAIL index.html is not serving the local build stamp {stamp.group(1).strip()!r}")
 
     # Range and conditional support matter for a 43 MiB object on a tablet.
     status, headers, _ = probe(names[0], {"Range": "bytes=0-15"})
