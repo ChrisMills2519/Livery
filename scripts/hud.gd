@@ -11,6 +11,9 @@ signal logo_pressed
 const TEXT_COLOR := Color(0.96, 0.97, 0.92, 1.0)
 const DIM_COLOR := Color(0.78, 0.82, 0.74, 1.0)
 const ACCENT := Color(0.72, 1.0, 0.62, 1.0)
+## Width of the three need bars, in pixels.  They hang under the wallet block,
+## which keeps them clear of the thumb band the touch debug readout avoids.
+const NEED_BAR_WIDTH := 96.0
 const LiveryLogoButton := preload("res://scripts/livery_logo_button.gd")
 
 var _course: Node
@@ -20,10 +23,17 @@ var _player: Node3D
 var _money_label: Label
 var _skill_label: Label
 var _best_label: Label
+var _rosette_label: Label
 var _objective_label: Label
 var _timer_label: Label
 var _progress_label: Label
 var _toast_label: Label
+var _hay_label: Label
+## The stable bed's bar: filled from `1 - stall_muck`, because a clean bed is
+## the good end of this bar just as a full belly is for FOOD.
+var _stable_fill: ColorRect
+## Keyed by the horse property name: hunger, energy, health.
+var _need_fills: Dictionary = {}
 var _result_panel: PanelContainer
 var _result_title: Label
 var _result_body: Label
@@ -51,6 +61,7 @@ func _bind() -> void:
 		_course.notice.connect(_show_toast)
 	GameState.money_changed.connect(func(_m): _refresh_stats())
 	GameState.best_time_changed.connect(func(_t): _refresh_stats())
+	GameState.rosettes_changed.connect(func(_n): _refresh_stats())
 	_refresh_stats()
 
 
@@ -66,9 +77,14 @@ func _build_ui() -> void:
 	stats.position = Vector2(24, 18)
 	stats.add_theme_constant_override("separation", 2)
 	root.add_child(stats)
-	_money_label = _label(stats, "£0", 27, ACCENT)
+	# The wallet is refreshed below, but the placeholder reads the real balance so
+	# the file carries no stale default.
+	_money_label = _label(stats, "£%d" % GameState.money, 27, ACCENT)
 	_skill_label = _label(stats, "Jumping 1.0 / 10", 17, DIM_COLOR)
 	_best_label = _label(stats, "Best round —", 17, DIM_COLOR)
+	_rosette_label = _label(stats, "", 17, Color(1.0, 0.86, 0.52))
+	_rosette_label.visible = false
+	_build_needs(stats)
 
 	# Top-centre: objective, timer and fence progress.
 	var centre := VBoxContainer.new()
@@ -104,12 +120,14 @@ func _build_ui() -> void:
 	style.set_corner_radius_all(12)
 	style.set_content_margin_all(22)
 	_result_panel.add_theme_stylebox_override("panel", style)
+	_result_panel.name = "ResultCard"
 	_result_panel.visible = false
 	root.add_child(_result_panel)
 	var result_box := VBoxContainer.new()
 	result_box.add_theme_constant_override("separation", 8)
 	_result_panel.add_child(result_box)
 	_result_title = _label(result_box, "ROUND COMPLETE", 30, ACCENT)
+	_result_title.name = "ResultTitle"
 	_result_body = _label(result_box, "", 20, TEXT_COLOR)
 	var hint := _label(result_box, "Clear a fence to go again", 15, DIM_COLOR)
 	hint.name = "Hint"
@@ -143,6 +161,53 @@ func _apply_input_hints() -> void:
 	)
 
 
+## Hay stock and the three daily needs.  Bars are two ColorRects rather than a
+## themed ProgressBar, so the HUD stays self-contained and the tint matches the
+## wallet block.
+func _build_needs(parent: Node) -> void:
+	var box := VBoxContainer.new()
+	box.name = "NeedsPanel"
+	box.add_theme_constant_override("separation", 2)
+	parent.add_child(box)
+	_hay_label = _label(box, "HAY  ·  0", 14, DIM_COLOR)
+	_hay_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	for entry in [
+		["hunger", "FOOD", Color(0.95, 0.78, 0.36, 1.0)],
+		["energy", "ENERGY", Color(0.55, 0.82, 1.0, 1.0)],
+		["health", "HEALTH", Color(0.72, 1.0, 0.62, 1.0)],
+	]:
+		_need_fills[String(entry[0])] = _need_row(box, String(entry[1]), entry[2], String(entry[0]).capitalize())
+	# The bed is the one bar that is the player's own work rather than the horse's
+	# appetite, and it reads *clean*, so a full bar means the same good thing the
+	# other three do.
+	_stable_fill = _need_row(box, "STABLE", Color(0.74, 0.68, 0.46, 1.0), "Stable")
+
+
+## One caption and track, with the fill returned for `_refresh_needs`.  Named so
+## a check can find the row it is asserting about.
+func _need_row(parent: Node, caption_text: String, colour: Color, node_name: String) -> ColorRect:
+	var row := HBoxContainer.new()
+	row.name = "%sRow" % node_name
+	row.add_theme_constant_override("separation", 6)
+	parent.add_child(row)
+	var caption := _label(row, caption_text, 13, DIM_COLOR)
+	caption.custom_minimum_size = Vector2(56, 0)
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var track := ColorRect.new()
+	track.name = "%sTrack" % node_name
+	track.color = Color(0.10, 0.13, 0.10, 0.85)
+	track.custom_minimum_size = Vector2(NEED_BAR_WIDTH, 7)
+	track.clip_contents = true
+	row.add_child(track)
+	var fill := ColorRect.new()
+	fill.name = "%sFill" % node_name
+	fill.color = colour
+	fill.position = Vector2.ZERO
+	fill.size = Vector2(NEED_BAR_WIDTH, 7)
+	track.add_child(fill)
+	return fill
+
+
 func _label(parent: Node, text: String, size: int, color: Color) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -172,9 +237,38 @@ func _refresh_stats() -> void:
 		_best_label.text = "Best round  %.1fs" % GameState.best_round_time
 	else:
 		_best_label.text = "Best round  —"
+	if _rosette_label != null:
+		var count := GameState.rosettes.size()
+		_rosette_label.visible = count > 0
+		_rosette_label.text = "Rosettes  %d" % count
+	_refresh_needs()
+
+
+## Reads the needs off the horse, which owns them, rather than off `HorseState`:
+## the horse is the thing the values are decaying in, and a scene that has no
+## horse has no care to show.
+func _refresh_needs() -> void:
+	if _hay_label != null:
+		_hay_label.text = "HAY  ·  %d" % GameState.hay
+	if _horse == null:
+		return
+	for key in _need_fills:
+		var raw: Variant = _horse.get(key)
+		if raw == null:
+			continue
+		var value := clampf(float(raw), 0.0, 1.0)
+		var fill: ColorRect = _need_fills[key]
+		fill.size = Vector2(NEED_BAR_WIDTH * value, fill.size.y)
+	if _stable_fill != null:
+		var raw_muck: Variant = _horse.get("stall_muck")
+		var muck := clampf(float(raw_muck), 0.0, 1.0) if raw_muck != null else 0.0
+		_stable_fill.size = Vector2(NEED_BAR_WIDTH * (1.0 - muck), _stable_fill.size.y)
 
 
 func _update_objective() -> void:
+	if _course.has_method("get_objective_text"):
+		_objective_label.text = String(_course.call("get_objective_text"))
+		return
 	var mounted: bool = _player != null and _player.get("mounted") == true
 	match _course.state:
 		"running":
@@ -236,6 +330,10 @@ func _on_round_finished(result: Dictionary) -> void:
 	var faults: int = result.get("faults", 0)
 	var is_clear_round: bool = result.get("clear_round", false)
 
+	if result.get("show_class", false):
+		_show_class_result(result)
+		return
+
 	if timed_out:
 		_result_title.text = "TIME UP"
 	elif is_clear_round:
@@ -253,6 +351,51 @@ func _on_round_finished(result: Dictionary) -> void:
 	if result.get("new_best", false):
 		_result_body.text += "\nNew personal best time!"
 	_result_panel.visible = true
+
+
+## Show-class card: placing, field, prize and the rosette are added only when
+## the result carries them, so schooling rounds are unchanged.
+func _show_class_result(result: Dictionary) -> void:
+	var placing: int = result.get("placing", 0)
+	var field: int = result.get("field", 0)
+	var prize: int = result.get("prize", 0)
+	var eliminated: bool = result.get("eliminated", false)
+	var rosette := String(result.get("rosette", ""))
+	_result_title.text = String(result.get("title", "CLASS RESULT"))
+	var lines: Array[String] = []
+	lines.append(String(result.get("class_label", "CLASS")))
+	lines.append("%d / %d fences   ·   %d faults" % [
+		int(result.get("clears", 0)), int(result.get("total", 0)), int(result.get("faults", 0))])
+	lines.append("Time  %.2fs" % float(result.get("seconds", 0.0)))
+	if placing > 0:
+		lines.append("%s of %d   ·   Prize  +£%d" % [_ordinal(placing), field, prize])
+	elif eliminated:
+		lines.append("No placing or prize")
+	else:
+		lines.append("Not placed this time")
+	if not rosette.is_empty():
+		lines.append("Rosette: %s  ·  collect it at the judges' box" % rosette.capitalize())
+	if result.get("new_best", false):
+		lines.append("New personal best!")
+	if not bool(result.get("timed_out", false)) and placing == 0 and not eliminated:
+		lines.append("Clear every fence with 0 faults to be placed")
+	_result_body.text = "\n".join(lines)
+	var hint := _result_panel.find_child("Hint", true, false) as Label
+	if hint != null:
+		hint.text = "Enter again at the secretary's desk"
+	_result_panel.visible = true
+
+
+func _ordinal(value: int) -> String:
+	match value:
+		1:
+			return "1st"
+		2:
+			return "2nd"
+		3:
+			return "3rd"
+		_:
+			return "%dth" % value
 
 
 func _on_round_reset() -> void:

@@ -1,0 +1,73 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/jump_obstacle.tscn" id="1_h5uvh"]
+[ext_resource type="Script" path="res://scripts/jump_obstacle.gd" id="2_wn7sr"]
+
+[node name="ShowCourse" type="Node3D" unique_id=1606069725]
+
+[node name="ShowJumps" type="Node3D" parent="." unique_id=1870710236]
+
+[node name="Jump_01" type="Node3D" parent="ShowJumps" unique_id=813689707 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, -9)
+script = ExtResource("2_wn7sr")
+height_tier = 2
+course_number = 1
+
+[node name="Jump_02" type="Node3D" parent="ShowJumps" unique_id=95217517 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 8, 0, -11)
+script = ExtResource("2_wn7sr")
+jump_type = 3
+height_tier = 2
+course_number = 2
+
+[node name="Jump_03" type="Node3D" parent="ShowJumps" unique_id=347355781 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, -10)
+script = ExtResource("2_wn7sr")
+jump_type = 4
+course_number = 3
+
+[node name="Jump_04" type="Node3D" parent="ShowJumps" unique_id=1237347125 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -18, 0, -8)
+script = ExtResource("2_wn7sr")
+jump_type = 5
+height_tier = 2
+course_number = 4
+
+[node name="Jump_05" type="Node3D" parent="ShowJumps" unique_id=943321103 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, 2)
+script = ExtResource("2_wn7sr")
+jump_type = 6
+course_number = 5
+
+[node name="Jump_06" type="Node3D" parent="ShowJumps" unique_id=1475844963 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -20, 0, 11)
+script = ExtResource("2_wn7sr")
+jump_type = 7
+height_tier = 2
+course_number = 6
+
+[node name="Jump_07" type="Node3D" parent="ShowJumps" unique_id=1723369329 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 10)
+script = ExtResource("2_wn7sr")
+height_tier = 2
+course_number = 7
+
+[node name="Jump_08" type="Node3D" parent="ShowJumps" unique_id=74097162 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 10)
+script = ExtResource("2_wn7sr")
+jump_type = 3
+height_tier = 2
+course_number = 8
+
+[node name="Jump_09" type="Node3D" parent="ShowJumps" unique_id=1278817501 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 14, 0, 8)
+script = ExtResource("2_wn7sr")
+jump_type = 4
+height_tier = 2
+course_number = 9
+
+[node name="Jump_10" type="Node3D" parent="ShowJumps" unique_id=2101174426 instance=ExtResource("1_h5uvh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 0, 2)
+script = ExtResource("2_wn7sr")
+height_tier = 2
+course_number = 10

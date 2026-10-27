@@ -1,0 +1,4 @@
+# Nothing in tools/web_shell/ is part of the game: Godot must not import the
+# splash art (this machine's editor crashes on a VRAM-compressed texture, and
+# the pck has no business carrying a loading screen it cannot show).  The
+# exporter reads this folder directly and copies what the shell needs.

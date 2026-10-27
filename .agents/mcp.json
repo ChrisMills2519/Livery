@@ -6,6 +6,9 @@
       "env": {
         "GODOT_PATH": "/usr/local/bin/godot"
       }
+    },
+    "cloudflare": {
+      "url": "https://mcp.cloudflare.com/mcp"
     }
   }
 }

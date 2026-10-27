@@ -72,9 +72,10 @@ func _check_control(control: Texture2D) -> void:
 	print("  OK: control map %dx%d" % [image.get_width(), image.get_height()])
 
 	_expect_dominant(image, "stable yard", Vector2(0.0, -22.0), 0)
-	_expect_dominant(image, "path", Vector2(0.0, -6.5), 1)
+	_expect_dominant(image, "lane", Vector2(0.0, 14.0), 1)
 	_expect_dominant(image, "training ground", Vector2(35.0, 0.0), 2)
 	_expect_dominant(image, "arena", Vector2(-32.5, 0.0), 3)
+	_expect_dominant(image, "house drive", Vector2(30.0, -30.0), 0)
 
 	var grass := _sample(image, Vector2(70.0, 40.0))
 	if grass.r + grass.g + grass.b + grass.a > 0.02:
@@ -82,9 +83,9 @@ func _check_control(control: Texture2D) -> void:
 	else:
 		print("  OK: grass remainder is empty")
 
-	# The stable yard's east edge at x=12 must feather into grass rather than
+	# The stable yard's east edge at x=16 must feather into grass rather than
 	# cut at a right angle.
-	var edge := _sample(image, Vector2(13.0, -22.0))
+	var edge := _sample(image, Vector2(16.0, -19.0))
 	if edge.r < 0.03 or edge.r > 0.95:
 		_fail("yard edge is not a blend: R=%.2f" % edge.r)
 	else:
@@ -96,6 +97,10 @@ func _check_control(control: Texture2D) -> void:
 		_fail("gate wear missing: %s" % gate)
 	else:
 		print("  OK: gate wear blends dirt %.2f into arena %.2f" % [gate.r, gate.a])
+
+	# The lane ends on worn hardstanding at the showground gate: both the dirt
+	# patch and the gravel have to be readable there.
+	_expect_blend(image, "showground hardstanding", Vector2(1.5, 25.0), 0, 1, 0.3)
 
 	# Coarse sweep for out-of-range weights and to confirm the map is mostly
 	# grass rather than accidentally painted solid.
@@ -140,6 +145,15 @@ func _expect_dominant(image: Image, label: String, world: Vector2, channel: int)
 		_fail("%s overlaps another layer: %s" % [label, c])
 	else:
 		print("  OK: %s (channel %d = %.2f)" % [label, channel, values[channel]])
+
+
+func _expect_blend(image: Image, label: String, world: Vector2, channel_a: int, channel_b: int, minimum: float) -> void:
+	var c := _sample(image, world)
+	var values := [c.r, c.g, c.b, c.a]
+	if values[channel_a] < minimum or values[channel_b] < minimum:
+		_fail("%s is not a two-layer blend: %s" % [label, c])
+		return
+	print("  OK: %s blends %.2f / %.2f" % [label, values[channel_a], values[channel_b]])
 
 
 func _sample(image: Image, world: Vector2) -> Color:

@@ -19,6 +19,8 @@ config/icon="res://icon.svg"
 
 Analytics="*res://scripts/analytics.gd"
 GameState="*res://scripts/game_state.gd"
+HorseState="*res://scripts/horse_state.gd"
+SaveGame="*res://scripts/save_game.gd"
 SceneFade="*res://scripts/scene_fade.gd"
 Device="*res://scripts/device.gd"
 TouchControls="*res://scripts/touch_controls.gd"

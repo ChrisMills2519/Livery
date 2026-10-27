@@ -76,12 +76,14 @@ func _physics_process(delta: float) -> void:
 
 	var speed := _ground_speed()
 	var strength := clampf(0.45 + 0.75 * (speed / maxf(full_strength_speed, 0.01)), 0.45, 1.0)
-	var yaw := _body.global_rotation.y + PI
-	var forward := -_body.global_transform.basis.z
-	forward.y = 0.0
-	if forward.length_squared() < 0.0001:
-		forward = Vector3.FORWARD
-	forward = forward.normalized()
+	# The player root carries the view yaw, so the print follows the body's own
+	# facing when the body exposes it.  The horse has no such property and keeps
+	# using its root, which is already the direction it travels.
+	var facing := _body.global_rotation.y
+	if _body.has_method("facing_yaw"):
+		facing = float(_body.call("facing_yaw"))
+	var yaw := facing + PI
+	var forward := Vector3(-sin(facing), 0.0, -cos(facing))
 
 	for i in range(_bones.size()):
 		_waited[i] = maxf(0.0, _waited[i] - delta)

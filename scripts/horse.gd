@@ -47,6 +47,39 @@ signal training_awarded(new_skill: float, new_fitness: float)
 var jumping_skill := 1.0
 var fitness := 1.0
 
+@export_group("Needs")
+## Daily needs, 1.0 = content.  Hunger takes a little over an hour of play to
+## empty, so a session ends with a horse that still looks cared for and a
+## skipped day is noticeable rather than punishing.  Nothing here is a fail
+## state: the horse keeps working at zero, and health only drifts.
+var hunger := 1.0
+var energy := 1.0
+var health := 1.0
+@export var hunger_per_minute := 0.011
+@export var energy_rest_per_minute := 0.05
+@export var energy_ride_per_minute := 0.04
+@export var health_per_minute := 0.02
+## How much of the bowl one bale fills.  Two bales take a hungry horse to full.
+@export var hay_feed_gain := 0.5
+## Seconds between need values being mirrored into `HorseState`.
+@export var needs_report_seconds := 1.0
+var _needs_report := 0.0
+
+@export_group("Stable")
+## How soiled the bed is, 0.0 fresh to 1.0 a full muck-out.  It soils on the
+## clock the player is playing on - a little while the horse is in the world at
+## all, and faster while it is standing about the yard rather than being ridden,
+## because a horse spends that time in or beside its stall.  A boarded horse is
+## frozen by `board()` and does not tick, so its bed stops soiling while it is
+## put away.
+var stall_muck := 0.0
+@export var stall_muck_per_minute := 0.02
+@export var stall_muck_standing_per_minute := 0.06
+## True while the muck session owns the player.  The bed does not soil during
+## the chore: the session is removing exactly what is in it, and a rate running
+## underneath would fight the scoop.
+var mucking := false
+
 ## Saddle socket. The marker is placed on the back surface in the scene and
 ## this script makes it follow the animated spine so the rider rises and
 ## pitches with the gait instead of hovering at a fixed height.
@@ -130,6 +163,11 @@ func _ready() -> void:
 	# this overlay stands down.
 	if jump_pose != null and fsm != null and fsm.has_air_clip():
 		jump_pose.active = false
+	# The horse is a scene node and every door is a full scene change, so this
+	# spawn starts from the progress the player actually earned rather than from
+	# the defaults above.
+	HorseState.apply_to(self)
+	_restore_rosette()
 
 
 func _process(delta: float) -> void:
@@ -199,14 +237,14 @@ func _update_tack() -> void:
 		var spine_global := _skeleton.global_transform * _skeleton.get_bone_global_pose(_seat_bone)
 		var stable := _stable_delta(spine_global, _spine_rest)
 		saddle.global_transform = _pivot_transform(
-			spine_global.origin, _spine_rest.origin, stable, _saddle_rest.basis
+			spine_global.origin, _spine_rest.origin, stable, _saddle_rest.basis, _saddle_rest.origin
 		)
 		rider_seat.global_transform = saddle.global_transform * _seat_in_saddle
 	if _head_bone >= 0 and bridle != null:
 		var head_global := _skeleton.global_transform * _skeleton.get_bone_global_pose(_head_bone)
 		var stable := _stable_delta(head_global, _head_rest)
 		bridle.global_transform = _pivot_transform(
-			head_global.origin, _head_rest.origin, stable, _bridle_rest.basis
+			head_global.origin, _head_rest.origin, stable, _bridle_rest.basis, _bridle_rest.origin
 		)
 
 
@@ -221,11 +259,18 @@ func _stable_delta(now: Transform3D, rest: Transform3D) -> Basis:
 	return horse_basis * stable_local * horse_basis.inverse()
 
 
-## Rotate the rigid tack around the bone's rest pivot, then carry it with the
-## bone's translation.  The mesh is authored in model space, so its root stays
-## at the origin when the bone is at rest.
-func _pivot_transform(now: Vector3, rest: Vector3, rotation: Basis, rest_basis: Basis) -> Transform3D:
-	var origin := (now - rest) + rest - rotation * rest
+## Places a rest-authored prop so it rides its bone: the prop's rest offset from
+## the bone is rotated about the bone, and the bone's translation is followed.
+##
+## The old form was `(now - rest)`, the bone's displacement from its rest pose,
+## which is the prop's absolute position only while the horse stands at the world
+## origin.  As soon as a scene placed the horse off the origin the saddle (and
+## the rider seat inside it) sat at the world origin instead of on the horse,
+## which silently broke `can_mount()`'s seat distance and the live reins.
+func _pivot_transform(
+	now: Vector3, rest: Vector3, rotation: Basis, rest_basis: Basis, rest_origin: Vector3
+) -> Transform3D:
+	var origin := now + rotation * (rest_origin - rest)
 	return Transform3D(rotation * rest_basis, origin)
 
 
@@ -355,7 +400,7 @@ func apply_fence_impact(speed_keep := 0.85) -> void:
 ## until release_from_stable() puts it back at the stall.  The player never
 ## leads or follows the horse, so this is the only way in and out of the yard.
 func board() -> bool:
-	if boarded or rider != null or grooming:
+	if boarded or rider != null or grooming or mucking:
 		return false
 	clear_leader()
 	boarded = true
@@ -418,14 +463,67 @@ func jump() -> bool:
 func award_training(jump_xp: float, fitness_xp: float) -> void:
 	jumping_skill = minf(jumping_skill + jump_xp, max_jumping_skill)
 	fitness = minf(fitness + fitness_xp, max_jumping_skill)
+	HorseState.record_from(self)
 	training_awarded.emit(jumping_skill, fitness)
+
+
+## Needs decay over real minutes and are mirrored into `HorseState` once a
+## second, so a doorway, a reload or a save carries them along.  The mirror is a
+## plain write rather than a `record_from()`: the latter emits `changed`, and a
+## save queued every second is not what any of this is for.
+func _tick_needs(delta: float) -> void:
+	var minutes := delta / 60.0
+	hunger = maxf(0.0, hunger - hunger_per_minute * minutes)
+	var working := rider != null and absf(_ride_speed) > 0.2
+	if working:
+		energy = maxf(0.0, energy - energy_ride_per_minute * minutes)
+	elif boarded or absf(_ride_speed) < 0.05:
+		energy = minf(1.0, energy + energy_rest_per_minute * minutes)
+	# The bed soils whether the horse is ridden or not, faster while it is
+	# standing about.  Riding does not soil it, because the horse is not in it.
+	if not mucking:
+		var muck_rate := stall_muck_per_minute
+		if not working and absf(_ride_speed) < 0.05:
+			muck_rate = stall_muck_standing_per_minute
+		stall_muck = minf(1.0, stall_muck + muck_rate * minutes)
+	# Health drifts toward what the horse's care adds up to, and a soiled bed is
+	# the one thing that holds it back.  It cannot be lost in a hurry and neglect
+	# alone does not take it to zero.
+	var target := clampf(
+		0.35 + 0.30 * cleanliness + 0.15 * trust + 0.1 * hunger + 0.1 * (1.0 - stall_muck),
+		0.0, 1.0
+	)
+	health = move_toward(health, target, health_per_minute * minutes)
+	_needs_report += delta
+	if _needs_report >= needs_report_seconds:
+		_needs_report = 0.0
+		HorseState.set_needs(hunger, energy, health)
+		HorseState.set_stall_muck(stall_muck)
+
+
+## Eats one bale from the yard's supplies.  The trough consumes the bale when
+## this answers ok, so a full horse cannot waste one.
+func feed() -> Dictionary:
+	if hunger >= 0.995:
+		return {"ok": false, "message": "Your horse is not hungry."}
+	var before := hunger
+	hunger = minf(1.0, hunger + hay_feed_gain)
+	energy = minf(1.0, energy + 0.1)
+	happiness = minf(1.0, happiness + 0.05)
+	trust = minf(1.0, trust + 0.02)
+	HorseState.record_from(self)
+	return {
+		"ok": true,
+		"hunger_gain": hunger - before,
+		"message": "Your horse eats the hay and settles.",
+	}
 
 
 ## Freeze the horse in a quiet standing pose at the bay.  The grooming mask
 ## is baked against the posed skeleton, so the mask zones and the picker must
 ## both see the same pose.
 func begin_grooming(anchor: Transform3D) -> bool:
-	if grooming or rider != null or boarded:
+	if grooming or rider != null or boarded or mucking:
 		return false
 	clear_leader()
 	grooming = true
@@ -459,6 +557,21 @@ func begin_grooming(anchor: Transform3D) -> bool:
 	return true
 
 
+## The muck session works the stall rather than the horse, so nothing is frozen
+## and no pose changes: the horse keeps standing wherever it is, and only the
+## soiling pauses.  The mount prompt is left alone, because the stable door
+## already suppresses it for anyone standing at that end of the yard.
+func begin_mucking() -> bool:
+	if mucking or grooming:
+		return false
+	mucking = true
+	return true
+
+
+func end_mucking() -> void:
+	mucking = false
+
+
 func end_grooming() -> void:
 	if not grooming:
 		return
@@ -488,6 +601,7 @@ func mark_hoof(index: int) -> bool:
 	for done in groomed_hooves:
 		if done:
 			hooves_cleaned += 1
+	HorseState.record_from(self)
 	return true
 
 
@@ -507,6 +621,7 @@ func apply_grooming_result(clean: float, polish: float, hooves: int, complete: b
 	if groom_surface != null:
 		var dirt := 0.0 if complete else clampf(1.0 - cleanliness, 0.0, 1.0)
 		groom_surface.call("set_dirt_level", dirt)
+	HorseState.record_from(self)
 	return {
 		"clean": cleanliness,
 		"polish": grooming_polish,
@@ -516,6 +631,74 @@ func apply_grooming_result(clean: float, polish: float, hooves: int, complete: b
 		"trust_gain": trust_gain,
 		"happiness_gain": happiness_gain,
 	}
+
+
+## Pins a rosette at the withers.  Returns false when one is already there, so a
+## re-spawn cannot stack two.  This lives on the horse because the horse is what
+## wears it: the show class used to build the node itself, which meant the
+## rosette disappeared with the next scene change.
+func attach_rosette(colour: String) -> bool:
+	if get_node_or_null("ShowRosette") != null:
+		return false
+	var colours := {
+		"red": Color(0.55, 0.09, 0.07),
+		"blue": Color(0.09, 0.18, 0.50),
+		"yellow": Color(0.80, 0.58, 0.09),
+	}
+	var body := StandardMaterial3D.new()
+	body.albedo_color = colours.get(colour, Color(0.8, 0.8, 0.8))
+	body.roughness = 0.6
+	var gold := StandardMaterial3D.new()
+	gold.albedo_color = Color(0.72, 0.55, 0.18)
+	gold.metallic = 0.7
+	gold.roughness = 0.35
+
+	var rosette := Node3D.new()
+	rosette.name = "ShowRosette"
+	rosette.position = Vector3(0.16, 1.66, 0.14)
+	rosette.rotation = Vector3(0.0, -0.6, 0.25)
+	add_child(rosette)
+
+	var disc := MeshInstance3D.new()
+	var disc_mesh := CylinderMesh.new()
+	disc_mesh.top_radius = 0.055
+	disc_mesh.bottom_radius = 0.055
+	disc_mesh.height = 0.012
+	disc_mesh.radial_segments = 16
+	disc.mesh = disc_mesh
+	disc.rotation = Vector3(PI * 0.5, 0.0, 0.0)
+	disc.material_override = body
+	rosette.add_child(disc)
+
+	var centre := MeshInstance3D.new()
+	var centre_mesh := SphereMesh.new()
+	centre_mesh.radius = 0.018
+	centre_mesh.height = 0.036
+	centre.mesh = centre_mesh
+	centre.position = Vector3(0.0, 0.0, 0.01)
+	centre.material_override = gold
+	rosette.add_child(centre)
+
+	for side in [-1.0, 1.0]:
+		var tail := MeshInstance3D.new()
+		var tail_mesh := BoxMesh.new()
+		tail_mesh.size = Vector3(0.030, 0.10, 0.008)
+		tail.mesh = tail_mesh
+		tail.position = Vector3(side * 0.018, -0.085, 0.0)
+		tail.rotation = Vector3(0.0, 0.0, side * 0.22)
+		tail.material_override = body
+		rosette.add_child(tail)
+	return true
+
+
+## Rosettes are recorded on GameState, which survives a scene change; the pin
+## itself was a child of the horse and did not.  Wearing the last one won is how
+## the showground door stops undressing the horse.
+func _restore_rosette() -> void:
+	if GameState.rosettes.is_empty():
+		return
+	var last: Dictionary = GameState.rosettes[GameState.rosettes.size() - 1]
+	attach_rosette(str(last.get("colour", "")))
 
 
 func _face(dir: Vector3, delta: float, rate: float = -1.0) -> void:
@@ -532,6 +715,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= gravity * delta
 
+	_tick_needs(delta)
 	if rider != null:
 		_ride(delta)
 	elif leader != null:
@@ -581,10 +765,19 @@ func _ride(delta: float) -> void:
 			velocity.z = move_toward(velocity.z, 0.0, deceleration * delta)
 		return
 
-	var dir := rider.global_transform.basis * Vector3(input.x, 0, input.y)
+	# The horse follows the same steering frame as the walk: camera-relative
+	# while the view is free, frozen while a touch stick is pushed.  Godot's
+	# forward is -Z and Input.get_vector puts forward on the negative Y axis, so
+	# the raw (x, 0, y) already points where the rider is pushing; only the frame
+	# comes from the view.  Multiplying a forward vector by input.y instead
+	# swaps W and S.
+	var yaw := rotation.y
+	if rider.has_method("steer_yaw"):
+		yaw = float(rider.call("steer_yaw"))
+	var dir := Basis(Vector3.UP, yaw) * Vector3(input.x, 0.0, input.y)
 	dir.y = 0.0
-	dir = dir.normalized()
-	_face(dir, delta, ridden_turn_speed)
+	if dir.length_squared() > 0.001:
+		_face(dir.normalized(), delta, ridden_turn_speed)
 
 	# Airborne steering is limited to body rotation; the horse keeps the
 	# momentum it left the ground with.
@@ -654,8 +847,19 @@ func _lead(delta: float) -> void:
 	# canter on the rope.
 	var speed := clampf(distance * 1.8, 0.6, trot_speed)
 	_face(dir, delta)
-	velocity.x = move_toward(velocity.x, dir.x * speed, lead_acceleration * delta)
-	velocity.z = move_toward(velocity.z, dir.z * speed, lead_acceleration * delta)
+	# Travel along the direction the horse actually faces, not the raw path to
+	# the handler's shoulder, or it slides sideways across the ground while the
+	# body is still swinging round.  A sharp turn becomes a pivot on the spot and
+	# then a walk, which is how a horse turns on a rope.
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() < 0.001:
+		return
+	forward = forward.normalized()
+	var throttle := clampf((forward.dot(dir) - 0.2) / 0.6, 0.0, 1.0)
+	var goal := speed * throttle
+	velocity.x = move_toward(velocity.x, forward.x * goal, lead_acceleration * delta)
+	velocity.z = move_toward(velocity.z, forward.z * goal, lead_acceleration * delta)
 
 
 func _on_landed() -> void:

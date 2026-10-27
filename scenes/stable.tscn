@@ -1,16 +1,15 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/stable.gd" id="1_stable_script"]
 [ext_resource type="PackedScene" path="res://Models/horse_stable_animal.glb" id="stable_model"]
 [ext_resource type="PackedScene" path="res://Models/livery_logo.glb" id="livery_logo"]
 [ext_resource type="PackedScene" path="res://scenes/stable_horse.tscn" id="stable_horse"]
 [ext_resource type="PackedScene" path="res://Models/medieval_village/fence_713fa0e6.glb" id="fence_model"]
-[ext_resource type="PackedScene" path="res://Models/medieval_village/hay_8ab0043c.glb" id="hay_model"]
-[ext_resource type="PackedScene" path="res://Models/medieval_village/well_0e044203.glb" id="well_model"]
-[ext_resource type="PackedScene" path="res://Models/medieval_village/barrel_df9e4b83.glb" id="barrel_model"]
-[ext_resource type="PackedScene" path="res://Models/medieval_village/crate_f5ed50d1.glb" id="crate_model"]
-[ext_resource type="PackedScene" path="res://Models/medieval_village/cart_94b32c91.glb" id="cart_model"]
-[ext_resource type="PackedScene" path="res://Models/medieval_village/bench_1361c268.glb" id="bench_model"]
+[ext_resource type="PackedScene" path="res://scenes/stable_yard_props.tscn" id="yard_props"]
+[ext_resource type="Script" path="res://scripts/feed_trough.gd" id="feed_trough_script"]
+[ext_resource type="Script" path="res://scripts/feed_store.gd" id="feed_store_script"]
+[ext_resource type="Script" path="res://scripts/muck_station.gd" id="muck_station_script"]
+[ext_resource type="Script" path="res://scripts/muck_session.gd" id="muck_session_script"]
 [sub_resource type="BoxShape3D" id="stable_col_shape"]
 size = Vector3(8.940, 3.970, 3.900)
 [sub_resource type="BoxShape3D" id="paddock_col_x"]
@@ -24,6 +23,18 @@ albedo_color = Color(0.45, 0.3, 0.18, 1)
 roughness = 1.0
 [sub_resource type="BoxShape3D" id="trough_shape"]
 size = Vector3(2.0, 0.5, 0.7)
+[sub_resource type="BoxMesh" id="store_body_mesh"]
+size = Vector3(0.9, 1.0, 0.6)
+[sub_resource type="BoxMesh" id="store_lid_mesh"]
+size = Vector3(0.96, 0.1, 0.66)
+[sub_resource type="StandardMaterial3D" id="store_wood"]
+albedo_color = Color(0.42, 0.28, 0.16, 1)
+roughness = 1.0
+[sub_resource type="StandardMaterial3D" id="store_hay"]
+albedo_color = Color(0.8, 0.68, 0.32, 1)
+roughness = 1.0
+[sub_resource type="BoxShape3D" id="store_shape"]
+size = Vector3(0.95, 1.1, 0.65)
 
 [node name="Stable" type="Node3D"]
 script = ExtResource("1_stable_script")
@@ -96,40 +107,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.000, 0.660, -24.000)
 shape = SubResource("paddock_col_z")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.000, 0.660, -24.000)
 
-[node name="Props" type="Node3D" parent="."]
-
-[node name="HayBale1" parent="Props" instance=ExtResource("hay_model")]
-transform = Transform3D(3.00000, 0.00000, -0.00000, 0.00000, 3.00000, 0.00000, 0.00000, 0.00000, 3.00000, 3.00000, 0.00000, -18.60000)
-
-[node name="HayBale2" parent="Props" instance=ExtResource("hay_model")]
-transform = Transform3D(2.45746, 0.00000, -1.72073, 0.00000, 3.00000, 0.00000, 1.72073, 0.00000, 2.45746, 3.60000, 0.00000, -19.20000)
-
-[node name="HayBale3" parent="Props" instance=ExtResource("hay_model")]
-transform = Transform3D(2.95442, 0.00000, -0.52094, 0.00000, 3.00000, 0.00000, 0.52094, 0.00000, 2.95442, 3.30000, 0.36000, -18.90000)
-
-[node name="Barrel1" parent="Props" instance=ExtResource("barrel_model")]
-transform = Transform3D(2.00000, 0.00000, -0.00000, 0.00000, 2.00000, 0.00000, 0.00000, 0.00000, 2.00000, 1.20000, 0.00000, -20.40000)
-
-[node name="Barrel2" parent="Props" instance=ExtResource("barrel_model")]
-transform = Transform3D(1.81262, 0.00000, -0.84524, 0.00000, 2.00000, 0.00000, 0.84524, 0.00000, 1.81262, 1.80000, 0.00000, -20.90000)
-
-[node name="Crate1" parent="Props" instance=ExtResource("crate_model")]
-transform = Transform3D(1.93185, 0.00000, -0.51764, 0.00000, 2.00000, 0.00000, 0.51764, 0.00000, 1.93185, -1.50000, 0.00000, -19.50000)
-
-[node name="Crate2" parent="Props" instance=ExtResource("crate_model")]
-transform = Transform3D(1.87939, 0.00000, 0.68404, 0.00000, 2.00000, 0.00000, -0.68404, 0.00000, 1.87939, -1.40000, 0.32000, -19.50000)
-
-[node name="Cart" parent="Props" instance=ExtResource("cart_model")]
-transform = Transform3D(1.81262, 0.00000, -0.84524, 0.00000, 2.00000, 0.00000, 0.84524, 0.00000, 1.81262, -4.40000, 0.00000, -18.80000)
-
-[node name="Bench" parent="Props" instance=ExtResource("bench_model")]
-transform = Transform3D(0.00000, 0.00000, -2.00000, 0.00000, 2.00000, 0.00000, 2.00000, 0.00000, 0.00000, -9.60000, 0.00000, -21.50000)
-
-[node name="Well" parent="Props" instance=ExtResource("well_model")]
-transform = Transform3D(2.00000, 0.00000, -0.00000, 0.00000, 2.00000, 0.00000, 0.00000, 0.00000, 2.00000, 9.80000, 0.00000, -19.60000)
+[node name="YardProps" parent="." instance=ExtResource("yard_props")]
 
 [node name="FeedTrough" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, 0.25, -22.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0.25, -23.0)
+script = ExtResource("feed_trough_script")
 
 [node name="Mesh" type="MeshInstance3D" parent="FeedTrough"]
 mesh = SubResource("trough_mesh")
@@ -139,6 +121,33 @@ surface_material_override/0 = SubResource("trough_mat")
 
 [node name="Shape" type="CollisionShape3D" parent="FeedTrough/TroughCollision"]
 shape = SubResource("trough_shape")
+
+[node name="FeedStore" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, 0, -19.4)
+script = ExtResource("feed_store_script")
+
+[node name="Body" type="MeshInstance3D" parent="FeedStore"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("store_body_mesh")
+surface_material_override/0 = SubResource("store_wood")
+
+[node name="Lid" type="MeshInstance3D" parent="FeedStore"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.06, 0)
+mesh = SubResource("store_lid_mesh")
+surface_material_override/0 = SubResource("store_hay")
+
+[node name="StoreCollision" type="StaticBody3D" parent="FeedStore"]
+
+[node name="Shape" type="CollisionShape3D" parent="FeedStore/StoreCollision"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+shape = SubResource("store_shape")
+
+[node name="MuckStation" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.9, 0, -19.85)
+script = ExtResource("muck_station_script")
+
+[node name="Session" type="Node" parent="MuckStation"]
+script = ExtResource("muck_session_script")
 
 [node name="StableHorses" type="Node3D" parent="."]
 

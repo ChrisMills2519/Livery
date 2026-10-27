@@ -30,6 +30,9 @@ uniform float use_uv2 = 1.0;
 uniform vec3 dirt_color : source_color = vec3(0.16, 0.13, 0.10);
 uniform vec3 sheen_color : source_color = vec3(0.95, 0.88, 0.68);
 uniform float sheen_strength = 0.50;
+// Extra sheen on the head (zone 3): a small area needs a stronger, softer lift
+// to read at all.
+uniform float face_sheen_strength = 1.10;
 uniform float dirt_strength = 0.85;
 
 varying vec3 world_normal;
@@ -92,7 +95,9 @@ void fragment() {
 	// than a lighting response.  A broader falloff lets the shine read across
 	// the body instead of only on the silhouette.
 	float fresnel = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 2.0);
-	colour += sheen_color * polish * fresnel * sheen_strength;
+	float sheen_zone_id = floor(texture(zone_map, groom_uv).r * 255.0 + 0.5);
+	float sheen_scale = abs(sheen_zone_id - 3.0) < 0.5 ? face_sheen_strength : sheen_strength;
+	colour += sheen_color * polish * fresnel * sheen_scale;
 
 	// Tool-change glow.  The zone map is a nearest-filtered id map, so a soft
 	// tint can cover the whole brushable area without hiding the coat detail.

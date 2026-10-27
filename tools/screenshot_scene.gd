@@ -16,6 +16,7 @@ const SHOTS := [
 	{"file": "arena_course", "pos": Vector3(10, 24, 58), "look": Vector3(-32, 1, 0)},
 	{"file": "player_view", "pos": Vector3(0, 1.7, 8), "look": Vector3(0, 1.1, -20)},
 	{"file": "jump_closeup", "pos": Vector3(-13.5, 2.4, 4.5), "look": Vector3(-22.0, 0.9, -1.5)},
+	{"file": "yard_props", "pos": Vector3(7.5, 4.5, -9.0), "look": Vector3(-4.0, 0.8, -22.0)},
 ]
 
 var _frame := 0

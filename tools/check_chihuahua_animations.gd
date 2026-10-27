@@ -7,9 +7,19 @@ const EXPECTED := {
 	"Bark": 2.800, "Bite": 0.867, "Death": 1.167, "Eat": 1.500,
 	"Fall": 0.500, "Fetch": 1.000, "Howl": 2.333, "Idle": 1.333,
 	"Idle_Alert": 1.600, "Jump": 2.200, "Lie": 1.733, "Rest_Pose": 0.333,
-	"Run": 0.500, "Shake": 1.067, "Sit": 1.333, "Sleep": 3.000,
-	"TailWag": 0.733, "Trot": 0.700, "Walk": 1.000,
+	"Run": 0.200, "Shake": 1.067, "Sit": 1.333, "Sleep": 3.000,
+	"TailWag": 0.733, "Trot": 0.233, "Walk": 0.333,
 }
+
+## Ground speed (m/s) each gait plants its paws at, measured by
+## tools/build_chihuahua.py.  dog_animator.gd plays the clips against these.
+const GAIT_REFERENCE := {"Walk": 0.73, "Trot": 1.86, "Run": 3.26}
+## How far above its own lowest point a paw still counts as planted.  The
+## skeleton's height origin is not the ground, so this is measured per clip.
+const CONTACT_MARGIN := 0.012
+const GAIT_TIPS := [
+	"Front_Leg_Tip_L", "Front_Leg_Tip_R", "Back_Leg_Tip_L", "Back_Leg_Tip_R"
+]
 const LOOPING := ["Idle", "Idle_Alert", "Walk", "Trot", "Run", "TailWag",
 	"Sit", "Eat", "Sleep", "Bark", "Howl", "Fetch", "Jump", "Bite", "Shake"]
 
@@ -104,6 +114,9 @@ func _process(_delta: float) -> bool:
 	if absf((hi.y - lo.y) - 0.225) > 0.02:
 		failures.append("height %.3f != 0.225" % (hi.y - lo.y))
 
+	if player != null and skel != null:
+		_check_gaits(player, skel, failures)
+
 	if failures.is_empty():
 		print("CHIHUAHUA ANIMATION CHECK: PASS")
 		quit(0)
@@ -113,6 +126,68 @@ func _process(_delta: float) -> bool:
 		print("CHIHUAHUA ANIMATION CHECK: FAIL (%d)" % failures.size())
 		quit(1)
 	return true
+
+
+## A gait is only natural if the planted paws stay planted: measure how fast
+## the paws travel backwards while they are on the ground and compare that with
+## the reference speed the runtime drives the dog at.
+func _check_gaits(player: AnimationPlayer, skel: Skeleton3D, failures: Array[String]) -> void:
+	var resume := player.current_animation
+	for clip in GAIT_REFERENCE.keys():
+		if not player.has_animation(clip):
+			failures.append("missing gait " + clip)
+			continue
+		var anim := player.get_animation(clip)
+		var steps := maxi(24, int(round(anim.length * 120.0)))
+		var step_time := anim.length / float(steps)
+		var tips := {}
+		for tip in GAIT_TIPS:
+			if skel.find_bone(tip) >= 0:
+				tips[tip] = []
+		player.play(clip)
+		player.speed_scale = 1.0
+		for i in range(steps):
+			player.seek(step_time * float(i), true)
+			skel.force_update_all_bone_transforms()
+			for tip in tips.keys():
+				var idx := skel.find_bone(tip)
+				tips[tip].append(skel.get_bone_global_pose(idx).origin)
+		var duty_sum := 0.0
+		var legs := 0
+		var slips: Array[float] = []
+		for tip in tips.keys():
+			var pts: Array = tips[tip]
+			# Contact is measured against each paw's own lowest point: the
+			# skeleton's height origin is not the ground.
+			var floor_y := 1e9
+			for p in pts:
+				floor_y = minf(floor_y, p.y)
+			var contact_z := floor_y + CONTACT_MARGIN
+			var contact := 0
+			for p in pts:
+				if p.y < contact_z:
+					contact += 1
+			duty_sum += float(contact) / float(pts.size())
+			legs += 1
+			for i in range(1, pts.size()):
+				var a: Vector3 = pts[i - 1]
+				var b: Vector3 = pts[i]
+				# Only the backward half of the contact window is a plant: the
+				# swing brushes near the ground too.  The dog faces +Z, so a
+				# planted paw travels towards -Z.
+				if a.y < contact_z and b.y < contact_z and b.z < a.z:
+					slips.append((a.z - b.z) / step_time)
+		var duty := duty_sum / maxf(1.0, float(legs))
+		slips.sort()
+		var implied := slips[slips.size() / 2] if not slips.is_empty() else 0.0
+		var reference: float = GAIT_REFERENCE[clip]
+		print("%-6s duty %.2f planted %.3f m/s (reference %.3f)" % [clip, duty, implied, reference])
+		if duty < 0.2 or duty > 0.9:
+			failures.append("%s contact duty %.2f outside 0.2..0.9" % [clip, duty])
+		if absf(implied - reference) > reference * 0.2:
+			failures.append("%s paws travel %.3f m/s, not %.3f" % [clip, implied, reference])
+	if resume != "":
+		player.play(resume)
 
 
 func _wrap_error(anim: Animation) -> float:

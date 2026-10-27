@@ -59,6 +59,14 @@ float value_noise(vec2 p) {
 }
 
 
+// VRAM-compressed normal maps (RGTC/ETC2) keep only the red and green
+// channels, so the blue channel has to be rebuilt here instead of sampled.
+vec3 sample_normal(sampler2D tex, vec2 uv) {
+	vec2 xy = texture(tex, uv).rg * 2.0 - 1.0;
+	return vec3(xy, sqrt(max(0.0, 1.0 - dot(xy, xy))));
+}
+
+
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
@@ -101,10 +109,10 @@ void fragment() {
 	SPECULAR = 0.18;
 	METALLIC = 0.0;
 
-	vec3 n_grass = texture(grass_normal, p / grass_tile).rgb * 2.0 - 1.0;
-	vec3 n_dirt = texture(dirt_normal, p / dirt_tile).rgb * 2.0 - 1.0;
-	vec3 n_path = texture(path_normal, p / path_tile).rgb * 2.0 - 1.0;
-	vec3 n_sand = texture(sand_normal, p / sand_tile).rgb * 2.0 - 1.0;
+	vec3 n_grass = sample_normal(grass_normal, p / grass_tile);
+	vec3 n_dirt = sample_normal(dirt_normal, p / dirt_tile);
+	vec3 n_path = sample_normal(path_normal, p / path_tile);
+	vec3 n_sand = sample_normal(sand_normal, p / sand_tile);
 	vec3 n = n_grass * grass_weight
 		+ n_dirt * weights.r
 		+ n_path * weights.g

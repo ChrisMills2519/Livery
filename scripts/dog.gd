@@ -31,20 +31,23 @@ const ACTIVE_STATES := [
 ]
 
 @export_group("Movement")
-@export var walk_speed := 1.0
-@export var trot_speed := 2.8
-@export var run_speed := 5.2
+## Gait speeds (m/s) matched to the stride of the Walk/Trot/Run clips, so the
+## planted paws stay put.  They are the clips' measured ground speeds from
+## tools/build_chihuahua.py; the animator references must stay in step.
+@export var walk_speed := 0.73
+@export var trot_speed := 1.86
+@export var run_speed := 3.26
 @export var acceleration := 7.0
 @export var deceleration := 10.0
 @export var turn_speed := 8.0
 @export var gravity := 20.0
 
 @export_group("Home")
-@export var home_radius := 6.0
+@export var home_radius := 9.0
 @export var home_leash := 22.0
 
 @export_group("Following")
-@export var follow_radius := 8.0
+@export var follow_radius := 12.0
 @export var follow_stop_distance := 1.15
 @export var heel_offset := Vector3(0.8, 0.0, 1.0)
 @export var sit_after_seconds := 2.5
@@ -58,10 +61,10 @@ const ACTIVE_STATES := [
 @export var sniff_radius := 2.0
 
 @export_group("Greeting and petting")
-@export var greet_radius := 7.0
+@export var greet_radius := 10.5
 @export var greet_distance := 1.25
 @export var greet_time := 1.4
-@export var pet_range := 1.6
+@export var pet_range := 2.4
 @export var pet_time := 1.8
 
 @export_group("Needs")
@@ -126,6 +129,8 @@ var _last_player_pos := Vector3.ZERO
 var _player_vel_est := Vector3.ZERO
 var _desired_pose := ""
 var _use_locomotion := false
+var _avoid_dir := Vector3.ZERO
+var _avoid_weight := 0.0
 var _rng := RandomNumberGenerator.new()
 
 
@@ -148,6 +153,7 @@ func _ready() -> void:
 	_enter_state(State.IDLE)
 	call_deferred("_bind")
 	call_deferred("_refresh_prompt")
+	call_deferred("_add_feed_target")
 
 
 func _process(delta: float) -> void:
@@ -172,8 +178,8 @@ func _physics_process(delta: float) -> void:
 	if _brain_timer <= 0.0:
 		_brain_timer = brain_interval
 		_think()
-	_update_state(delta)
 	_apply_horse_avoidance(delta)
+	_update_state(delta)
 	var before := global_position
 	move_and_slide()
 	_check_stuck(delta, before)
@@ -339,6 +345,11 @@ func _check_horse_alert() -> bool:
 
 
 func _update_state(delta: float) -> void:
+	# Cleared every frame, not only on a state change: a state that stops this
+	# frame has to hand the animator over to its own pose (Eat, TailWag, Sit)
+	# instead of leaving the previous frame's gait in charge.
+	_use_locomotion = false
+	_desired_pose = ""
 	match state:
 		State.IDLE:
 			_stop(delta)
@@ -405,22 +416,20 @@ func _update_state(delta: float) -> void:
 				player_velocity.y = 0.0
 				var match_speed := minf(player_velocity.length(), run_speed)
 				if match_speed > 0.01:
-					player_velocity = player_velocity.normalized() * match_speed
-					# Trotting at heel is a movement like any other: face the way the
-					# pair is travelling instead of keeping the old heading and sliding
-					# sideways alongside the player.
-					_face_direction(player_velocity, delta)
-					velocity.x = move_toward(velocity.x, player_velocity.x, acceleration * delta)
-					velocity.z = move_toward(velocity.z, player_velocity.z, acceleration * delta)
+					# Trotting at heel is a movement like any other: travel along the
+					# dog's own nose, so it does not crab alongside the player.
+					_move_along_facing(player_velocity, match_speed, delta)
 				_use_locomotion = true
 				_settle_time = 0.0
 				return
 			if gap > follow_stop_distance:
 				var player_speed := _player_speed()
+				# The player walks at 3 m/s, which is already the dog's full run, so
+				# the pack speed decides the gait rather than the distance alone.
 				var follow_speed := walk_speed
-				if gap > 3.0 or player_speed > 4.2:
+				if gap > 3.0 or player_speed > 2.4:
 					follow_speed = run_speed
-				elif gap > 1.3 or player_speed > 1.8:
+				elif gap > 1.3 or player_speed > 0.9:
 					follow_speed = trot_speed
 				follow_speed = minf(follow_speed, gap * 2.2 + 0.35)
 				_steer_to(target, follow_speed, delta)
@@ -522,7 +531,9 @@ func _update_state(delta: float) -> void:
 func _apply_animation() -> void:
 	if animator == null:
 		return
-	if _use_locomotion:
+	# A pose only takes over once the dog has stopped rolling out of its gait.
+	var moving := _use_locomotion or _planar_speed() > 0.15
+	if moving:
 		animator.set_locomotion(_planar_speed())
 	elif _desired_pose != "":
 		animator.set_pose(_desired_pose)
@@ -717,14 +728,34 @@ func _stop(delta: float) -> void:
 func _steer_to(target: Vector3, speed: float, delta: float) -> void:
 	var to_target := target - global_position
 	to_target.y = 0.0
-	var distance := to_target.length()
-	if distance < 0.001:
+	_move_along_facing(to_target, speed, delta)
+
+
+## Travel where the nose points: turn toward `direction`, then move along the
+## body's own heading.  Aiming the velocity straight at the target while the
+## body was still swinging round is what made the dog slide sideways.
+func _move_along_facing(direction: Vector3, speed: float, delta: float) -> void:
+	var wanted := direction
+	wanted.y = 0.0
+	if wanted.length_squared() < 0.0001:
 		_stop(delta)
 		return
-	var direction := to_target / distance
-	_face_direction(direction, delta)
-	velocity.x = move_toward(velocity.x, direction.x * speed, acceleration * delta)
-	velocity.z = move_toward(velocity.z, direction.z * speed, acceleration * delta)
+	wanted = wanted.normalized()
+	if _avoid_weight > 0.1:
+		wanted = (wanted + _avoid_dir * _avoid_weight * 1.6).normalized()
+	_face_direction(wanted, delta)
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() < 0.0001:
+		_stop(delta)
+		return
+	forward = forward.normalized()
+	# Slow down while the body is still swinging round, and pivot on the spot
+	# once the target sits well off the nose.
+	var throttle := clampf((forward.dot(wanted) - 0.2) / 0.6, 0.0, 1.0)
+	var goal := speed * throttle
+	velocity.x = move_toward(velocity.x, forward.x * goal, acceleration * delta)
+	velocity.z = move_toward(velocity.z, forward.z * goal, acceleration * delta)
 
 
 func _face_point(point: Vector3, delta: float, rate := -1.0) -> void:
@@ -741,23 +772,32 @@ func _face_direction(direction: Vector3, delta: float, rate := -1.0) -> void:
 	rotation.y = lerp_angle(rotation.y, target_yaw, clampf(turn_rate * delta, 0.0, 1.0))
 
 
+## Stepping out of the horse's way is steering, not a shove: the outward
+## direction is folded into the next movement so the dog still steps aside
+## nose-first instead of being pushed sideways.
 func _apply_horse_avoidance(delta: float) -> void:
 	if _horse == null or not is_instance_valid(_horse):
+		_avoid_weight = 0.0
 		return
 	var away := global_position - _horse.global_position
 	away.y = 0.0
 	var distance := away.length()
 	if distance >= 1.8 or _horse_speed() <= 0.5:
+		_avoid_weight = move_toward(_avoid_weight, 0.0, delta * 2.5)
 		return
 	if distance < 0.001:
 		away = Vector3.RIGHT
-	velocity += away.normalized() * (1.8 - distance) * 8.0 * delta
+	_avoid_dir = away.normalized()
+	_avoid_weight = clampf((1.8 - distance) / 0.9, 0.0, 1.0)
 
 
 func _check_stuck(delta: float, before: Vector3) -> void:
 	var intended := _planar_speed()
 	var moved := global_position.distance_to(before)
-	if intended > 0.25 and moved < 0.02:
+	# Judge progress against the ground this frame's speed should have covered.
+	# A flat 2 cm threshold counted a 0.7 m/s walk (1.2 cm a frame) as stuck, so
+	# the dog gave up while it was still walking home.
+	if intended > 0.25 and delta > 0.0 and moved < intended * delta * 0.25:
 		_stuck_time += delta
 		if _stuck_time > 1.0:
 			_stuck_time = 0.0
@@ -809,6 +849,40 @@ func debug_set_needs(
 		affection = clampf(affection_value, 0.0, 1.0)
 	if boredom_value >= 0.0:
 		boredom = clampf(boredom_value, 0.0, 1.0)
+
+
+## A bowl the player can aim at and use to feed the dog.  Built beside the
+## bowl spot so the aim ray meets a real collider (layer 4) on the bowl.
+func _add_feed_target() -> void:
+	if get_parent() == null or _bowl_spot == null:
+		return
+	var target := Node3D.new()
+	target.name = "FeedTarget"
+	target.set_script(load("res://scripts/interactable.gd"))
+	target.set("prompt_label", "FEED")
+	target.set("body_reach", 1.6)
+	target.set("action_target", self)
+	target.set("action_method", "feed")
+	target.position = _bowl_spot.position + Vector3(0.0, 0.25, 0.0)
+	var body := StaticBody3D.new()
+	body.name = "FeedCollision"
+	body.collision_layer = 4
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.45, 0.4, 0.45)
+	shape.shape = box
+	body.add_child(shape)
+	target.add_child(body)
+	get_parent().add_child(target)
+
+
+## Fills the bowl: the dog comes to eat, as if it were hungry.
+func feed() -> bool:
+	if _player != null and _player_mounted():
+		return false
+	hunger = maxf(hunger, eat_hunger)
+	_change_state(State.EAT)
+	return true
 
 
 func debug_think() -> void:

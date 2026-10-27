@@ -19,6 +19,8 @@ var _dragging := false
 var _drag_dir := Vector3.ZERO
 var _drag_speed := 0.0
 var _drag_dog_start := Vector3.ZERO
+var _turning := false
+var _turn_min_align := 1.0
 
 
 func _initialize() -> void:
@@ -30,6 +32,15 @@ func _process(delta: float) -> bool:
 	_time += delta
 	if _dragging and _player != null:
 		_player.global_position += _drag_dir * _drag_speed * delta
+	if _turning and _dog != null:
+		var planar := Vector2(_dog.velocity.x, _dog.velocity.z)
+		if planar.length() > 0.2:
+			var forward := -_dog.global_transform.basis.z
+			forward.y = 0.0
+			_turn_min_align = minf(
+				_turn_min_align,
+				forward.normalized().dot(Vector3(planar.x, 0.0, planar.y).normalized())
+			)
 	if _stage == 9 and _dog != null:
 		var home_gap := _horizontal(_dog.global_position, _dog.call("get_home_position"))
 		_return_min_gap = minf(_return_min_gap, home_gap)
@@ -78,7 +89,8 @@ func _process(delta: float) -> bool:
 			_check_wander()
 			_test_return()
 			_stage = 9
-			_stage_at = _time + 9.0
+			# 25 m at the dog's real run speed needs a longer leash walk home.
+			_stage_at = _time + 13.0
 		9:
 			_check_return()
 			_test_follow_real()
@@ -96,6 +108,11 @@ func _process(delta: float) -> bool:
 			_stage_at = _time + 1.4
 		12:
 			_check_follow_heel()
+			_test_turn()
+			_stage = 13
+			_stage_at = _time + 1.2
+		13:
+			_check_turn()
 			_finish()
 			return true
 	return false
@@ -141,7 +158,9 @@ func _check_scene() -> void:
 	_check(absf(top - 0.225) < 0.035, "dog model height %.3f m" % top)
 	_check(bottom > -0.02, "dog mesh sits on the origin (min y %.3f)" % bottom)
 	var home: Vector3 = _dog.call("get_home_position")
-	_check(home.distance_to(Vector3(-3.5, 0.0, -16.5)) < 0.1, "dog home in the stable yard")
+	# The dog lives by the well in the yard's east corner, clear of the lane the
+	# player arrives on and of the horse's standing spot.
+	_check(home.distance_to(Vector3(13.5, 0.0, -15.5)) < 0.1, "dog home in the stable yard")
 	_check(_state() == "idle", "dog starts idle (got %s)" % _state())
 
 
@@ -336,6 +355,36 @@ func _check_follow_heel() -> void:
 		alignment > 0.9,
 		"at heel the dog faces the way it is moving (dot %.2f)" % alignment
 	)
+
+
+func _test_turn() -> void:
+	# Send the dog home from behind its own tail.  Aiming the velocity at the
+	# target while the body is still swinging round is what used to make it crab
+	# sideways across the ground.
+	_dragging = false
+	var home: Vector3 = _dog.call("get_home_position")
+	_dog.global_position = home + Vector3(0.0, 0.05, 3.0)
+	_dog.velocity = Vector3.ZERO
+	_dog.rotation.y = PI
+	_dog.call("debug_force_state", "return")
+	_turn_min_align = 1.0
+	_turning = true
+
+
+func _check_turn() -> void:
+	_turning = false
+	_check(
+		_turn_min_align > 0.9,
+		"the dog travels the way it faces through a turn (dot %.2f)" % _turn_min_align
+	)
+	_check(_state() == "return", "the dog is still walking home (got %s)" % _state())
+	_check(_clip() == "Walk", "the returning dog walks (clip %s)" % _clip())
+	var player := _dog.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if player != null:
+		_check(
+			player.speed_scale >= 0.85 and player.speed_scale <= 1.2,
+			"the walk clip plays at its planted speed (scale %.2f)" % player.speed_scale
+		)
 
 
 func _send_pet() -> void:

@@ -81,9 +81,15 @@ const CORNERS := [
 const CAMERA_FAILURE_LIMIT := 8
 ## The old rig could fall to the 0.35 m safety clamp in any tight spot.  These
 ## floors are the measured answers: every open room and every backed-into
-## corner must keep a third-person boom, not just stay off the clamp.
+## corner must keep a third-person boom, not just stay off the clamp.  The
+## doorway transit gets the same floor as a corner.  The stair is measured
+## separately: it is 1.2 m wide with a wall behind the player, so its close
+## camera is a genuine first-person exception rather than a doorway failure.
 const ROOM_BOOM_FLOOR := 1.0
 const CORNER_BOOM_FLOOR := 0.90
+const ROUTE_BOOM_FLOOR := 0.90
+## The stair exception still must not regress into the old head camera.
+const STAIR_BOOM_FLOOR := 0.30
 
 var _world: Node3D
 var _player: CharacterBody3D
@@ -91,8 +97,12 @@ var _pivot: Node3D
 var _camera: Camera3D
 var _space: PhysicsDirectSpaceState3D
 var _last_boom := 0.0
-var _min_boom := INF
-var _min_boom_at := Vector3.ZERO
+var _min_walk_boom := INF
+var _min_walk_at := Vector3.ZERO
+var _min_walk_body_visible := true
+var _min_stair_boom := INF
+var _min_stair_at := Vector3.ZERO
+var _stair_samples := 0
 var _max_boom := 0.0
 var _max_inward := 0.0
 var _max_outward := 0.0
@@ -112,8 +122,16 @@ func _initialize() -> void:
 	for failure in _leg_failures:
 		print("  ROUTE FAIL: " + failure)
 	print("  camera samples: %d, clipped frames: %d, outward pops: %d" % [_sample_count, _clip_frames, _outward_pops])
-	print("  boom range: %.2f .. %.2f, min at %s" % [_min_boom, _max_boom, _min_boom_at])
+	print("  third-person boom: %.2f .. %.2f, min at %s" % [_min_walk_boom, _max_boom, _min_walk_at])
+	if _stair_samples > 0:
+		print("  stair boom: %.2f (first-person exception) at %s" % [_min_stair_boom, _min_stair_at])
 	print("  max inward step: %.2f, max outward step: %.2f" % [_max_inward, _max_outward])
+	if _min_walk_boom < ROUTE_BOOM_FLOOR:
+		_add_cam_failure("third-person boom fell to %.2f m (floor %.2f) at %s" % [_min_walk_boom, ROUTE_BOOM_FLOOR, _min_walk_at])
+	if not _min_walk_body_visible:
+		_add_cam_failure("body hidden at the third-person minimum (%.2f m) at %s" % [_min_walk_boom, _min_walk_at])
+	if _stair_samples > 0 and _min_stair_boom < STAIR_BOOM_FLOOR:
+		_add_cam_failure("stair boom fell to %.2f m (floor %.2f) at %s" % [_min_stair_boom, STAIR_BOOM_FLOOR, _min_stair_at])
 	for key in _room_booms:
 		print("  %s boom: %.2f" % [key, _room_booms[key]])
 	for failure in _cam_failures:
@@ -224,9 +242,16 @@ func _sample() -> void:
 		return
 	var boom := float(_player.call("camera_boom_length"))
 	_sample_count += 1
-	if boom < _min_boom:
-		_min_boom = boom
-		_min_boom_at = _player.global_position
+	if _on_stair():
+		_stair_samples += 1
+		if boom < _min_stair_boom:
+			_min_stair_boom = boom
+			_min_stair_at = _player.global_position
+	elif boom < _min_walk_boom:
+		_min_walk_boom = boom
+		_min_walk_at = _player.global_position
+		var body := _player.get_node_or_null("Model") as Node3D
+		_min_walk_body_visible = body == null or body.visible
 	_max_boom = maxf(_max_boom, boom)
 	if _sample_count > 2:
 		var delta := boom - _last_boom
@@ -253,6 +278,16 @@ func _sample() -> void:
 		_add_cam_failure("camera clipped at %s (boom %.2f)" % [_player.global_position, boom])
 	if distance < 0.30:
 		_add_cam_failure("camera too close at %s (%.2f)" % [_player.global_position, distance])
+
+
+func _on_stair() -> bool:
+	if _space == null:
+		return false
+	var from := _player.global_position + Vector3.UP * 0.10
+	var query := PhysicsRayQueryParameters3D.create(from, from - Vector3.UP * 0.40, 1)
+	query.exclude = [_player.get_rid()]
+	var hit := _space.intersect_ray(query)
+	return not hit.is_empty() and String(hit["collider"].name).begins_with("Stair")
 
 
 func _add_cam_failure(message: String) -> void:

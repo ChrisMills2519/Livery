@@ -83,6 +83,12 @@ func _run() -> void:
 	_check(bool(_horse.get("grooming")), "horse is frozen for grooming")
 	_check(not bool(_player.get("controls_enabled")), "player controls are frozen")
 	_check(_player_model != null and not _player_model.visible, "player model hidden")
+	# The player keeps processing while the session runs, and its camera rule used
+	# to turn the body back on a frame after the session hid it.
+	for i in range(30):
+		await process_frame
+	_check(_player_model != null and not _player_model.visible,
+		"player model stays hidden while the session runs")
 	_check(_normal_hud != null and not _normal_hud.visible, "gameplay HUD hidden")
 	_check(_player_camera != null and not _player_camera.current, "player camera released")
 	_check(bool(_session.get("_camera").current), "groom camera current")

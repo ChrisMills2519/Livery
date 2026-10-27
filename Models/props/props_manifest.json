@@ -1,0 +1,1364 @@
+{
+  "props": [
+    {
+      "name": "tree_oak_01",
+      "category": "trees",
+      "file": "Models/props/trees/tree_oak_01.glb",
+      "size_m": [
+        4.166,
+        4.624,
+        6.168
+      ],
+      "triangles": 816,
+      "materials": [
+        "bark_dark",
+        "bark",
+        "bark_light",
+        "leaf_deep",
+        "leaf_mid",
+        "leaf_light"
+      ]
+    },
+    {
+      "name": "tree_oak_02",
+      "category": "trees",
+      "file": "Models/props/trees/tree_oak_02.glb",
+      "size_m": [
+        4.845,
+        4.976,
+        5.889
+      ],
+      "triangles": 816,
+      "materials": [
+        "bark_dark",
+        "bark",
+        "bark_light",
+        "leaf_deep",
+        "leaf_mid",
+        "leaf_light"
+      ]
+    },
+    {
+      "name": "tree_oak_03",
+      "category": "trees",
+      "file": "Models/props/trees/tree_oak_03.glb",
+      "size_m": [
+        3.551,
+        3.808,
+        6.769
+      ],
+      "triangles": 816,
+      "materials": [
+        "bark_dark",
+        "bark",
+        "bark_light",
+        "leaf_deep",
+        "leaf_mid",
+        "leaf_light"
+      ]
+    },
+    {
+      "name": "tree_oak_autumn",
+      "category": "trees",
+      "file": "Models/props/trees/tree_oak_autumn.glb",
+      "size_m": [
+        4.189,
+        4.32,
+        6.117
+      ],
+      "triangles": 816,
+      "materials": [
+        "bark_dark",
+        "bark",
+        "bark_light",
+        "leaf_rust",
+        "leaf_amber",
+        "leaf_red",
+        "leaf_deep",
+        "leaf_mid"
+      ]
+    },
+    {
+      "name": "tree_apple",
+      "category": "trees",
+      "file": "Models/props/trees/tree_apple.glb",
+      "size_m": [
+        3.412,
+        3.248,
+        5.252
+      ],
+      "triangles": 1016,
+      "materials": [
+        "bark_dark",
+        "bark",
+        "bark_light",
+        "leaf_deep",
+        "leaf_mid",
+        "leaf_light",
+        "apple"
+      ]
+    },
+    {
+      "name": "tree_birch",
+      "category": "trees",
+      "file": "Models/props/trees/tree_birch.glb",
+      "size_m": [
+        3.222,
+        2.838,
+        7.113
+      ],
+      "triangles": 912,
+      "materials": [
+        "birch",
+        "bark_dark",
+        "leaf_olive",
+        "leaf_light",
+        "leaf_mid"
+      ]
+    },
+    {
+      "name": "tree_pine_01",
+      "category": "trees",
+      "file": "Models/props/trees/tree_pine_01.glb",
+      "size_m": [
+        3.383,
+        3.383,
+        7.4
+      ],
+      "triangles": 188,
+      "materials": [
+        "bark_dark",
+        "bark",
+        "pine_deep",
+        "pine_mid",
+        "pine_light"
+      ]
+    },
+    {
+      "name": "tree_pine_02",
+      "category": "trees",
+      "file": "Models/props/trees/tree_pine_02.glb",
+      "size_m": [
+        2.554,
+        2.554,
+        5.6
+      ],
+      "triangles": 188,
+      "materials": [
+        "bark_dark",
+        "bark",
+        "pine_deep",
+        "pine_mid",
+        "pine_light"
+      ]
+    },
+    {
+      "name": "tree_willow",
+      "category": "trees",
+      "file": "Models/props/trees/tree_willow.glb",
+      "size_m": [
+        4.919,
+        4.353,
+        4.518
+      ],
+      "triangles": 1984,
+      "materials": [
+        "bark",
+        "bark_light",
+        "leaf_mid",
+        "leaf_light",
+        "leaf_olive",
+        "leaf_deep"
+      ]
+    },
+    {
+      "name": "tree_dead",
+      "category": "trees",
+      "file": "Models/props/trees/tree_dead.glb",
+      "size_m": [
+        2.431,
+        3.529,
+        4.07
+      ],
+      "triangles": 172,
+      "materials": [
+        "bark_light",
+        "wood_grey"
+      ]
+    },
+    {
+      "name": "tree_sapling",
+      "category": "trees",
+      "file": "Models/props/trees/tree_sapling.glb",
+      "size_m": [
+        1.278,
+        1.44,
+        2.122
+      ],
+      "triangles": 416,
+      "materials": [
+        "bark",
+        "leaf_light",
+        "leaf_mid",
+        "leaf_olive"
+      ]
+    },
+    {
+      "name": "tree_stump",
+      "category": "trees",
+      "file": "Models/props/trees/tree_stump.glb",
+      "size_m": [
+        1.233,
+        1.245,
+        0.806
+      ],
+      "triangles": 200,
+      "materials": [
+        "bark",
+        "bark_light",
+        "bark_dark",
+        "wood_pale",
+        "wood_light",
+        "moss"
+      ]
+    },
+    {
+      "name": "fallen_log",
+      "category": "trees",
+      "file": "Models/props/trees/fallen_log.glb",
+      "size_m": [
+        2.672,
+        0.8,
+        0.879
+      ],
+      "triangles": 320,
+      "materials": [
+        "bark",
+        "bark_light",
+        "wood_pale",
+        "moss"
+      ]
+    },
+    {
+      "name": "bush_round",
+      "category": "bushes",
+      "file": "Models/props/bushes/bush_round.glb",
+      "size_m": [
+        1.519,
+        1.406,
+        1.004
+      ],
+      "triangles": 516,
+      "materials": [
+        "leaf_mid",
+        "leaf_light",
+        "leaf_olive",
+        "bark"
+      ]
+    },
+    {
+      "name": "bush_large",
+      "category": "bushes",
+      "file": "Models/props/bushes/bush_large.glb",
+      "size_m": [
+        2.206,
+        2.118,
+        1.373
+      ],
+      "triangles": 516,
+      "materials": [
+        "leaf_deep",
+        "leaf_mid",
+        "leaf_light",
+        "bark"
+      ]
+    },
+    {
+      "name": "bush_berry",
+      "category": "bushes",
+      "file": "Models/props/bushes/bush_berry.glb",
+      "size_m": [
+        1.377,
+        1.366,
+        0.945
+      ],
+      "triangles": 796,
+      "materials": [
+        "leaf_mid",
+        "leaf_light",
+        "leaf_olive",
+        "bark",
+        "berry"
+      ]
+    },
+    {
+      "name": "bush_flower",
+      "category": "bushes",
+      "file": "Models/props/bushes/bush_flower.glb",
+      "size_m": [
+        1.338,
+        1.406,
+        0.886
+      ],
+      "triangles": 736,
+      "materials": [
+        "leaf_mid",
+        "leaf_light",
+        "leaf_olive",
+        "bark",
+        "blossom",
+        "blossom_pale"
+      ]
+    },
+    {
+      "name": "bush_flower_pale",
+      "category": "bushes",
+      "file": "Models/props/bushes/bush_flower_pale.glb",
+      "size_m": [
+        1.601,
+        1.576,
+        1.063
+      ],
+      "triangles": 776,
+      "materials": [
+        "leaf_mid",
+        "leaf_light",
+        "leaf_olive",
+        "bark",
+        "blossom",
+        "blossom_pale"
+      ]
+    },
+    {
+      "name": "hedge_section",
+      "category": "bushes",
+      "file": "Models/props/bushes/hedge_section.glb",
+      "size_m": [
+        3.02,
+        0.883,
+        1.052
+      ],
+      "triangles": 1280,
+      "materials": [
+        "leaf_deep",
+        "leaf_mid",
+        "leaf_light"
+      ]
+    },
+    {
+      "name": "bush_bramble",
+      "category": "bushes",
+      "file": "Models/props/bushes/bush_bramble.glb",
+      "size_m": [
+        2.285,
+        2.122,
+        0.972
+      ],
+      "triangles": 2604,
+      "materials": [
+        "bark",
+        "leaf_deep",
+        "leaf_mid",
+        "leaf_light",
+        "berry"
+      ]
+    },
+    {
+      "name": "rock_cluster_01",
+      "category": "nature",
+      "file": "Models/props/nature/rock_cluster_01.glb",
+      "size_m": [
+        1.691,
+        1.796,
+        0.85
+      ],
+      "triangles": 400,
+      "materials": [
+        "stone",
+        "stone_light",
+        "stone_dark",
+        "moss",
+        "leaf_mid"
+      ]
+    },
+    {
+      "name": "rock_cluster_02",
+      "category": "nature",
+      "file": "Models/props/nature/rock_cluster_02.glb",
+      "size_m": [
+        2.321,
+        2.45,
+        1.248
+      ],
+      "triangles": 400,
+      "materials": [
+        "stone",
+        "stone_light",
+        "stone_dark",
+        "moss",
+        "leaf_mid"
+      ]
+    },
+    {
+      "name": "mushroom_cluster",
+      "category": "nature",
+      "file": "Models/props/nature/mushroom_cluster.glb",
+      "size_m": [
+        0.505,
+        0.473,
+        0.399
+      ],
+      "triangles": 540,
+      "materials": [
+        "wood_pale",
+        "blossom_pale",
+        "paint_red",
+        "wood_red",
+        "paint_white",
+        "flower_white"
+      ]
+    },
+    {
+      "name": "grass_tuft",
+      "category": "nature",
+      "file": "Models/props/nature/grass_tuft.glb",
+      "size_m": [
+        0.415,
+        0.322,
+        0.628
+      ],
+      "triangles": 108,
+      "materials": [
+        "leaf_mid",
+        "leaf_light",
+        "leaf_olive"
+      ]
+    },
+    {
+      "name": "grass_tuft_small",
+      "category": "nature",
+      "file": "Models/props/nature/grass_tuft_small.glb",
+      "size_m": [
+        0.396,
+        0.258,
+        0.593
+      ],
+      "triangles": 108,
+      "materials": [
+        "leaf_mid",
+        "leaf_light",
+        "leaf_olive"
+      ]
+    },
+    {
+      "name": "reeds",
+      "category": "nature",
+      "file": "Models/props/nature/reeds.glb",
+      "size_m": [
+        0.842,
+        0.947,
+        1.51
+      ],
+      "triangles": 224,
+      "materials": [
+        "leaf_deep",
+        "leaf_olive",
+        "wood_dark",
+        "bark",
+        "leaf_mid"
+      ]
+    },
+    {
+      "name": "flower_patch",
+      "category": "nature",
+      "file": "Models/props/nature/flower_patch.glb",
+      "size_m": [
+        0.414,
+        0.529,
+        0.464
+      ],
+      "triangles": 512,
+      "materials": [
+        "leaf_mid",
+        "leaf_olive",
+        "blossom",
+        "flower_yellow",
+        "flower_white"
+      ]
+    },
+    {
+      "name": "water_trough",
+      "category": "stable",
+      "file": "Models/props/stable/water_trough.glb",
+      "size_m": [
+        1.87,
+        0.74,
+        0.68
+      ],
+      "triangles": 180,
+      "materials": [
+        "wood_dark",
+        "wood",
+        "wood_light",
+        "water",
+        "metal_dark"
+      ]
+    },
+    {
+      "name": "hay_round",
+      "category": "stable",
+      "file": "Models/props/stable/hay_round.glb",
+      "size_m": [
+        1.222,
+        1.412,
+        1.412
+      ],
+      "triangles": 264,
+      "materials": [
+        "hay",
+        "hay_dark",
+        "rope"
+      ]
+    },
+    {
+      "name": "hay_square",
+      "category": "stable",
+      "file": "Models/props/stable/hay_square.glb",
+      "size_m": [
+        1.157,
+        0.719,
+        1.083
+      ],
+      "triangles": 152,
+      "materials": [
+        "hay",
+        "hay_dark",
+        "rope"
+      ]
+    },
+    {
+      "name": "hay_feeder",
+      "category": "stable",
+      "file": "Models/props/stable/hay_feeder.glb",
+      "size_m": [
+        1.19,
+        0.75,
+        1.1
+      ],
+      "triangles": 304,
+      "materials": [
+        "wood",
+        "wood_light",
+        "hay",
+        "hay_dark"
+      ]
+    },
+    {
+      "name": "feed_bucket",
+      "category": "stable",
+      "file": "Models/props/stable/feed_bucket.glb",
+      "size_m": [
+        0.441,
+        0.46,
+        0.505
+      ],
+      "triangles": 260,
+      "materials": [
+        "metal_dark",
+        "feed",
+        "metal"
+      ]
+    },
+    {
+      "name": "water_bucket",
+      "category": "stable",
+      "file": "Models/props/stable/water_bucket.glb",
+      "size_m": [
+        0.387,
+        0.4,
+        0.495
+      ],
+      "triangles": 180,
+      "materials": [
+        "churn",
+        "water",
+        "metal_dark",
+        "metal"
+      ]
+    },
+    {
+      "name": "saddle_rack",
+      "category": "stable",
+      "file": "Models/props/stable/saddle_rack.glb",
+      "size_m": [
+        1.107,
+        0.764,
+        1.228
+      ],
+      "triangles": 192,
+      "materials": [
+        "wood",
+        "wood_light",
+        "rope"
+      ]
+    },
+    {
+      "name": "hitching_post",
+      "category": "stable",
+      "file": "Models/props/stable/hitching_post.glb",
+      "size_m": [
+        2.64,
+        0.519,
+        1.168
+      ],
+      "triangles": 140,
+      "materials": [
+        "wood",
+        "wood_light",
+        "metal"
+      ]
+    },
+    {
+      "name": "mounting_block",
+      "category": "stable",
+      "file": "Models/props/stable/mounting_block.glb",
+      "size_m": [
+        1.6,
+        0.94,
+        0.555
+      ],
+      "triangles": 96,
+      "materials": [
+        "wood",
+        "wood_light",
+        "wood_dark"
+      ]
+    },
+    {
+      "name": "feed_sack",
+      "category": "stable",
+      "file": "Models/props/stable/feed_sack.glb",
+      "size_m": [
+        0.59,
+        0.614,
+        0.794
+      ],
+      "triangles": 164,
+      "materials": [
+        "sack",
+        "rope"
+      ]
+    },
+    {
+      "name": "grooming_tote",
+      "category": "stable",
+      "file": "Models/props/stable/grooming_tote.glb",
+      "size_m": [
+        0.44,
+        0.366,
+        0.465
+      ],
+      "triangles": 204,
+      "materials": [
+        "wood_light",
+        "wood_dark",
+        "rope",
+        "wood",
+        "bark_dark"
+      ]
+    },
+    {
+      "name": "hay_net",
+      "category": "stable",
+      "file": "Models/props/stable/hay_net.glb",
+      "size_m": [
+        0.643,
+        0.643,
+        0.664
+      ],
+      "triangles": 628,
+      "materials": [
+        "hay",
+        "hay_dark",
+        "rope"
+      ]
+    },
+    {
+      "name": "pitchfork",
+      "category": "stable",
+      "file": "Models/props/stable/pitchfork.glb",
+      "size_m": [
+        0.246,
+        0.079,
+        1.418
+      ],
+      "triangles": 80,
+      "materials": [
+        "wood",
+        "metal_dark",
+        "metal"
+      ]
+    },
+    {
+      "name": "broom",
+      "category": "stable",
+      "file": "Models/props/stable/broom.glb",
+      "size_m": [
+        0.313,
+        0.308,
+        1.298
+      ],
+      "triangles": 584,
+      "materials": [
+        "wood_light",
+        "bristle_pale",
+        "hay_dark",
+        "bristle_grey",
+        "rope"
+      ]
+    },
+    {
+      "name": "muck_tub",
+      "category": "stable",
+      "file": "Models/props/stable/muck_tub.glb",
+      "size_m": [
+        0.805,
+        0.79,
+        0.33
+      ],
+      "triangles": 164,
+      "materials": [
+        "rubber",
+        "metal_dark",
+        "metal"
+      ]
+    },
+    {
+      "name": "saddle_blanket",
+      "category": "stable",
+      "file": "Models/props/stable/saddle_blanket.glb",
+      "size_m": [
+        0.69,
+        0.55,
+        0.218
+      ],
+      "triangles": 96,
+      "materials": [
+        "paint_white",
+        "paint_red",
+        "leather",
+        "metal"
+      ]
+    },
+    {
+      "name": "lead_rope",
+      "category": "stable",
+      "file": "Models/props/stable/lead_rope.glb",
+      "size_m": [
+        0.678,
+        0.531,
+        0.064
+      ],
+      "triangles": 532,
+      "materials": [
+        "rope",
+        "metal"
+      ]
+    },
+    {
+      "name": "carrot_bunch",
+      "category": "stable",
+      "file": "Models/props/stable/carrot_bunch.glb",
+      "size_m": [
+        0.208,
+        0.198,
+        0.251
+      ],
+      "triangles": 360,
+      "materials": [
+        "carrot",
+        "leaf_mid",
+        "leaf_light"
+      ]
+    },
+    {
+      "name": "wheelbarrow",
+      "category": "yard",
+      "file": "Models/props/yard/wheelbarrow.glb",
+      "size_m": [
+        1.869,
+        0.656,
+        0.768
+      ],
+      "triangles": 256,
+      "materials": [
+        "wood",
+        "wood_light",
+        "wood_dark",
+        "metal_dark"
+      ]
+    },
+    {
+      "name": "barrel",
+      "category": "yard",
+      "file": "Models/props/yard/barrel.glb",
+      "size_m": [
+        0.724,
+        0.724,
+        1.02
+      ],
+      "triangles": 352,
+      "materials": [
+        "wood",
+        "wood_light",
+        "wood_dark",
+        "metal_dark"
+      ]
+    },
+    {
+      "name": "crate",
+      "category": "yard",
+      "file": "Models/props/yard/crate.glb",
+      "size_m": [
+        0.628,
+        0.638,
+        0.61
+      ],
+      "triangles": 276,
+      "materials": [
+        "wood_dark",
+        "wood_light",
+        "wood"
+      ]
+    },
+    {
+      "name": "milk_churn",
+      "category": "yard",
+      "file": "Models/props/yard/milk_churn.glb",
+      "size_m": [
+        0.431,
+        0.42,
+        0.784
+      ],
+      "triangles": 188,
+      "materials": [
+        "churn",
+        "metal_dark"
+      ]
+    },
+    {
+      "name": "bench",
+      "category": "yard",
+      "file": "Models/props/yard/bench.glb",
+      "size_m": [
+        1.4,
+        0.535,
+        0.974
+      ],
+      "triangles": 132,
+      "materials": [
+        "wood_dark",
+        "wood_light"
+      ]
+    },
+    {
+      "name": "firewood_stack",
+      "category": "yard",
+      "file": "Models/props/yard/firewood_stack.glb",
+      "size_m": [
+        0.95,
+        0.692,
+        0.545
+      ],
+      "triangles": 264,
+      "materials": [
+        "bark",
+        "wood",
+        "wood_pale",
+        "wood_dark"
+      ]
+    },
+    {
+      "name": "apple_basket",
+      "category": "yard",
+      "file": "Models/props/yard/apple_basket.glb",
+      "size_m": [
+        0.631,
+        0.62,
+        0.62
+      ],
+      "triangles": 424,
+      "materials": [
+        "wood_light",
+        "wood",
+        "wood_dark",
+        "apple",
+        "apple_green",
+        "rope"
+      ]
+    },
+    {
+      "name": "flower_planter",
+      "category": "yard",
+      "file": "Models/props/yard/flower_planter.glb",
+      "size_m": [
+        0.86,
+        0.44,
+        0.745
+      ],
+      "triangles": 540,
+      "materials": [
+        "wood_light",
+        "wood",
+        "wood_dark",
+        "soil",
+        "leaf_mid",
+        "blossom_pale",
+        "flower_yellow",
+        "blossom",
+        "flower_white"
+      ]
+    },
+    {
+      "name": "well",
+      "category": "yard",
+      "file": "Models/props/yard/well.glb",
+      "size_m": [
+        2.307,
+        2.19,
+        2.637
+      ],
+      "triangles": 436,
+      "materials": [
+        "stone",
+        "stone_light",
+        "stone_dark",
+        "water",
+        "wood_dark",
+        "wood",
+        "roof_red",
+        "rope",
+        "metal_dark",
+        "metal"
+      ]
+    },
+    {
+      "name": "water_pump",
+      "category": "yard",
+      "file": "Models/props/yard/water_pump.glb",
+      "size_m": [
+        0.902,
+        1.258,
+        1.234
+      ],
+      "triangles": 180,
+      "materials": [
+        "stone",
+        "stone_light",
+        "stone_dark",
+        "metal",
+        "metal_dark",
+        "wood_dark",
+        "water"
+      ]
+    },
+    {
+      "name": "signpost",
+      "category": "yard",
+      "file": "Models/props/yard/signpost.glb",
+      "size_m": [
+        1.89,
+        0.22,
+        2.05
+      ],
+      "triangles": 136,
+      "materials": [
+        "wood_dark",
+        "wood_light",
+        "flower_white"
+      ]
+    },
+    {
+      "name": "lantern_post",
+      "category": "yard",
+      "file": "Models/props/yard/lantern_post.glb",
+      "size_m": [
+        0.69,
+        0.26,
+        2.04
+      ],
+      "triangles": 148,
+      "materials": [
+        "stone_dark",
+        "wood_dark",
+        "metal_dark",
+        "glass_warm"
+      ]
+    },
+    {
+      "name": "chicken_coop",
+      "category": "garden",
+      "file": "Models/props/garden/chicken_coop.glb",
+      "size_m": [
+        1.8,
+        1.892,
+        1.576
+      ],
+      "triangles": 252,
+      "materials": [
+        "wood_dark",
+        "plaster",
+        "wood",
+        "roof_red",
+        "bark_dark",
+        "wood_light"
+      ]
+    },
+    {
+      "name": "beehive",
+      "category": "garden",
+      "file": "Models/props/garden/beehive.glb",
+      "size_m": [
+        0.58,
+        0.564,
+        1.12
+      ],
+      "triangles": 144,
+      "materials": [
+        "wood_dark",
+        "wood",
+        "wood_pale",
+        "wood_light",
+        "bark_dark",
+        "roof",
+        "roof_red"
+      ]
+    },
+    {
+      "name": "fence_panel",
+      "category": "garden",
+      "file": "Models/props/garden/fence_panel.glb",
+      "size_m": [
+        2.66,
+        0.16,
+        1.27
+      ],
+      "triangles": 84,
+      "materials": [
+        "wood",
+        "wood_light",
+        "wood_dark"
+      ]
+    },
+    {
+      "name": "farm_gate",
+      "category": "garden",
+      "file": "Models/props/garden/farm_gate.glb",
+      "size_m": [
+        2.78,
+        0.14,
+        1.32
+      ],
+      "triangles": 132,
+      "materials": [
+        "wood_dark",
+        "wood_light",
+        "wood",
+        "metal_dark"
+      ]
+    },
+    {
+      "name": "jump_wing",
+      "category": "course",
+      "file": "Models/props/course/jump_wing.glb",
+      "size_m": [
+        0.72,
+        0.72,
+        1.745
+      ],
+      "triangles": 244,
+      "materials": [
+        "wood",
+        "paint_white",
+        "paint_red",
+        "metal",
+        "metal_dark"
+      ]
+    },
+    {
+      "name": "jump_pole",
+      "category": "course",
+      "file": "Models/props/course/jump_pole.glb",
+      "size_m": [
+        3.0,
+        0.1,
+        0.1
+      ],
+      "triangles": 280,
+      "materials": [
+        "paint_red",
+        "paint_white"
+      ]
+    },
+    {
+      "name": "curry_comb",
+      "category": "grooming",
+      "file": "Models/props/grooming/curry_comb.glb",
+      "size_m": [
+        0.184,
+        0.156,
+        0.051
+      ],
+      "triangles": 972,
+      "materials": [
+        "rubber",
+        "metal_dark",
+        "leather"
+      ]
+    },
+    {
+      "name": "dandy_brush",
+      "category": "grooming",
+      "file": "Models/props/grooming/dandy_brush.glb",
+      "size_m": [
+        0.127,
+        0.127,
+        0.067
+      ],
+      "triangles": 1976,
+      "materials": [
+        "wood_light",
+        "wood_dark",
+        "bristle_dark"
+      ]
+    },
+    {
+      "name": "soft_brush",
+      "category": "grooming",
+      "file": "Models/props/grooming/soft_brush.glb",
+      "size_m": [
+        0.123,
+        0.123,
+        0.068
+      ],
+      "triangles": 1976,
+      "materials": [
+        "wood",
+        "wood_dark",
+        "bristle_pale"
+      ]
+    },
+    {
+      "name": "face_brush",
+      "category": "grooming",
+      "file": "Models/props/grooming/face_brush.glb",
+      "size_m": [
+        0.083,
+        0.083,
+        0.057
+      ],
+      "triangles": 1976,
+      "materials": [
+        "wood_light",
+        "wood_dark",
+        "bristle_grey"
+      ]
+    },
+    {
+      "name": "hoof_pick",
+      "category": "grooming",
+      "file": "Models/props/grooming/hoof_pick.glb",
+      "size_m": [
+        0.26,
+        0.052,
+        0.062
+      ],
+      "triangles": 184,
+      "materials": [
+        "wood_dark",
+        "metal_dark",
+        "metal",
+        "wood",
+        "bristle_dark"
+      ]
+    },
+    {
+      "name": "sponge",
+      "category": "grooming",
+      "file": "Models/props/grooming/sponge.glb",
+      "size_m": [
+        0.194,
+        0.154,
+        0.08
+      ],
+      "triangles": 260,
+      "materials": [
+        "sponge",
+        "wood_dark",
+        "bark_dark"
+      ]
+    },
+    {
+      "name": "sweat_scraper",
+      "category": "grooming",
+      "file": "Models/props/grooming/sweat_scraper.glb",
+      "size_m": [
+        0.358,
+        0.04,
+        0.161
+      ],
+      "triangles": 84,
+      "materials": [
+        "rubber",
+        "wood",
+        "wood_light",
+        "wood_dark"
+      ]
+    },
+    {
+      "name": "spectator_standing_a",
+      "category": "crowd",
+      "file": "Models/props/crowd/spectator_standing_a.glb",
+      "size_m": [
+        0.485,
+        0.32,
+        1.545
+      ],
+      "triangles": 412,
+      "materials": [
+        "coat_grey",
+        "boot",
+        "coat_blue",
+        "skin",
+        "hair",
+        "straw",
+        "hay_dark"
+      ]
+    },
+    {
+      "name": "spectator_standing_b",
+      "category": "crowd",
+      "file": "Models/props/crowd/spectator_standing_b.glb",
+      "size_m": [
+        0.485,
+        0.258,
+        1.503
+      ],
+      "triangles": 360,
+      "materials": [
+        "denim",
+        "boot",
+        "coat_mustard",
+        "skin",
+        "hair",
+        "coat_red"
+      ]
+    },
+    {
+      "name": "spectator_seated_a",
+      "category": "crowd",
+      "file": "Models/props/crowd/spectator_seated_a.glb",
+      "size_m": [
+        0.465,
+        0.576,
+        1.097
+      ],
+      "triangles": 380,
+      "materials": [
+        "coat_grey",
+        "coat_red",
+        "skin",
+        "hair",
+        "boot"
+      ]
+    },
+    {
+      "name": "spectator_seated_b",
+      "category": "crowd",
+      "file": "Models/props/crowd/spectator_seated_b.glb",
+      "size_m": [
+        0.465,
+        0.588,
+        1.135
+      ],
+      "triangles": 444,
+      "materials": [
+        "denim",
+        "coat_green",
+        "skin",
+        "hair",
+        "boot",
+        "straw",
+        "hay_dark"
+      ]
+    },
+    {
+      "name": "spectator_seated_c",
+      "category": "crowd",
+      "file": "Models/props/crowd/spectator_seated_c.glb",
+      "size_m": [
+        0.465,
+        0.576,
+        1.097
+      ],
+      "triangles": 380,
+      "materials": [
+        "boot",
+        "coat_grey",
+        "skin",
+        "hair"
+      ]
+    },
+    {
+      "name": "spectator_child",
+      "category": "crowd",
+      "file": "Models/props/crowd/spectator_child.glb",
+      "size_m": [
+        0.335,
+        0.414,
+        0.9
+      ],
+      "triangles": 380,
+      "materials": [
+        "denim",
+        "coat_blue",
+        "skin",
+        "hair",
+        "boot"
+      ]
+    },
+    {
+      "name": "judge_bell",
+      "category": "arena",
+      "file": "Models/props/arena/judge_bell.glb",
+      "size_m": [
+        0.118,
+        0.124,
+        0.174
+      ],
+      "triangles": 148,
+      "materials": [
+        "brass",
+        "metal_dark",
+        "wood_dark"
+      ]
+    },
+    {
+      "name": "showground_arch",
+      "category": "arena",
+      "file": "Models/props/arena/showground_arch.glb",
+      "size_m": [
+        0.32,
+        5.12,
+        6.86
+      ],
+      "triangles": 108,
+      "materials": [
+        "wood_dark",
+        "wood",
+        "wood_light",
+        "paint_red"
+      ]
+    }
+  ]
+}

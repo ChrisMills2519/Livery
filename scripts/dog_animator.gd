@@ -9,18 +9,23 @@ signal action_finished(clip_name: String)
 @export var idle_clip := "Idle"
 
 @export_group("Gait thresholds")
-@export var trot_threshold := 1.35
-@export var run_threshold := 3.6
+@export var trot_threshold := 1.15
+@export var run_threshold := 2.4
 
 @export_group("Reference speeds")
-@export var walk_reference_speed := 0.9
-@export var trot_reference_speed := 2.2
-@export var run_reference_speed := 4.8
+## Body speed (m/s) each clip plants its feet at.  These are measured from the
+## built clips (tools/build_chihuahua.py, "measured ... ground speed"), so a
+## clip only stays planted while it plays near its reference speed.  The dog is
+## driven at these speeds, and dog.gd must not ask for more than the clip can
+## cover or the paws go back to skating.
+@export var walk_reference_speed := 0.73
+@export var trot_reference_speed := 1.86
+@export var run_reference_speed := 3.26
 
 @export_group("Playback")
 @export var blend_time := 0.18
-@export var min_speed_scale := 0.75
-@export var max_speed_scale := 1.4
+@export var min_speed_scale := 0.85
+@export var max_speed_scale := 1.2
 
 const LOOPING := [
 	"Idle", "Idle_Alert", "Walk", "Trot", "Run", "TailWag",
@@ -98,12 +103,21 @@ func set_locomotion(speed: float) -> void:
 		return
 	if _one_shot != "":
 		return
+	# A small hold on the current gait keeps it from flapping right at a
+	# threshold, where the clip's speed scale would jump back and forth.
+	var hold := 0.9
 	var clip_name := walk_clip
 	var reference := walk_reference_speed
-	if speed >= run_threshold and _has_any([run_clip]):
+	if _has_any([run_clip]) and (
+		speed >= run_threshold
+		or (current_clip == run_clip and speed >= run_threshold * hold)
+	):
 		clip_name = run_clip
 		reference = run_reference_speed
-	elif speed >= trot_threshold and _has_any([trot_clip]):
+	elif _has_any([trot_clip]) and (
+		speed >= trot_threshold
+		or (current_clip == trot_clip and speed >= trot_threshold * hold)
+	):
 		clip_name = trot_clip
 		reference = trot_reference_speed
 	elif not _has_any([walk_clip]):

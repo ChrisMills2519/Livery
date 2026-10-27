@@ -19,7 +19,8 @@ extends SceneTree
 ##   materials            354 -> 103
 ##   textured materials    75 -> 52
 ##   textures             11 -> 15
-##   decoded texture MB 17.0 -> 18.1
+##   decoded texture MB 17.0 -> 18.1 (20.2 once the detail maps became RGB8;
+##                                  see the note on MAX_TEXTURE_MB)
 
 const SCENE := "res://scenes/farmhouse.tscn"
 const GROUPS := ["Shell", "Furniture", "Lighting"]
@@ -31,7 +32,12 @@ const MAX_TRIANGLES := 112000
 const MAX_MATERIALS := 115
 const MAX_TEXTURED_MATERIALS := 60
 const MAX_TEXTURES := 20
-const MAX_TEXTURE_MB := 20.0
+# The four detail maps are neutral greys but are stored as RGB, not luminance:
+# a single-channel map imports as a luminance texture and a driver that samples
+# that without a channel swizzle reads it as (grey, 0, 0), which paints every
+# textured surface in the house red.  Three channels cost 2.1 MB more decoded
+# memory and are the price of that portability.
+const MAX_TEXTURE_MB := 22.0
 
 # The shared catalogue the furniture draws from.  Missing ones mean a prop fell
 # back to a flat colour, which is exactly the regression this pass removed.
@@ -113,6 +119,11 @@ func _initialize() -> void:
 			_failures.append("%s is larger than 512 px" % path)
 		if texture.get_size().x != texture.get_size().y:
 			_failures.append("%s is not square" % path)
+		var image := texture.get_image()
+		if image != null and (image.get_format() == Image.FORMAT_L8 or image.get_format() == Image.FORMAT_LA8):
+			_failures.append(
+				"%s imports as a luminance texture; save it as RGB or drivers without " % path
+				+ "a channel swizzle draw it as pure red")
 
 	if _failures.is_empty():
 		print("INTERIOR COST CHECK: PASS")

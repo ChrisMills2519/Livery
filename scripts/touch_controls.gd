@@ -19,10 +19,31 @@ extends CanvasLayer
 const STICK_RADIUS := 110.0
 const RUN_ENTER := 0.80
 const RUN_EXIT := 0.70
-const LOOK_GAIN := 1.0
+## Fraction of the mouse look rate a finger drag applies.  A thumb covers far
+## less distance than a mouse sweep, and movement is camera-relative, so at 1:1
+## dragging to look also re-aims the character's heading and the view spins.
+const LOOK_GAIN := 0.55
+## How far the stick finger may sit from its anchor and still count as resting
+## (a palm, or a thumb that has not pushed yet).
+const STICK_REST := 10.0
 const ORBIT_GAIN := 0.5
 const CONTEXT_REFRESH := 0.1
 const BUTTON_SLOP := 8.0
+## How far the thumb must push before the stick counts as steering.  Below this
+## it is a resting finger, not a direction.
+const STICK_PUSH := 0.12
+## How long a stick holder may go without reporting before another thumb may take
+## the stick from it.  iOS Safari cancels a touch instead of ending it (the edge
+## back-swipe, its toolbar moving, a system gesture, palm rejection) and Godot's
+## web input has no event for that, so the touch-up never arrives: the finger is
+## gone while `_stick_index` still points at it.  Without this window that stale
+## holder locks every later left-half press out of the stick for the rest of the
+## scene, which is the "left stick does nothing" fault on the phone.
+const STICK_STALE_MS := 250
+## A two-finger gesture only zooms once the gap has changed by this fraction
+## from where the second finger landed.  Below it the gesture is pure orbit, so
+## wrist wobble cannot drag the camera in and out while turning the horse.
+const PINCH_TRIGGER := 0.10
 
 const TEXT_COLOR := Color(0.96, 0.97, 0.92, 1.0)
 const DIM_COLOR := Color(0.86, 0.90, 0.80, 0.42)
@@ -35,15 +56,32 @@ var mode := "off"
 
 var _overlay: Control
 var _fingers: Dictionary = {}
+## Index of the finger that owns the stick.  Only meaningful while `_stick_owned`
+## is true: iOS Safari's touch identifiers keep climbing for the life of the page
+## and overflow into a negative int32 (a real device reported -410517893), so the
+## value itself says nothing about ownership.
 var _stick_index := -1
+## True while a finger actually owns the stick.  The id alone cannot carry that
+## meaning: `-1` is not the only "no stick" value a device can produce, so
+## `_stick_index < 0` was true for a live stick on iOS, which made
+## `get_move_input()` return bare keyboard input and left the walk and the horse
+## with nothing to move on.
+var _stick_owned := false
 var _stick_base := Vector2.ZERO
 var _stick_offset := Vector2.ZERO
+## When the stick holder last claimed or dragged, in msec.  A holder that has
+## gone quiet is not necessarily dead (a thumb can hold a straight line without
+## moving), so this is only trusted together with a new press, and the takeover
+## it allows is a re-anchor, not a turn.
+var _stick_seen_ms := 0
 var _move := Vector2.ZERO
 var _running := false
 var _look_accum := Vector2.ZERO
 var _orbit_accum := Vector2.ZERO
 var _pinch_ratio := 1.0
 var _pair_distance := 0.0
+var _pair_start := 0.0
+var _pinching := false
 var _swipe_accum := 0.0
 var _paint_active := false
 var _paint_pos := Vector2.ZERO
@@ -68,10 +106,18 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not is_active():
 		return
+	# A stick index whose finger is no longer tracked can only be a stale holder.
+	# Dropping it here means no lost event can leave the stick pointed at nothing.
+	if _stick_owned and not _fingers.has(_stick_index):
+		_reset_stick()
 	_context_timer -= delta
 	if _context_timer <= 0.0:
 		_context_timer = CONTEXT_REFRESH
 		_refresh_context()
+	if mode == "groom":
+		# Sampled once a frame, after both thumbs have reported, so moving them
+		# one after the other is not mistaken for a squeeze.
+		_update_pinch()
 	_overlay.queue_redraw()
 
 
@@ -104,7 +150,7 @@ func set_mode(new_mode: String) -> void:
 ## only live in "ride" mode.
 func get_move_input() -> Vector2:
 	var keys := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	if not is_active() or _stick_index < 0:
+	if not is_active() or not _stick_owned:
 		return keys
 	return (keys + _move).limit_length(1.0)
 
@@ -162,7 +208,13 @@ func paint_position() -> Vector2:
 
 
 func is_stick_active() -> bool:
-	return _stick_index >= 0
+	return _stick_owned
+
+
+## True once the thumb has actually pushed the stick away from its anchor.  A
+## finger that merely owns the stick has not asked for a direction yet.
+func is_stick_pushing() -> bool:
+	return _stick_owned and _move.length() > STICK_PUSH
 
 
 func is_running() -> bool:
@@ -205,9 +257,10 @@ func feed_drag(index: int, pos: Vector2, relative: Vector2) -> bool:
 			_paint_pos = pos
 		"orbit":
 			_orbit_accum += relative * ORBIT_GAIN
-			_update_pinch()
 		"swipe":
 			_swipe_accum += relative.x
+		"idle":
+			_try_push_reclaim(index, pos)
 		_:
 			pass
 	return true
@@ -215,7 +268,9 @@ func feed_drag(index: int, pos: Vector2, relative: Vector2) -> bool:
 
 func _touch_down(index: int, pos: Vector2) -> bool:
 	if _fingers.has(index):
-		return true
+		# The release for this finger was lost (app switch, a dropped event).
+		# The new press wins instead of leaving a stale role wedged in place.
+		_touch_up(index)
 	var button: Dictionary = _button_at(pos) if mode == "ride" else {}
 	if not button.is_empty():
 		var action := _action_for(String(button["id"]))
@@ -229,14 +284,15 @@ func _touch_down(index: int, pos: Vector2) -> bool:
 	match mode:
 		"ride":
 			if pos.x < get_viewport().get_visible_rect().size.x * 0.5:
-				if _stick_index < 0:
-					_stick_index = index
-					_stick_base = pos
-					_stick_offset = Vector2.ZERO
-					_move = Vector2.ZERO
-					_fingers[index] = {"role": "stick", "pos": pos}
+				if _stick_is_available():
+					# No holder, a holder that never pushed, or one whose touch-up
+					# was lost, so the thumb that just landed takes the stick.
+					_claim_stick(index, pos)
 				else:
-					_fingers[index] = {"role": "idle", "pos": pos}
+					# A live thumb owns the stick.  Remember where this finger
+					# landed so its own push can take over once that owner goes
+					# quiet, instead of it being stuck as a passenger.
+					_fingers[index] = {"role": "idle", "pos": pos, "down": pos}
 			else:
 				_fingers[index] = {"role": "look", "pos": pos}
 			return true
@@ -265,7 +321,7 @@ func _groom_touch_down(index: int, pos: Vector2) -> bool:
 			if String(_fingers[other]["role"]) == "paint":
 				_fingers[other]["role"] = "orbit"
 		_fingers[index] = {"role": "orbit", "pos": pos}
-		_pair_distance = _orbit_pair_distance()
+		_begin_pinch_pair()
 		return true
 	# The first finger of a stroke: it paints or becomes a two-finger gesture.
 	_fingers[index] = {"role": "paint", "pos": pos}
@@ -288,15 +344,19 @@ func _touch_up(index: int) -> bool:
 			if not action.is_empty():
 				_send_action(action, false)
 		"stick":
-			_stick_index = -1
-			_move = Vector2.ZERO
-			_stick_offset = Vector2.ZERO
-			_set_run(false)
+			# Only the finger that owns the stick may release it.  A touch-up from
+			# a holder that was already demoted (its release was lost and another
+			# thumb took over) must not kill the stick that replaced it.
+			if _stick_owned and index == _stick_index:
+				_reset_stick()
+				_adopt_idle_stick()
 		"paint":
 			_paint_active = false
 		"orbit":
 			_paint_active = false
 			_pair_distance = 0.0
+			_pair_start = 0.0
+			_pinching = false
 			for other in _fingers:
 				if String(_fingers[other]["role"]) == "orbit":
 					_fingers[other]["role"] = "idle"
@@ -308,13 +368,13 @@ func _release_all() -> void:
 		_touch_up(index)
 	_fingers.clear()
 	_held_buttons.clear()
-	_stick_index = -1
-	_move = Vector2.ZERO
-	_stick_offset = Vector2.ZERO
+	_reset_stick()
 	_look_accum = Vector2.ZERO
 	_orbit_accum = Vector2.ZERO
 	_swipe_accum = 0.0
 	_pinch_ratio = 1.0
+	_pair_start = 0.0
+	_pinching = false
 	_paint_active = false
 	_set_run(false)
 
@@ -323,9 +383,102 @@ func _on_mode_changed(_is_touch: bool) -> void:
 	set_mode(mode)
 
 
+func _notification(what: int) -> void:
+	# Backgrounding the app can swallow the touch-up events, which would leave a
+	# finger index and the stick wedged until the next scene change.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		_release_all()
+	elif what == NOTIFICATION_WM_SIZE_CHANGED:
+		# Safari's toolbar sliding in and out resizes the canvas, and iOS cancels
+		# the in-flight touches around it.  Dropping them here makes the next press
+		# start clean instead of landing beside a holder that is already gone.
+		_release_all()
+
+
 # --- Stick and run -----------------------------------------------------------
 
+## Arms the stick on `index`, taking it away from whatever finger held it.
+func _claim_stick(index: int, pos: Vector2) -> void:
+	# Exactly one finger may carry the stick role, so a holder left behind by a
+	# lost touch-up is demoted here instead of staying a second owner.  Its
+	# landing point is kept as an anchor, so if it is a live thumb it can claim
+	# the stick back with a push of its own.
+	for other in _fingers:
+		if other == index or String(_fingers[other]["role"]) != "stick":
+			continue
+		_fingers[other]["role"] = "idle"
+		if not _fingers[other].has("down"):
+			_fingers[other]["down"] = _fingers[other]["pos"]
+	_stick_index = index
+	_stick_owned = true
+	_stick_base = pos
+	_stick_offset = Vector2.ZERO
+	_move = Vector2.ZERO
+	_stick_seen_ms = Time.get_ticks_msec()
+	_fingers[index] = {"role": "stick", "pos": pos}
+
+
+## Drops the stick without disturbing any other finger.
+func _reset_stick() -> void:
+	_stick_index = -1
+	_stick_owned = false
+	_stick_seen_ms = 0
+	_move = Vector2.ZERO
+	_stick_offset = Vector2.ZERO
+	_set_run(false)
+
+
+## True when a finger may take the stick from its current holder: nobody holds
+## it, the holder is a contact that has not pushed, its entry is gone, or it has
+## not reported for STICK_STALE_MS and is therefore a cancelled touch.
+func _stick_is_available() -> bool:
+	if not _stick_owned:
+		return true
+	if not _fingers.has(_stick_index):
+		return true
+	if String(_fingers[_stick_index]["role"]) != "stick":
+		return true
+	if _stick_offset.length() < STICK_REST:
+		return true
+	return Time.get_ticks_msec() - _stick_seen_ms > STICK_STALE_MS
+
+
+## A finger filed "idle" because a live thumb held the stick.  Once it pushes
+## past STICK_REST and that holder has gone quiet, the push takes over.  This is
+## the other half of recovering a cancelled touch: the new press can arrive while
+## the stale holder still looks live, and the push arrives after it timed out.
+func _try_push_reclaim(index: int, pos: Vector2) -> void:
+	var finger: Dictionary = _fingers[index]
+	var anchor: Vector2 = finger.get("down", pos)
+	if pos.distance_to(anchor) <= STICK_REST:
+		return
+	if not _stick_is_available():
+		return
+	_claim_stick(index, anchor)
+	_update_stick(pos)
+
+
+## Hands the stick to a finger already resting in the stick half, so lifting one
+## thumb while the other is down does not leave the stick dead.
+func _adopt_idle_stick() -> void:
+	if mode != "ride":
+		return
+	if _stick_owned:
+		if _fingers.has(_stick_index):
+			return
+		_reset_stick()
+	var half := get_viewport().get_visible_rect().size.x * 0.5
+	for other in _fingers:
+		if String(_fingers[other]["role"]) != "idle":
+			continue
+		var pos: Vector2 = _fingers[other]["pos"]
+		if pos.x < half:
+			_claim_stick(other, pos)
+			return
+
+
 func _update_stick(pos: Vector2) -> void:
+	_stick_seen_ms = Time.get_ticks_msec()
 	_stick_offset = pos - _stick_base
 	_move = (_stick_offset / STICK_RADIUS).limit_length(1.0)
 	var strength := _stick_offset.length() / STICK_RADIUS
@@ -354,11 +507,24 @@ func _orbit_pair_distance() -> float:
 	return points[0].distance_to(points[1])
 
 
+## Records the gap between the two orbit fingers when the gesture forms.
+func _begin_pinch_pair() -> void:
+	_pair_distance = _orbit_pair_distance()
+	_pair_start = _pair_distance
+	_pinching = false
+
+
 func _update_pinch() -> void:
 	var distance := _orbit_pair_distance()
 	if distance <= 0.0 or _pair_distance <= 0.0:
 		_pair_distance = distance
 		return
+	if not _pinching:
+		# Deliberate pinch or nothing: an orbit keeps the gap roughly steady.
+		if _pair_start <= 0.0 or absf(distance / _pair_start - 1.0) <= PINCH_TRIGGER:
+			_pair_distance = distance
+			return
+		_pinching = true
 	# Spreading the fingers gives a ratio below 1, which brings the camera in.
 	_pinch_ratio *= _pair_distance / distance
 	_pair_distance = distance
@@ -467,10 +633,81 @@ func _draw_overlay() -> void:
 	if mode == "ride":
 		_draw_stick()
 		_draw_cluster()
+	if Device.debug_overlay():
+		_draw_debug()
+
+
+## Internal state, only with ?touchdebug=1.  A phone cannot show a console, and
+## a stick that does nothing on the device is exactly the case where these
+## numbers are the only evidence: which role each finger got, who owns the
+## stick, what move is coming out of it, and - on the second line - what the
+## player actually received and where the resolved velocity left it.
+##
+## The player line exists because the touch vector is not the last word.  A body
+## that is blocked (or repositioned) still reads as idle: move_and_slide()
+## writes the resolved velocity back, so `vel` near zero with `in` non-zero is a
+## collision, while `in` at zero is a routing fault.  Reading `pos` over two
+## pushes separates "not moving" from "moving with the camera on top of it".
+func _draw_debug() -> void:
+	var lines := PackedStringArray()
+	var parts := PackedStringArray()
+	# The pack carries the build string the loading screen shows, so this line
+	# proves the page and the pack in play are the same build.
+	var build := String(ProjectSettings.get_setting("application/config/version", ""))
+	if not build.is_empty():
+		parts.append(build)
+	parts.append("mode %s" % mode)
+	var size := get_viewport().get_visible_rect().size
+	parts.append("vp %dx%d" % [int(size.x), int(size.y)])
+	parts.append("fps %d" % Engine.get_frames_per_second())
+	for index in _fingers:
+		parts.append("%d:%s" % [index, String(_fingers[index]["role"])])
+	# Printed as-is: a phone's index can be negative, and treating the sign as
+	# "no owner" is the bug this readout was added to catch.
+	parts.append(("stick %d" % _stick_index) if _stick_owned else "stick -")
+	parts.append("move %.2f,%.2f" % [_move.x, _move.y])
+	lines.append("  ".join(parts))
+	var body := get_tree().get_first_node_in_group("player") as CharacterBody3D
+	if body != null:
+		var given := get_move_input()
+		lines.append("p ctrl:%d mnt:%d seat:%d air:%d in:%.2f,%.2f vel:%.2f,%.2f pos:%.1f,%.1f" % [
+			int(bool(body.get("controls_enabled"))),
+			int(bool(body.get("mounted"))),
+			int(bool(body.get("seated"))),
+			0 if body.is_on_floor() else 1,
+			given.x, given.y, body.velocity.x, body.velocity.z,
+			body.global_position.x, body.global_position.z,
+		])
+	var font := ThemeDB.fallback_font
+	const FONT_SIZE := 13
+	var line_height := FONT_SIZE + 4.0
+	# Below the HUD's wallet block and above the thumb's usual resting band, so
+	# the readout does not sit under the stick it is describing.  A dark plate
+	# keeps it legible where it crosses a HUD prompt.
+	var top := 120.0
+	var widest := 0.0
+	for line in lines:
+		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x)
+	_overlay.draw_rect(
+		Rect2(Vector2(8.0, top - FONT_SIZE - 2.0), Vector2(widest + 16.0, line_height * lines.size() + 6.0)),
+		Color(0.0, 0.0, 0.0, 0.62)
+	)
+	var y := top
+	for line in lines:
+		_overlay.draw_string(
+			font,
+			Vector2(16.0, y),
+			line,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			FONT_SIZE,
+			Color(1.0, 1.0, 1.0, 0.95)
+		)
+		y += line_height
 
 
 func _draw_stick() -> void:
-	if _stick_index < 0:
+	if not _stick_owned:
 		return
 	var color := RUN_COLOR if _running else DIM_COLOR
 	_overlay.draw_arc(_stick_base, STICK_RADIUS, 0.0, TAU, 64, color, 3.0)

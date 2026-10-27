@@ -7,6 +7,11 @@ extends Node3D
 ## the stall door; the horse must be led here (ridden back) before it can be
 ## stabled.  Bringing it out always works and places it at the stall marker.
 
+## The muck-out point is the other station at this end of the yard.  See
+## `station_proximity.gd` for why an overlapping pair needs one rule.
+const STATION_GROUP := "stable_station"
+const StationProximity := preload("res://scripts/station_proximity.gd")
+
 @export var player_range := 3.4
 @export var horse_range := 12.0
 @export var prompt_height := 2.35
@@ -33,6 +38,9 @@ func touch_context() -> Dictionary:
 
 func _ready() -> void:
 	add_to_group("touch_context")
+	# Joined, not merely declared: a station that is not in the group cannot be
+	# compared against, and the nearer-offer rule then never fires for the pair.
+	add_to_group(STATION_GROUP)
 	_build_prompt()
 	call_deferred("_bind")
 
@@ -55,6 +63,12 @@ func _build_prompt() -> void:
 func _bind() -> void:
 	_player = get_tree().get_first_node_in_group("player") as Node3D
 	_horse = get_tree().get_first_node_in_group("horse") as Node3D
+
+
+## This station offers from the stall door, and the node itself is the middle of
+## the building 4.7 m away.  See `station_proximity.gd`.
+func claim_point() -> Vector3:
+	return use_anchor.global_position
 
 
 func _process(delta: float) -> void:
@@ -80,10 +94,16 @@ func _refresh() -> bool:
 	var boarded := bool(_horse.get("boarded"))
 	var horse_near := _horse.global_position.distance_to(stall.global_position) <= horse_range
 
-	_prompt.visible = player_near
-	_can_use = player_near and not mounted and (boarded or horse_near)
-	# The stable owns E here; hide the overlapping mount prompt under it.
-	_horse.set("mount_prompt_suppressed", _can_use)
+	# Only the nearest of the pair claims the spot, so the two prompts never
+	# stand over one patch of yard and one `interact` press is never swallowed.
+	# The claim is what the prompt and the press follow.
+	var here: bool = player_near and StationProximity.is_nearest(_player, self, STATION_GROUP)
+	_prompt.visible = here
+	_can_use = here and not mounted and (boarded or horse_near)
+	# The stable owns E here; hide the overlapping mount prompt under it.  Keyed
+	# on this station's own distance rather than on the claim, so the two nodes
+	# never write the flag against each other on every refresh.
+	_horse.set("mount_prompt_suppressed", player_near and not mounted and (boarded or horse_near))
 
 	if not player_near:
 		return false

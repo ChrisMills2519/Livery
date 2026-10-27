@@ -4,11 +4,12 @@
 [ext_resource type="AudioStream" uid="uid://m1r5munjw8t0" path="res://assets/sounds/footsteps/footstep_grass_000.ogg" id="2_step"]
 [ext_resource type="PackedScene" uid="uid://bwpmc5m4mxonl" path="res://Models/chris.glb" id="3_chris"]
 [ext_resource type="AnimationLibrary" uid="uid://dfsra7w0v3omm" path="res://assets/animations/humanoid.res" id="3_dqkch"]
-[ext_resource type="Script" path="res://scripts/ride_pose.gd" id="7_ride_pose"]
-[ext_resource type="Script" path="res://scripts/reins.gd" id="8_reins"]
+[ext_resource type="Script" uid="uid://c6jah36gvq7xt" path="res://scripts/player_model_profile.gd" id="3_y4r1p"]
+[ext_resource type="Script" uid="uid://dlkg4ypdlp7c7" path="res://scripts/ride_pose.gd" id="7_ride_pose"]
+[ext_resource type="Script" uid="uid://cxnhh0hvd6htv" path="res://scripts/reins.gd" id="8_reins"]
 [ext_resource type="Resource" path="res://resources/characters/chris.tres" id="9_chris_profile"]
 [ext_resource type="Resource" path="res://resources/characters/liv.tres" id="10_liv_profile"]
-[ext_resource type="Script" path="res://scripts/footprint_emitter.gd" id="11_footprints"]
+[ext_resource type="Script" uid="uid://hnvanlkog16r" path="res://scripts/footprint_emitter.gd" id="11_footprints"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 radius = 0.3
@@ -20,7 +21,7 @@ radius = 0.28
 [node name="Player" type="CharacterBody3D" unique_id=1892282212]
 script = ExtResource("1_player")
 character_profile = ExtResource("9_chris_profile")
-character_profiles = Array[ExtResource("9_chris_profile")]([ExtResource("9_chris_profile"), ExtResource("10_liv_profile")])
+character_profiles = Array[ExtResource("3_y4r1p")]([ExtResource("9_chris_profile"), ExtResource("10_liv_profile")])
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=1569596614]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
@@ -29,7 +30,7 @@ shape = SubResource("CapsuleShape3D_body")
 [node name="Model" parent="." unique_id=2008143807 instance=ExtResource("3_chris")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
 
-[node name="GeneralSkeleton" parent="Model/Armature" parent_id_path=PackedInt32Array(2008143807, 301883499) index="0" unique_id=2000969285]
+[node name="GeneralSkeleton" parent="Model/Armature" parent_id_path=PackedInt32Array(2008143807, 1407672813) index="0" unique_id=516602828]
 bones/0/position = Vector3(0.0028801037, 0.94023633, -0.09152401)
 bones/0/rotation = Quaternion(-0.05534227, -0.115434945, -0.0064542866, 0.9917512)
 bones/1/rotation = Quaternion(-0.0007883195, 0.11285555, 0.98719823, -0.11270615)
@@ -87,12 +88,12 @@ bones/51/rotation = Quaternion(-7.473898e-09, 1, 1.1376019e-09, 4.9456414e-08)
 root_node = NodePath("../Model")
 libraries/humanoid = ExtResource("3_dqkch")
 
-[node name="RidePose" type="Node" parent="."]
+[node name="RidePose" type="Node" parent="." unique_id=101315837]
 script = ExtResource("7_ride_pose")
 
-[node name="SeatContact" type="Marker3D" parent="."]
+[node name="SeatContact" type="Marker3D" parent="." unique_id=24204967]
 
-[node name="Reins" type="Node3D" parent="."]
+[node name="Reins" type="Node3D" parent="." unique_id=862295010]
 script = ExtResource("8_reins")
 
 [node name="CameraPivot" type="Node3D" parent="." unique_id=1235735689]
@@ -102,9 +103,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
 current = true
 
-[node name="CameraCast" type="ShapeCast3D" parent="CameraPivot"]
-target_position = Vector3(0, 0, 3)
+[node name="CameraCast" type="ShapeCast3D" parent="CameraPivot" unique_id=1858721705]
 shape = SubResource("SphereShape3D_camera")
+target_position = Vector3(0, 0, 3)
 collision_mask = 5
 
 [node name="Footsteps" type="AudioStreamPlayer3D" parent="." unique_id=1881919144]
@@ -112,14 +113,14 @@ stream = ExtResource("2_step")
 unit_size = 4.0
 max_distance = 25.0
 
-[node name="Footprints" type="Node" parent="."]
+[node name="Footprints" type="Node" parent="." unique_id=450088040]
 script = ExtResource("11_footprints")
 kind = 1
 print_size = Vector2(0.11, 0.3)
 forward_offset = 0.06
 toe_angle_degrees = 5.0
 bone_names = PackedStringArray("LeftFoot", "RightFoot")
-min_gap = 0.22
 cooldown = 0.24
+min_gap = 0.22
 
 [editable path="Model"]

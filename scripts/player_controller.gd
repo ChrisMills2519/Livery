@@ -77,6 +77,10 @@ const CAMERA_SWING_RADIUS := 0.62
 const CAMERA_PITCH_MIN := -1.0
 const CAMERA_PITCH_MAX := 0.35
 const RIDE_CAMERA := Vector3(0.0, 0.0, 4.2)
+## How fast the body swings round to face the direction it is walking, in
+## radians per second.  Fast enough to read as a turn rather than a slide, slow
+## enough that reversing does not snap the model round.
+const BODY_TURN_SPEED := 12.0
 
 ## The selectable body.  Both shipped characters are retargeted to the same
 ## humanoid skeleton; the profile carries the per-model saddle and hand fit.
@@ -123,6 +127,10 @@ var _current_anim_state := ""
 var _skeleton: Skeleton3D = null
 var _hips_bone := -1
 var _model_base_yaw := 0.0
+## World yaw the visible body faces.  The root carries the view yaw and the
+## camera hangs off it, so the body keeps its own facing: walking sideways or
+## backwards turns the character instead of sliding him across the ground.
+var _body_yaw := 0.0
 var _camera_pivot_base := Vector3.ZERO
 var _camera_base := Vector3.ZERO
 var _camera_max_boom := 3.0
@@ -131,6 +139,14 @@ var _boom_length := 3.0
 var _camera_slide := 0.0
 var _jump_blend := 0.0
 var _was_on_floor := true
+## Yaw captured when the touch stick was last pushed.  While the thumb holds a
+## direction the frame stays put, so the right thumb can look around without
+## re-aiming the walk or the horse.
+var _steer_frame_yaw := 0.0
+var _stick_steering := false
+## Set by the grooming session, which owns the body's visibility for the length
+## of a visit; the camera rule below must not turn it back on.
+var model_hidden := false
 
 
 func _ready() -> void:
@@ -153,6 +169,7 @@ func _ready() -> void:
 	_apply_camera_profile()
 	_boom_length = _camera_base.length()
 	_apply_pending_spawn()
+	_body_yaw = rotation.y
 	_select_requested_profile()
 	_apply_character_profile()
 	_resolve_rig()
@@ -342,6 +359,7 @@ func _cycle_character() -> void:
 
 
 func _process(delta: float) -> void:
+	_track_steer_frame()
 	_refresh_aim_prompt()
 	if (controls_enabled or seated) and TouchControls.is_active():
 		var look_delta := TouchControls.consume_look()
@@ -421,8 +439,9 @@ func aim_target() -> Node:
 
 
 ## Fallback when the camera ray misses: an interactable within its own
-## body_reach of the player, and roughly in front of them.  Measured from the
-## body, so a low target such as a bowl works without aiming the camera down.
+## body_reach of the player, and roughly in the direction the view faces (the
+## root yaw, not the body's), so a low target such as a bowl works without
+## aiming the camera down.
 func _nearby_interactable() -> Node:
 	var forward := -global_transform.basis.z
 	forward.y = 0.0
@@ -457,6 +476,17 @@ func _nearby_interactable() -> Node:
 	return best
 
 
+## A line can be clear at full length and still be unreachable from a camera
+## on another line: the short arc between them crosses a door jamb.  Test the
+## candidate at the current boom rather than trusting its full length.
+func _line_reachable(candidate: Vector3) -> bool:
+	if candidate.length() < 0.01 or camera.position.length() < 0.01:
+		return true
+	var radius := minf(maxf(camera.position.length(), CAMERA_SWING_RADIUS), candidate.length())
+	var swing := candidate.normalized() * radius
+	return _cast_safe_distance(swing) > radius - 0.05
+
+
 ## Resolves the on-foot camera position in four steps.
 ##  1. The direct shoulder line.
 ##  2. A lateral line, for a chair or desk the player has just backed into.
@@ -476,6 +506,12 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 	var best_score := maxf(direct_safe, CAMERA_MIN_BOOM)
 	var overhead_position := Vector3.ZERO
 	var overhead_length := 0.0
+	var current_safe := _cast_safe_distance(camera.position) if camera.position.length() > 0.01 else 0.0
+	var current_blocked := camera.position.length() > 0.01 and current_safe < camera.position.length() - 0.05
+	# Only rescue a camera that has already fallen into the first-person clamp.
+	# Rooms and corners that still have a third-person line keep their previous
+	# lateral and overhead choices.
+	var recovering := current_blocked and current_safe < CAMERA_OVERHEAD_TRIGGER
 	if direct_safe < length - 0.05:
 		for offset in CAMERA_SLIDE_OFFSETS:
 			if is_zero_approx(offset):
@@ -484,6 +520,12 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 			var safe := _cast_safe_distance(candidate)
 			var position := candidate.normalized() * maxf(safe, CAMERA_MIN_BOOM)
 			if position.z < 0.15 or atan2(absf(position.x), position.z) > CAMERA_SLIDE_MAX_ANGLE:
+				continue
+			# A lateral line that is only clear further out cannot be reached
+			# from a camera already on the other side of a door jamb.  Keep the
+			# direct line rather than chasing it inward.  The overhead search
+			# stays available for corners that genuinely have no rear line.
+			if recovering and not _line_reachable(position):
 				continue
 			var score := position.length() - absf(offset) * CAMERA_SLIDE_COST
 			if score > best_score + 0.001:
@@ -497,7 +539,7 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 				var overhead := Vector3(side, lift, 0.0)
 				var overhead_safe := _cast_safe_distance(overhead)
 				var position := overhead.normalized() * maxf(overhead_safe, CAMERA_MIN_BOOM)
-				if position.length() > overhead_length:
+				if position.length() > overhead_length and (not recovering or _line_reachable(position)):
 					overhead_length = position.length()
 					overhead_position = position
 		if best_score < CAMERA_OVERHEAD_TRIGGER and overhead_length > best_score + 0.05:
@@ -505,7 +547,11 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 	var proposed := camera.position.move_toward(desired, CAMERA_RETURN_SPEED * delta)
 	if desired.length() > 0.01 and camera.position.length() > 0.01:
 		var around := camera.position.angle_to(desired)
-		if around > CAMERA_SWING_ANGLE:
+		# A blocked current point has to move even when the angle to the next
+		# line is small: the straight ease between the two is inside the jamb.
+		# This is what closes the study doorway without moving any room that
+		# still has a third-person line.
+		if around > CAMERA_SWING_ANGLE or current_blocked:
 			var swing_length := minf(maxf(camera.position.length(), CAMERA_SWING_RADIUS), desired.length())
 			var swing := desired.normalized() * swing_length
 			if _cast_safe_distance(swing) > swing_length - 0.05:
@@ -545,12 +591,60 @@ func _update_camera_tilt(delta: float) -> void:
 	camera.rotation.x = lerp_angle(camera.rotation.x, tilt, blend)
 
 
+## Hides the body and stops the camera rule from turning it back on.  The
+## grooming session calls this for the length of a visit; it restores the
+## previous visibility itself when the session ends.
+func set_model_hidden(hidden: bool) -> void:
+	model_hidden = hidden
+	if hidden and model != null:
+		model.visible = false
+
+
+## Yaw the movement input is mapped through.  Keyboard and mouse keep the old
+## behaviour (the camera is the frame); a pushed touch stick freezes the frame
+## it was pushed in, so looking around no longer re-aims the character or the
+## horse, which is what used to feel like spinning.
+func steer_yaw() -> float:
+	return _steer_frame_yaw if _stick_steering else rotation.y
+
+
+## True while the frozen touch frame owns steering.  Tests and diagnostics.
+func is_steering_with_stick() -> bool:
+	return _stick_steering
+
+
+func _track_steer_frame() -> void:
+	var pushing := TouchControls.is_stick_pushing()
+	if pushing and not _stick_steering:
+		_steer_frame_yaw = rotation.y
+	_stick_steering = pushing
+
+
+## The body turns to face where it is walking while the root keeps the view
+## yaw, so orbiting the camera no longer drags the character round with it and
+## a sideways walk is a turn rather than a strafe.  Standing still leaves the
+## body facing where it stopped.
+func _turn_body(dir: Vector3, delta: float) -> void:
+	if model == null:
+		return
+	if controls_enabled and dir.length_squared() > 0.0001:
+		var want := atan2(-dir.x, -dir.z)
+		_body_yaw = lerp_angle(_body_yaw, want, clampf(BODY_TURN_SPEED * delta, 0.0, 1.0))
+	model.rotation.y = _model_base_yaw + wrapf(_body_yaw - rotation.y, -PI, PI)
+
+
+## World yaw the visible body faces.  Prints and anything else that has to line
+## up with the body read this, not the root, which carries the view.
+func facing_yaw() -> float:
+	return _body_yaw
+
+
 ## Only a true first-person clamp hides the body.  The lateral and overhead
 ## answers above keep the camera far enough out that the body stays in frame;
 ## a look-down sits above the head even when its distance is short, so height
 ## is checked as well as the boom.
 func _update_model_visibility() -> void:
-	if model == null:
+	if model == null or model_hidden:
 		return
 	if camera.position.y > 0.30:
 		model.visible = true
@@ -673,6 +767,7 @@ func stand_up(where: Vector3, yaw: float) -> void:
 	seated = false
 	global_position = where
 	rotation.y = yaw
+	_body_yaw = yaw
 	camera_pivot.position = _camera_pivot_base
 	camera.position = _camera_base
 	_boom_length = _camera_base.length()
@@ -732,6 +827,7 @@ func dismount() -> void:
 			landing.y = horse.global_position.y
 		global_position = landing
 	model.rotation.y = _model_base_yaw
+	_body_yaw = rotation.y
 	if ride_pose != null:
 		ride_pose.deactivate()
 	$Collision.disabled = false
@@ -806,7 +902,17 @@ func _physics_process(delta: float) -> void:
 	var input := Vector2.ZERO
 	if controls_enabled:
 		input = TouchControls.get_move_input()
-	var dir := transform.basis * Vector3(input.x, 0, input.y)
+	# Camera-relative movement.  Godot's forward is -Z and Input.get_vector puts
+	# forward on the negative Y axis, so the raw (x, 0, y) already points where
+	# the player wants to go; only the frame comes from the steering yaw.  A yaw
+	# basis also keeps the camera's pitch out of the walk, so nothing needs
+	# flattening.  Never multiply a forward vector by input.y here: that negates
+	# the convention the input already carries and swaps W and S.
+	var dir := Basis(Vector3.UP, steer_yaw()) * Vector3(input.x, 0.0, input.y)
+	dir.y = 0.0
+	if dir.length_squared() > 0.0001:
+		dir = dir.normalized()
+	_turn_body(dir, delta)
 	var running := controls_enabled and Input.is_action_pressed("run")
 	# A light touch on the stick walks slower; keys and full pushes are unchanged.
 	var speed := (run_speed if running else walk_speed) * clampf(input.length(), 0.0, 1.0)

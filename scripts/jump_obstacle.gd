@@ -10,7 +10,16 @@ enum JumpType {
 	CROSSRAIL,
 	CAVALETTI,
 	OXER,
+	TRIPLE_BAR,
+	WALL,
+	LIVERPOOL,
+	BRUSH,
 }
+
+const TYPE_NAMES := [
+	"Vertical", "Cross rail", "Cavaletti", "Oxer",
+	"Triple bar", "Wall", "Liverpool", "Brush",
+]
 
 const HEIGHT_LEVELS := [0.60, 0.85, 1.05, 1.25]
 const HEIGHT_NAMES := ["Intro (0.60m)", "Novice (0.85m)", "Intermediate (1.05m)", "Grand Prix (1.25m)"]
@@ -83,6 +92,7 @@ func _ready() -> void:
 	_top_rest_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, get_current_height(), 0.0))
 	_apply_height()
 	reset_jump()
+	_build_type_scenery()
 
 	if knock_detector != null:
 		knock_detector.body_entered.connect(_on_knock_body_entered)
@@ -104,6 +114,10 @@ func get_current_height() -> float:
 
 func get_height_name() -> String:
 	return HEIGHT_NAMES[clampi(height_tier, 0, HEIGHT_NAMES.size() - 1)]
+
+
+func get_type_name() -> String:
+	return TYPE_NAMES[clampi(jump_type, 0, TYPE_NAMES.size() - 1)]
 
 
 func set_height_tier(tier: int) -> void:
@@ -136,7 +150,103 @@ func _apply_height() -> void:
 		prompt_label.position.y = h + 0.85
 		_update_prompt_text()
 
+	if is_node_ready() and is_inside_tree():
+		_build_type_scenery()
 	height_changed.emit(height_tier, h)
+
+
+# ---------------------------------------------------------------------------
+# per-type scenery
+# ---------------------------------------------------------------------------
+
+var _type_materials := {}
+
+
+func _type_material(key: String, colour: Color, roughness := 0.85) -> StandardMaterial3D:
+	if _type_materials.has(key):
+		return _type_materials[key]
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = colour
+	mat.roughness = roughness
+	_type_materials[key] = mat
+	return mat
+
+
+func _add_scenery_box(centre: Vector3, size: Vector3, material: StandardMaterial3D) -> MeshInstance3D:
+	var box := BoxMesh.new()
+	box.size = size
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = box
+	mesh.material_override = material
+	mesh.position = centre
+	return mesh
+
+
+## A striped show-jump rail made from alternating painted blocks.
+func _add_rail(parent: Node3D, height: float, depth: float, length := 3.0, segments := 6) -> void:
+	var white := _type_material("rail_white", Color(0.88, 0.86, 0.78))
+	var red := _type_material("rail_red", Color(0.55, 0.10, 0.08))
+	var piece := length / float(segments)
+	for i in range(segments):
+		var x := -length * 0.5 + piece * (i + 0.5)
+		var mat := red if i % 2 == 0 else white
+		parent.add_child(_add_scenery_box(Vector3(x, height, depth), Vector3(piece, 0.10, 0.10), mat))
+
+
+func _build_type_scenery() -> void:
+	var existing := get_node_or_null("TypeScenery")
+	if existing != null:
+		existing.free()
+	if jump_type == JumpType.VERTICAL or jump_type == JumpType.CROSSRAIL \
+			or jump_type == JumpType.CAVALETTI:
+		return
+	var root := Node3D.new()
+	root.name = "TypeScenery"
+	add_child(root)
+	var h := get_current_height()
+	match jump_type:
+		JumpType.OXER:
+			_add_rail(root, h - 0.26, -0.42)
+			_apply_clear_depth(2.1, -0.34)
+		JumpType.TRIPLE_BAR:
+			_add_rail(root, h - 0.34, -0.62)
+			_add_rail(root, h - 0.17, -0.31, 3.0, 6)
+			_apply_clear_depth(2.3, -0.46)
+		JumpType.WALL:
+			var plaster := _type_material("wall_plaster", Color(0.72, 0.66, 0.55))
+			var band := _type_material("wall_band", Color(0.33, 0.12, 0.09))
+			root.add_child(_add_scenery_box(Vector3(0, h * 0.5 - 0.05, -0.32),
+				Vector3(2.96, maxf(h - 0.08, 0.3), 0.26), plaster))
+			root.add_child(_add_scenery_box(Vector3(0, h * 0.78, -0.32),
+				Vector3(2.98, 0.16, 0.28), band))
+			_apply_clear_depth(1.4, -0.20)
+		JumpType.LIVERPOOL:
+			var water := _type_material("water", Color(0.12, 0.31, 0.40), 0.12)
+			var tray := _type_material("tray", Color(0.30, 0.31, 0.29))
+			root.add_child(_add_scenery_box(Vector3(0, 0.035, -0.55),
+				Vector3(3.5, 0.07, 1.35), tray))
+			root.add_child(_add_scenery_box(Vector3(0, 0.075, -0.55),
+				Vector3(3.3, 0.02, 1.12), water))
+			_apply_clear_depth(2.5, -0.48)
+		JumpType.BRUSH:
+			var hedge := _type_material("brush", Color(0.18, 0.28, 0.13))
+			root.add_child(_add_scenery_box(Vector3(0, 0.36, -0.34),
+				Vector3(2.94, 0.72, 0.40), hedge))
+			_apply_clear_depth(1.6, -0.26)
+
+
+func _apply_clear_depth(depth: float, offset_z: float) -> void:
+	if clear_detector == null:
+		return
+	var shape_node := clear_detector.get_node_or_null("ClearShape") as CollisionShape3D
+	if shape_node == null or shape_node.shape == null:
+		return
+	var box := shape_node.shape.duplicate() as BoxShape3D
+	if box == null:
+		return
+	box.size = Vector3(maxf(box.size.x, 3.2), box.size.y, depth)
+	shape_node.shape = box
+	clear_detector.position.z = offset_z
 
 
 func _update_number_label() -> void:

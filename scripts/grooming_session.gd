@@ -19,6 +19,14 @@ const TOOL_COLORS := {
 const HOOF_BONES := ["front_leg_foot_l", "front_leg_foot_r", "back_leg_toe_l", "back_leg_toe_r"]
 const COMPLETE_CLEAN := 0.90
 const COMPLETE_POLISH := 0.55
+## Touch aims the brush above the thumb, in viewport pixels.  The finger becomes
+## a handle: the cleaning point and the red/green disk both sit at the lifted
+## point, so the disk is visible and never lies about what is being cleaned.
+const TOUCH_BRUSH_OFFSET := Vector2(0.0, -64.0)
+## Two-finger orbit rates for touch.  A thumb covers far less ground than a
+## mouse sweep, so these are faster than the mouse's 0.006 / 0.004 rad per pixel.
+const TOUCH_ORBIT_YAW := 0.008
+const TOUCH_ORBIT_PITCH := 0.005
 
 var active := false
 var finished := false
@@ -285,6 +293,9 @@ func enter(horse_anchor: Transform3D, groomer_anchor: Transform3D) -> bool:
 	_player.look_at(Vector3(horse_anchor.origin.x, _player.global_position.y, horse_anchor.origin.z), Vector3.UP)
 	if player_model != null:
 		player_model.visible = false
+	# The player keeps running while the session is up, and its camera rule would
+	# otherwise turn the body back on a frame later.
+	_player.call("set_model_hidden", true)
 	if player_camera != null:
 		player_camera.current = false
 	if _normal_hud != null:
@@ -363,6 +374,8 @@ func exit_session() -> void:
 		player_model = _player.get("model") as Node3D
 	if player_camera != null:
 		player_camera.current = _saved_camera_current
+	if _player != null:
+		_player.call("set_model_hidden", false)
 	if player_model != null:
 		player_model.visible = _saved_model_visible
 	if _player != null:
@@ -384,6 +397,13 @@ func exit_session() -> void:
 	set_process(false)
 	set_process_unhandled_input(false)
 	_fade_to(0.0, 0.28)
+	# Trust, happiness and cleanliness change without a signal of their own, so
+	# leaving the bay is an explicit save point.  The state owner is refreshed
+	# first: the last strokes, the painted mask and the pick only exist in the
+	# horse node until they are recorded.
+	if _horse != null:
+		HorseState.record_from(_horse)
+	SaveGame.save_now("groom")
 	_exit_in_progress = false
 
 
@@ -412,12 +432,14 @@ func _process(delta: float) -> void:
 func _update_touch_gestures() -> void:
 	if TouchControls.consume_paint_started():
 		_has_last_paint = false
-	if not _finished and TouchControls.is_painting() and not _hud.is_pointer_over_ui():
+	# No hover gate here: the touch layer already sends real UI touches to the
+	# GUI, and _paint_at_screen only consults the mouse hover on the mouse path.
+	if not _finished and TouchControls.is_painting():
 		_paint_at_screen(TouchControls.paint_position())
 	var orbit := TouchControls.consume_orbit()
 	if orbit != Vector2.ZERO:
-		_yaw -= orbit.x * 0.006
-		_pitch = clampf(_pitch + orbit.y * 0.004, -0.05, 0.75)
+		_yaw -= orbit.x * TOUCH_ORBIT_YAW
+		_pitch = clampf(_pitch + orbit.y * TOUCH_ORBIT_PITCH, -0.05, 0.75)
 	var pinch := TouchControls.consume_pinch()
 	if not is_equal_approx(pinch, 1.0):
 		_distance = clampf(_distance * pinch, 2.6, 6.0)
@@ -631,12 +653,27 @@ func _update_ring(hit: Dictionary) -> void:
 	_ring.visible = true
 
 
+## Screen point the brush works at.  On touch it sits above the thumb so the
+## disk is not hidden under the finger; the hoof pick keeps the finger position
+## because the mud clumps are small targets and a tap should land on them.
+func _brush_screen_pos(screen_pos: Vector2) -> Vector2:
+	if not Device.is_touch() or _tool_id() == "hoof":
+		return screen_pos
+	var rect := get_viewport().get_visible_rect()
+	return Vector2(
+		clampf(screen_pos.x, rect.position.x + 6.0, rect.end.x - 6.0),
+		clampf(screen_pos.y + TOUCH_BRUSH_OFFSET.y, rect.position.y + 6.0, rect.end.y - 6.0)
+	)
+
+
 func _paint_at_screen(screen_pos: Vector2) -> bool:
 	if not active or _finished:
 		return false
-	if _hud != null and _hud.is_pointer_over_ui():
+	# The hover gate is a mouse idea: the touch layer already sends real UI
+	# touches to the GUI, while the emulated pointer's hovered control is often
+	# the tool button that was just tapped, which would block a valid stroke.
+	if not Device.is_touch() and _hud != null and _hud.is_pointer_over_ui():
 		return false
-	var hit := _pick(screen_pos)
 	if _tool_id() == "hoof":
 		# The clump sits in front of the hoof and can project just past the
 		# little hoof mesh, so give the visible clump its own screen-space hit
@@ -645,12 +682,19 @@ func _paint_at_screen(screen_pos: Vector2) -> bool:
 		if clump_index >= 0:
 			mark_hoof(clump_index)
 			return false
-		if hit.is_empty():
+		var hoof_hit := _pick(screen_pos)
+		if hoof_hit.is_empty():
 			_ring.visible = false
 			return false
-		_update_ring(hit)
-		_try_hoof_pick(hit)
+		_update_ring(hoof_hit)
+		_try_hoof_pick(hoof_hit)
 		return false
+	var aim := _brush_screen_pos(screen_pos)
+	var hit := _pick(aim)
+	if hit.is_empty() and aim != screen_pos:
+		# The lifted point ran off the horse (top of the screen); paint where
+		# the finger is rather than dropping the stroke.
+		hit = _pick(screen_pos)
 	if hit.is_empty():
 		_ring.visible = false
 		return false
@@ -767,7 +811,7 @@ func _show_hint(reason: String, zone: int) -> void:
 					"dandy":
 						text = "The dandy brush is for the body and legs; the head needs the face brush."
 					"soft":
-						text = "The soft brush polishes the body and legs; the head needs the face brush."
+						text = "The soft brush polishes the body, legs and clean head."
 					"face":
 						text = "The face brush only touches the head."
 					"hoof":

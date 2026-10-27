@@ -1,4 +1,5 @@
 extends Node3D
+class_name SchoolingCourse
 
 ## Schooling round: the first complete gameplay loop.
 ##
@@ -54,18 +55,46 @@ var _reset_left := 0.0
 
 func _ready() -> void:
 	add_to_group("riding_course")
-	horse = get_tree().get_first_node_in_group("horse") as Node3D
-	player = get_tree().get_first_node_in_group("player") as Node3D
+	_resolve_actors()
 	_build_jumps()
 	_bind_practice_jump()
 	_reset_jump_visuals()
-	if horse == null:
-		push_warning("RidingCourse: no horse in the scene")
+	# A course placed above the horse in the scene tree readies first, before the
+	# horse has joined its group.  Look again once the whole scene is ready.
+	if horse == null or player == null:
+		_resolve_actors.call_deferred()
 	_reset_left = 0.0
+
+
+func _resolve_actors() -> void:
+	if horse == null:
+		horse = get_tree().get_first_node_in_group("horse") as Node3D
+	if player == null:
+		player = get_tree().get_first_node_in_group("player") as Node3D
 
 
 func get_jump_count() -> int:
 	return _jumps.size()
+
+
+func get_elapsed() -> float:
+	return elapsed
+
+
+func get_faults() -> int:
+	return faults
+
+
+func get_cleared() -> int:
+	return cleared_count
+
+
+func get_jump_list() -> Array[Dictionary]:
+	return _jumps
+
+
+func time_left() -> float:
+	return maxf(0.0, time_limit - elapsed)
 
 
 func _build_jumps() -> void:
