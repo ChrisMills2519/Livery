@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+		<title>Livery loading screen — preview</title>
+		<!--
+			Dev-only review page for the branded loading screen.  It is not
+			exported and not uploaded: it exists because the real shell cannot be
+			reviewed here (this machine has no WebGL2, and the real page would
+			download 122 MiB first).  Serve it over http, because the driver
+			fetches the fragment:
+
+				python3 -m http.server 8765 --directory tools/web_shell
+				# http://localhost:8765/preview.html?progress=0.42
+
+			Query parameters:
+				?progress=0.42   hold the bar at a value (0–1); anything not 0
+				                 also fades the horse in, as a real download does
+				?notice=1        show the failure notice the shell shows when the
+				                 browser cannot run the game
+			 (no parameter)     play a fixed 0–100% timeline, as a download would
+		-->
+		<style>
+/* Godot's stock shell rules, copied from the generated index.html so the
+   fragment is reviewed against the page it actually lands in.  If Godot changes
+   its shell, update this block: the exporter asserts the anchors it patches and
+   fails the build if they move, and this is where to see why. */
+html, body, #canvas { margin: 0; padding: 0; border: 0; }
+body { color: white; background-color: black; overflow: hidden; touch-action: none; }
+#canvas { display: block; }
+#canvas:focus { outline: none; }
+#status, #status-splash, #status-progress { position: absolute; left: 0; right: 0; }
+#status, #status-splash { top: 0; bottom: 0; }
+#status { background-color: #242424; display: flex; flex-direction: column; justify-content: center; align-items: center; visibility: hidden; }
+#status-splash { max-height: 100%; max-width: 100%; margin: auto; }
+#status-splash.show-image--false { display: none; }
+#status-splash.fullsize--true { height: 100%; width: 100%; object-fit: contain; }
+#status-splash.use-filter--false { image-rendering: pixelated; }
+#status-progress, #status-notice { display: none; }
+#status-progress { bottom: 10%; width: 50%; margin: 0 auto; }
+		</style>
+	</head>
+	<body>
+		<canvas id="canvas">preview</canvas>
+		<div id="status"></div>
+		<script>
+/* Everything is loaded with a cache-busting stamp.  A plain http.server sends
+   no Cache-Control, so a browser is free to reuse splash.css or splash.js from
+   its own heuristic cache and show the previous version of a file being edited
+   -- as a review page that is worse than useless. */
+function fresh(url) {
+	return url + '?v=' + Date.now();
+}
+
+(function () {
+	var status = document.getElementById('status');
+	var params = new URLSearchParams(window.location.search);
+
+	function progressElement() {
+		return document.getElementById('status-progress');
+	}
+
+	/* The shell's own onProgress body, plus the one line the exporter adds. */
+	function report(current, total) {
+		var bar = progressElement();
+		if (current > 0 && total > 0) {
+			bar.value = current;
+			bar.max = total;
+		} else {
+			bar.removeAttribute('value');
+			bar.removeAttribute('max');
+		}
+		if (window.gingerSplash) {
+			window.gingerSplash.set(current, total);
+		}
+	}
+
+	function makeVisible() {
+		status.style.visibility = 'visible';
+		var bar = progressElement();
+		if (bar) {
+			bar.style.display = 'block';
+		}
+	}
+
+	var style = document.createElement('link');
+	style.rel = 'stylesheet';
+	style.href = fresh('splash.css');
+	document.head.appendChild(style);
+
+	var driver = document.createElement('script');
+	driver.src = fresh('splash.js');
+	driver.onload = function () {
+		loadFragment();
+	};
+	document.head.appendChild(driver);
+
+	function loadFragment() {
+	fetch(fresh('splash.html')).then(function (response) {
+		return response.text();
+	}).then(function (markup) {
+		status.innerHTML = markup
+			+ '\t\t\t<div id="status-notice"></div>\n'
+			+ '\t\t\t<div id="build-version" style="position:absolute;left:0;right:0;'
+			+ "bottom:2.2rem;text-align:center;font-family:'Noto Sans','Droid Sans',"
+			+ 'Arial,sans-serif;font-size:1rem;letter-spacing:0.04em;color:#c9d2c2;'
+			+ 'opacity:0.95;">build 2026-10-27 00:00 UTC  preview</div>\n';
+		/* Only the file location differs: the exporter copies each of these into
+		   the export under the name the markup asks for. */
+		document.getElementById('ginger-logo').src = fresh('art/ginger-games-logo.png');
+		document.getElementById('ginger-livery').src = fresh('art/livery-splash.png');
+		makeVisible();
+
+		var notice = params.get('notice');
+		if (notice) {
+			var panel = document.getElementById('status-notice');
+			panel.textContent = 'Error\nThe following features required to run Godot projects on the Web are missing:\nWebGL2';
+			panel.style.display = 'block';
+			var bar = progressElement();
+			if (bar) {
+				bar.style.display = 'none';
+			}
+			return;
+		}
+
+		var frozen = params.get('progress');
+		if (frozen !== null) {
+			var value = Math.max(0, Math.min(1, parseFloat(frozen) || 0));
+			/* Always determinate: a progress element with no value animates in
+			   WebKit, and two screenshots of the same state would differ. */
+			report(Math.max(1, Math.round(value * 1000)), 1000);
+			return;
+		}
+
+		/* A fixed timeline, not a random one, so two runs of this page look the
+		   same and a screenshot can be compared with the last one.  122 MiB in
+		   nine uneven steps, the way a real download arrives. */
+		var steps = [0.03, 0.11, 0.24, 0.36, 0.52, 0.68, 0.81, 0.93, 1.0];
+		var index = 0;
+		var total = 122 * 1024 * 1024;
+		report(1, total);
+		setInterval(function () {
+			if (index >= steps.length) {
+				return;
+			}
+			report(Math.round(steps[index] * total), total);
+			index += 1;
+		}, 700);
+	});
+	}
+}());
+		</script>
+	</body>
+</html>

@@ -1,0 +1,253 @@
+/* Ginger Games loading screen.
+ *
+ * Inlined into Godot's web shell by tools/export_web_mobile.py, after the stock
+ * rules, so these win at equal specificity.  tools/web_shell/preview.html links
+ * this same file.  Nothing here may depend on a webfont or on network access:
+ * this screen exists precisely while the network is busy.
+ */
+
+:root {
+	--ginger-orange: #e89246;
+	--ginger-orange-light: #f6b478;
+	--ginger-cream: #f6efe2;
+	--ginger-cream-deep: #e9ddc6;
+	--ginger-ink: #4a3b31;
+	--ginger-track: rgba(74, 59, 49, 0.16);
+}
+
+body {
+	/* The stock shell paints black.  The splash is cream, so a slow first paint
+	   should not flash a dark rectangle before the overlay appears. */
+	background-color: var(--ginger-cream);
+}
+
+#ginger-splash {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: clamp(1.4rem, 5vh, 3rem);
+	/* The stamp owns the bottom of the screen. */
+	padding: clamp(1.4rem, 5vh, 2.6rem) 1.4rem 4.4rem;
+	background: linear-gradient(180deg, var(--ginger-cream) 0%, var(--ginger-cream-deep) 100%);
+	color: var(--ginger-ink);
+	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
+	text-align: center;
+}
+
+#ginger-logo {
+	width: clamp(10rem, 44vw, 19rem);
+	height: auto;
+	flex: 0 0 auto;
+}
+
+#ginger-stage {
+	position: relative;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	flex: 1 1 auto;
+	min-height: 0;
+	width: 100%;
+	max-width: 32rem;
+}
+
+/* The horse arrives only once the download is under way, so the screen reads as
+   something arriving rather than something already there. */
+#ginger-livery {
+	/* Width is what binds on a phone and on a tablet; the viewport-relative
+	   ceiling is what keeps a short, wide window -- a landscape browser, a
+	   keyboard taking half the screen -- from pushing the bar off the bottom. */
+	max-width: 100%;
+	max-height: min(100%, 46vh);
+	width: auto;
+	height: auto;
+	object-fit: contain;
+	opacity: 0;
+	transform: translateY(12px) scale(0.985);
+	transition: opacity 1.1s ease, transform 1.1s ease;
+}
+
+#ginger-livery.is-in {
+	opacity: 1;
+	transform: none;
+}
+
+#ginger-load {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.9rem;
+	width: clamp(12rem, 60vw, 25rem);
+	flex: 0 0 auto;
+}
+
+#ginger-bar {
+	position: relative;
+	width: 100%;
+	/* Written by splash.js from the engine's own byte counts. */
+	--ginger-progress: 0%;
+}
+
+/* Godot's shell parks the progress element at the bottom of the screen; inside
+   the branded bar it is a normal block again. */
+#ginger-bar #status-progress {
+	position: static;
+	left: auto;
+	right: auto;
+	bottom: auto;
+	display: block;
+	width: 100%;
+	height: 0.85rem;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: var(--ginger-track);
+	-webkit-appearance: none;
+	appearance: none;
+	overflow: hidden;
+}
+
+#ginger-bar progress::-webkit-progress-bar {
+	background: var(--ginger-track);
+	border-radius: 999px;
+}
+
+#ginger-bar progress::-webkit-progress-value {
+	background: linear-gradient(90deg, var(--ginger-orange-light), var(--ginger-orange));
+	border-radius: 999px;
+	transition: width 0.2s linear;
+}
+
+#ginger-bar progress::-moz-progress-bar {
+	background: var(--ginger-orange);
+	border-radius: 999px;
+}
+
+#ginger-puller {
+	position: absolute;
+	bottom: 0;
+	left: var(--ginger-progress);
+	/* The viewBox's aspect ratio, scaled up: the rope tip stays on the bar's
+	   centre line, which is what makes the fill look dragged rather than
+	   animated. */
+	width: 56px;
+	height: 96px;
+	overflow: visible;
+	pointer-events: none;
+	transition: left 0.2s linear;
+}
+
+#ginger-puller path,
+#ginger-puller circle {
+	fill: none;
+	stroke: var(--ginger-orange);
+	stroke-width: 4;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+#ginger-puller .ginger-head {
+	fill: var(--ginger-cream);
+	stroke-width: 4.2;
+}
+
+#ginger-puller .ginger-rope {
+	stroke-width: 2.6;
+	stroke-dasharray: 1 0;
+}
+
+#ginger-puller .ginger-foot {
+	stroke-width: 3.4;
+}
+
+.ginger-leg-back,
+.ginger-leg-front,
+#ginger-body {
+	transform-box: fill-box;
+	transform-origin: 50% 0%;
+}
+
+.ginger-leg-back {
+	animation: ginger-step-back 0.62s ease-in-out infinite alternate;
+}
+
+.ginger-leg-front {
+	animation: ginger-step-front 0.62s ease-in-out infinite alternate;
+}
+
+#ginger-body {
+	transform-origin: 50% 100%;
+	animation: ginger-lean 0.62s ease-in-out infinite alternate;
+}
+
+@keyframes ginger-step-back {
+	from { transform: rotate(-14deg); }
+	to { transform: rotate(12deg); }
+}
+
+@keyframes ginger-step-front {
+	from { transform: rotate(13deg); }
+	to { transform: rotate(-13deg); }
+}
+
+@keyframes ginger-lean {
+	from { transform: rotate(-1.6deg); }
+	to { transform: rotate(1.6deg); }
+}
+
+/* The pull is over: he stands up straight and stops walking. */
+body.ginger-loaded .ginger-leg-front,
+body.ginger-loaded .ginger-leg-back,
+body.ginger-loaded #ginger-body {
+	animation-play-state: paused;
+}
+
+#ginger-percent {
+	font-size: 0.86rem;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: rgba(74, 59, 49, 0.72);
+}
+
+/* The build stamp is injected by the exporter with a pale inline colour chosen
+   for the old dark shell; on cream it has to be readable, and it is the line
+   that answers "am I playing the build I just published?". */
+#build-version {
+	color: rgba(74, 59, 49, 0.55) !important;
+	bottom: 1.6rem !important;
+	letter-spacing: 0.06em !important;
+}
+
+/* An error notice lands on the cream panel instead of the old dark one. */
+#status-notice {
+	background-color: #fbe6d3;
+	border: 1px solid var(--ginger-orange);
+	color: #6b4a2c;
+	margin: 0 1.4rem;
+	max-width: 34rem;
+	font-size: 0.95rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ginger-leg-front,
+	.ginger-leg-back,
+	#ginger-body {
+		animation: none;
+	}
+	#ginger-livery {
+		transition: opacity 0.3s linear;
+	}
+}
+
+@media (min-height: 900px) {
+	#ginger-logo {
+		width: clamp(12rem, 38vw, 22rem);
+	}
+	#ginger-load {
+		width: clamp(14rem, 48vw, 28rem);
+	}
+}

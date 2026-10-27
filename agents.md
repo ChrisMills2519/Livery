@@ -276,11 +276,47 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
 - Cloudflare has no hard R2 spend cap; the kill switch is deleting the bucket.
 - `?touch=1` / `?touch=0` force the input mode in the browser.
 
+## The loading screen
+
+The branded loading screen, its art and its driver live in `tools/web_shell/`,
+and `tools/export_web_mobile.py` injects them into Godot's generated
+`index.html` on every export. `build/web-mobile/index.html` is generated: never
+edit it, and never add a file to the export by hand.
+
+- **The screen is `tools/web_shell/`**: `splash.html`, `splash.css`, `splash.js`
+  and `art/`, with a `.gdignore` so Godot never imports it and the pck never
+  carries it. Review it through `tools/web_shell/preview.html` on a local
+  `python3 -m http.server`; the preview loads every file with a cache-busting
+  stamp, because a plain server sends no `Cache-Control` and a heuristically
+  cached file shows the previous version of what is being edited.
+- **`patch_index_branding()` asserts the anchors it patches and fails the
+  export.** The branded markup keeps `<div id="status-notice"></div>` because
+  that is the marker `patch_index_version()` keys on, and the progress element
+  keeps its stock id because the engine drives it. If Godot changes its shell
+  template, update the `SHELL_*` anchors in `tools/export_web_mobile.py` and the
+  verbatim stock CSS copied into `preview.html`.
+- **The art is copied to the export as `branding-*.png` and must be listed in
+  `tools/deploy_r2.py`'s `OBJECTS`**, or the loading screen 404s on a phone;
+  `tools/check_web_shell.py` fails when the two disagree, and it is in the check
+  manifest.
+- The horse image is generated, not drawn: `tools/render_splash.gd` renders it
+  (transparent background, camera from the horse's basis, idle clip pinned to
+  1.4 s, `SPLASH_POSE`/`SPLASH_OUT` to sweep a pose) and
+  `tools/prepare_splash_art.py` trims and de-halos it. Re-run both when the
+  horse, the tack or the lighting changes.
+- **The driver only ever reads what the engine reports.** The single injected
+  line inside `onProgress` is the whole coupling; do not add a timer that moves
+  the bar on its own, and do not drive the progress element by hand.
+
 ## Checks
 
 - `tools/check_all.sh` is the single manifest: `--fast` (skips the motion
   walkthrough), `--only name[,name]`, `--list`. Every `tools/check_*.gd` belongs
   in it; add new checks there and in this file's neighbours, not in prose lists.
+- An entry ending in `.py` runs under `python3` instead of Godot, for a check
+  that reads the build rather than the game: `check_web_shell.py` is the one
+  that does, and it skips itself (exit 0) when `build/web-mobile` does not
+  exist, which is where CI runs it.
 - CI (`.github/workflows/checks.yml`) runs `--fast` on every push and the
   walkthrough on pull requests and nightly. Keep that set green; do not commit a
   workflow that is red on arrival.
@@ -319,6 +355,11 @@ tools/release.sh --dry-run                   # sizes only, uploads nothing
 tools/release.sh --skip-export               # publish build/web-mobile as it stands
 python3 tools/deploy_r2.py --check           # assert the live host
 grep -rE '^compress/mode=2' Models/          # should print nothing
+python3 tools/check_web_shell.py             # the exported loading screen, and what will publish
+xvfb-run -a godot --path . --rendering-driver opengl3 \
+  --resolution 2400x1600 --script res://tools/render_splash.gd   # re-render the splash horse
+python3 tools/prepare_splash_art.py          # trim the splash art, after a re-render
+python3 -m http.server 8765 --directory tools/web_shell   # review the loading screen
 ```
 
 Screenshots for review: `tools/screenshot_farmhouse.gd` (eight views, `plan_*`

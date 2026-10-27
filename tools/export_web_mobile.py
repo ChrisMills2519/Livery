@@ -27,6 +27,12 @@ What it does in the staging copy only
 * Excludes build/, _respdump/, artifacts/ and dev-only tools/ from the export.
 * Adds a small HTML head snippet that caps devicePixelRatio at 2 (helps iPhone;
   an iPad is already 2).
+* Brands the generated loading screen from `tools/web_shell/`: the Ginger Games
+  mark, the livery horse fading in and a stick man pulling the progress bar,
+  driven by the engine's own byte counts.  The art is copied to the export as
+  `branding-*.png` and must also be listed in `tools/deploy_r2.py`; the anchors
+  it patches are asserted, so a change to Godot's template stops the export
+  instead of shipping the default page.  See `tools/check_web_shell.py`.
 
 Usage
 -----
@@ -433,6 +439,97 @@ def patch_index_version(out_dir: Path, version: str) -> None:
     log(f"[stamp] loading screen shows {version}")
 
 
+# The loading screen's own source: markup, styles, driver and art.  Kept out of
+# the project tree's import path by a .gdignore, because none of it is game
+# content -- it is read here and copied into the export.
+SHELL_DIR = ROOT / "tools" / "web_shell"
+
+# (source under SHELL_DIR, name on the host) for everything the shell fetches.
+# deploy_r2.py must list the same host names or the screen ships without a
+# logo, which is what tools/check_web_shell.py exists to catch.
+BRANDING_ART = [
+    ("art/ginger-games-logo.png", "branding-ginger-games.png"),
+    ("art/livery-splash.png", "branding-livery.png"),
+]
+
+# The stock shell markup the branded screen replaces.  The splash image and the
+# progress element are one block on purpose: the branded screen keeps Godot's
+# own <progress> element, with its id, so the engine still drives the bar and
+# only the look of it is ours.
+SHELL_SPLASH_ANCHOR = (
+    '\t\t\t<img id="status-splash" class="show-image--true fullsize--true use-filter--true"'
+    ' src="index.png" alt="">\n'
+    '\t\t\t<progress id="status-progress"></progress>\n'
+)
+SHELL_STYLE_ANCHOR = "\t\t</style>"
+SHELL_SCRIPT_ANCHOR = '\t\t<script src="index.js"></script>\n'
+SHELL_PROGRESS_ANCHOR = "\t\t\t\t\tstatusProgress.max = total;\n"
+
+
+def patch_index_branding(out_dir: Path) -> int:
+    """Put the Ginger Games loading screen into Godot's generated shell.
+
+    The shell is the only thing on screen while 51 MiB of pck and wasm arrives,
+    and it is generated fresh by every export, so the branded screen cannot be
+    a file kept in the output: it is injected here, from tools/web_shell/.
+
+    Every anchor is asserted and a miss stops the export.  Godot owns this
+    template and will change it eventually; the failure mode to avoid is not a
+    broken export but a silent one -- a build that publishes Godot's default
+    page and looks, from the outside, exactly like a build that works.
+    """
+    index = out_dir / "index.html"
+    if not index.exists():
+        log("[branding] no index.html in the export; nothing to brand")
+        return 1
+
+    pieces: dict[str, str] = {}
+    for name in ("splash.html", "splash.css", "splash.js"):
+        source = SHELL_DIR / name
+        if not source.exists():
+            log(f"[branding] missing {source.relative_to(ROOT)}")
+            return 1
+        pieces[name] = source.read_text(encoding="utf-8").rstrip("\n")
+
+    for source_name, host_name in BRANDING_ART:
+        source = SHELL_DIR / source_name
+        if not source.exists():
+            log(f"[branding] missing {source.relative_to(ROOT)}; run tools/prepare_splash_art.py")
+            return 1
+        shutil.copy2(source, out_dir / host_name)
+
+    text = index.read_text(encoding="utf-8")
+    for anchor, what in (
+        (SHELL_SPLASH_ANCHOR, "the stock splash image and progress bar"),
+        (SHELL_STYLE_ANCHOR, "the end of the shell's style block"),
+        (SHELL_SCRIPT_ANCHOR, "the engine script tag"),
+        (SHELL_PROGRESS_ANCHOR, "the shell's progress callback"),
+    ):
+        if anchor not in text:
+            log(f"[branding] cannot find {what} in index.html; Godot's template changed")
+            return 1
+
+    text = text.replace(SHELL_SPLASH_ANCHOR, pieces["splash.html"] + "\n", 1)
+    text = text.replace(SHELL_STYLE_ANCHOR, "\n" + pieces["splash.css"] + "\n" + SHELL_STYLE_ANCHOR, 1)
+    # After the engine script and before the shell's own boot script, so the
+    # screen is defined before the first progress callback can fire.
+    text = text.replace(
+        SHELL_SCRIPT_ANCHOR,
+        SHELL_SCRIPT_ANCHOR + "\t\t<script>\n" + pieces["splash.js"] + "\n\t\t</script>\n",
+        1,
+    )
+    # One line inside the engine's own progress callback: the branded screen
+    # follows the real byte counts rather than a timer.
+    text = text.replace(
+        SHELL_PROGRESS_ANCHOR,
+        SHELL_PROGRESS_ANCHOR + "\t\t\t\t\twindow.gingerSplash && gingerSplash.set(current, total);\n",
+        1,
+    )
+    index.write_text(text, encoding="utf-8")
+    log(f"[branding] loading screen branded ({', '.join(name for _, name in BRANDING_ART)})")
+    return 0
+
+
 def texture_policy(rel: str) -> tuple[int, int] | None:
     """Return (compress_mode, size_limit) or None to leave the import alone."""
     rel = rel.replace(os.sep, "/")
@@ -797,7 +894,7 @@ def write_report(
         "  devicePixelRatio capped at 2 in the web shell",
         "  outgoing selection scene freed before the world load",
         "  build/, _respdump/, artifacts/ excluded",
-        "  loading screen and pack stamped with the build version",
+        "  loading screen branded from tools/web_shell/ and pack stamped with the build version",
         "",
         "Pruned entries:",
     ]
@@ -911,6 +1008,9 @@ def main() -> int:
                 shutil.copytree(item, target)
             else:
                 shutil.copy2(item, target)
+        if patch_index_branding(out) != 0:
+            log("[branding] aborting: the loading screen would have shipped unbranded")
+            return 1
         patch_index_version(out, version)
 
         (report_dir(out) / "build-stats.json").write_text(

@@ -986,4 +986,56 @@ The care loop itself is compact on purpose (it is a phone game and `check_care`/
 - The chore has no time limit and no failure; it is a job to do, like the other two.
 - Seen in renders only - no device or touch pass on the scoop gesture yet.
 
+## A Ginger Games loading screen
+
+2026-10-27
+
+### What a player saw before
+
+- Until now the wait for the game was Godot's stock shell: a flat `#242424` page, the project icon as a splash image, a thin native progress bar and the build stamp. On a phone that is 51 MiB of download with nothing on screen saying whose game it is or that anything is happening.
+- It is also the one surface the game cannot draw for itself: the pck it would draw from is the thing being downloaded, so anything richer than HTML, CSS and two PNGs has to wait for the bytes it is meant to cover.
+- `GingerGamesLogo.png` had been sitting untracked in the repo since 12 August with no `.import` and no reference anywhere: the studio mark, dropped in for exactly this and never wired up.
+
+### The screen
+
+- `tools/web_shell/` holds the screen: `splash.html` (markup), `splash.css`, `splash.js` (driver) and `art/`. The folder carries a `.gdignore`, so Godot never imports it and the pck carries none of it - which also keeps the no-VRAM rule out of the picture entirely.
+- The layout is the studio mark at the top, the livery horse in full tack fading in over the middle, and a bar at the bottom with an orange stick man at its leading edge, walking and pulling. `#e89246` is read off the wordmark, so the figure is the same orange as the logo. A `LOADING 42%` line sits under the bar, because a graphic alone does not answer "how much longer".
+- **The bar is still Godot's own `<progress id="status-progress">`.** The exporter moves it inside the branded markup and the CSS restyles it, so the engine keeps driving it and the screen still works if our script never runs. The puller and the readout follow `onProgress` through one injected line: `window.gingerSplash && gingerSplash.set(current, total)`.
+- The horse is revealed as the screen appears rather than on the first byte, because the wait for that first byte is the longest moment on a slow phone and an empty cream panel is not something to look at.
+
+### Getting it into the build
+
+- `tools/export_web_mobile.py` gained `patch_index_branding()`, run on the finished export beside the existing `patch_index_version()`. The shell is generated fresh by every export, so the screen cannot be a file kept in the output: it is injected from `tools/web_shell/`.
+- **Every anchor it patches is asserted, and a miss stops the export.** Godot owns that template and will change it eventually. The failure to avoid is not a broken export but a silent one: a build that publishes the default page and looks, from the outside, exactly like a build that works.
+- The two patch steps are coupled. The branded markup replaces Godot's splash image and progress bar but keeps `<div id="status-notice"></div>`, which is the marker the stamp patch keys on; the stamp still lands, and the export prints it.
+- The art is copied into the export as `branding-ginger-games.png` and `branding-livery.png`, and both were added to the `OBJECTS` table in `tools/deploy_r2.py` as `image/png` with `no-cache`: the marks change with a release, and the icons' day of blind reuse would show a phone the previous logo. Being in that table also means `--check` probes them for free.
+- New `tools/check_web_shell.py`, in `tools/check_all.sh`'s manifest, covers the two silent failures: a shell whose branding never made it in, and an object the deployer will not upload because it is missing from the export directory (`deploy_r2.py` skips names it cannot find, so a missing PNG becomes a 404 on a phone with nothing in the deploy output saying so). It also holds the stamp against `build-stats.json`. The manifest gained a `python3` branch for `.py` entries, and the check skips itself when there is no export to read, which is where CI runs it.
+- It was proved to bite: against the export built before this work it FAILs and lists the missing markers, and against the rebuilt one it passes.
+
+### The art
+
+- `tools/render_splash.gd` renders the horse: `main.tscn` with everything hidden except the horse and the sun, a transparent viewport, and a camera built from the horse's own basis so turning the horse cannot leave it pointing at empty yard. The idle clip is sought to a fixed 1.4 s and paused, so two renders are the same picture instead of depending on how fast this machine draws frames. `SPLASH_POSE` and `SPLASH_OUT` override the pose and the path for a sweep.
+- `tools/prepare_splash_art.py` trims to the alpha bounding box, sizes the horse to 1100 px (a tablet draws it about 32 rem wide at 2x) and fills the RGB under transparent pixels from their nearest opaque neighbour. The wordmark was already alpha with black underneath, which is invisible until a browser scales it down and blends it - and then it is a dark halo.
+- The two images ship at 168 KiB and 599 KiB, about 1.5% of a 50.9 MiB cold visit, and revalidated rather than downloaded again.
+
+### Reviewing it without a 122 MiB download
+
+- `tools/web_shell/preview.html` loads the same fragment, styles and driver over a local `python3 -m http.server`, with `?progress=` to hold the bar anywhere, `?notice=1` for the failure panel, and a fixed nine-step timeline otherwise. This machine has no WebGL2, so the real shell cannot be reviewed here at all.
+- **A review page that shows the previous version of a file is worse than none.** A plain `http.server` sends no `Cache-Control`, so a browser is free to reuse `splash.css` or `splash.js` from its heuristic cache. Everything the preview loads now carries a cache-busting stamp - which is exactly how it lied the first time, showing an edited driver that appeared to do nothing.
+- The driver's first bug was in the same family. It looked up its elements once when it ran, and the preview injects the markup after the script: three cached nulls, a screen that never moved, and a bar that looked driven because CSS had already put the puller at its left end. The lookups are lazy now.
+
+### Verification
+
+- `python3 tools/check_web_shell.py`: `PASS - loading screen branded, stamp 'build 2026-10-27 17:34 UTC  2afcd6c+local', 11 objects present`.
+- The real exported page was served from `build/web-mobile` and opened, not just the preview: the access log shows `branding-ginger-games.png` and `branding-livery.png` both fetched, and Godot 4.7 then booted from `index.pck` and `index.wasm` (WebGL 2.0 through the software fallback). The shipped shell paints the screen and hands over.
+- Screenshots at 0%, 45% and 86%, phone and tablet, into `artifacts/` (git-ignored): `splash_00.png`, `splash_45.png`, `splash_tablet.png`.
+- A 1112 px-tall screenshot clipped in the review panel while the DOM said the layout fitted (the bar at y = 995 of 1112), so the tablet shot was retaken at the panel's own size. The width-driven sizing was then confirmed by measurement rather than by eye.
+
+### Limitations
+
+- The horse is a render, not the model. A browser cannot replay a GLB on the loading screen, so the image has to be re-rendered when the horse, the tack or the yard lighting changes: the same art, but a picture of it.
+- The puller's walk is a CSS animation and the timeline behind it is nine fixed steps, not a network profile. It exists to be reviewable, not to predict a phone.
+- The failure path - a browser without WebGL2, and the notice panel on cream - was styled and rendered only through the preview's `?notice=1`.
+- No device pass: the splash has not been seen on the iPad, which is the screen this whole exercise is for.
+
 <!-- end -->

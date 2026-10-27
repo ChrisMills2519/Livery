@@ -13,6 +13,7 @@ Wire cost per cold visit after this tool has run:
 
     index.pck  84.0 MiB -> 42.9 MiB   (brotli q9, Content-Encoding: br)
     index.wasm 37.7 MiB ->  7.6 MiB   (brotli q9, Content-Encoding: br)
+    branding-*.png       0.8 MiB     (the loading screen's art, revalidated)
 
 Quality 9, not 11: q11 is roughly twenty times slower on this payload for a few
 percent, the same trade the export report already documents.
@@ -85,6 +86,14 @@ OBJECTS: dict[str, tuple[str, str, bool]] = {
     "index.png": ("image/png", "public, max-age=86400", False),
     "index.icon.png": ("image/png", "public, max-age=86400", False),
     "index.apple-touch-icon.png": ("image/png", "public, max-age=86400", False),
+    # The loading screen's own art, copied into the export by
+    # tools/export_web_mobile.py from tools/web_shell/art/.  Revalidated rather
+    # than reused blind: the marks change with a release, and a day of max-age
+    # would show a phone the previous logo.  Both are small next to the
+    # binaries (about 0.8 MiB together), and they are only fetched while the
+    # screen is up.
+    "branding-ginger-games.png": ("image/png", "no-cache", False),
+    "branding-livery.png": ("image/png", "no-cache", False),
 }
 
 # Everything except the icons is revalidated.  The pck and wasm are large, so an

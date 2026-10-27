@@ -58,9 +58,14 @@ CHECKS=(
   "check_tack               240  0"
   "check_terrain_blend      180  0"
   "check_touch              180  0"
+  "check_web_shell.py       120  0"
   "check_yard_props         180  0"
   "check_walkthrough        600  1"
 )
+
+# An entry ending in .py runs under python3 rather than Godot.  check_web_shell
+# reads the built export, not the game, so it is a shell check; it skips itself
+# on a checkout with no build/web-mobile, which is where CI runs it.
 
 usage() {
   sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -126,10 +131,15 @@ is_flaky() {
 
 run_check() {
   local name="$1" secs="$2" out="$3"
+  local cmd
+  case "$name" in
+    *.py) cmd=(python3 "tools/${name}") ;;
+    *) cmd=("$GODOT_BIN" --headless --path . --script "res://tools/${name}.gd") ;;
+  esac
   if command -v timeout >/dev/null 2>&1; then
-    timeout "$secs" "$GODOT_BIN" --headless --path . --script "res://tools/${name}.gd" >"$out" 2>&1
+    timeout "$secs" "${cmd[@]}" >"$out" 2>&1
   else
-    "$GODOT_BIN" --headless --path . --script "res://tools/${name}.gd" >"$out" 2>&1
+    "${cmd[@]}" >"$out" 2>&1
   fi
 }
 
@@ -191,7 +201,10 @@ for entry in "${CHECKS[@]}"; do
     # Only the lines that explain the failure, not the whole run's log.
     grep -E 'FAIL|ERROR|SCRIPT ERROR|Parse Error' "$out" | head -12 | sed 's/^/        /'
     echo "        full output: rerun with" >>"$REPORT"
-    echo "          \$GODOT --headless --path . --script res://tools/${name}.gd" >>"$REPORT"
+    case "$name" in
+      *.py) echo "          python3 tools/${name}" >>"$REPORT" ;;
+      *) echo "          \$GODOT --headless --path . --script res://tools/${name}.gd" >>"$REPORT" ;;
+    esac
     grep -E 'FAIL|SCRIPT ERROR|Parse Error' "$out" | head -12 | sed 's/^/        /' >>"$REPORT"
   fi
   rm -f "$out"
