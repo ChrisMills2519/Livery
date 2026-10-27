@@ -811,7 +811,7 @@ func _show_hint(reason: String, zone: int) -> void:
 					"dandy":
 						text = "The dandy brush is for the body and legs; the head needs the face brush."
 					"soft":
-						text = "The soft brush polishes the body and legs; the head needs the face brush."
+						text = "The soft brush polishes the body, legs and clean head."
 					"face":
 						text = "The face brush only touches the head."
 					"hoof":

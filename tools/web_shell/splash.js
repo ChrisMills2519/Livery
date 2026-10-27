@@ -49,6 +49,7 @@
 			return;
 		}
 		shown = percent;
+		moved();
 
 		var bar = element('ginger-bar');
 		if (bar) {
@@ -62,6 +63,68 @@
 			document.body.classList.add('ginger-loaded');
 		}
 	}
+
+	/* Stall detection: when the bar has not moved for a while, the puller strains
+	   against it; when it moves again he heaves.  Only classes and text change, so
+	   a stuck download can never freeze the screen. */
+	var STALL_MS = 400;
+	var lastMove = Date.now();
+	var straining = false;
+	var heaveTimer = null;
+	var bubbleTimer = null;
+	var lines = ['hnnngh\u2026', 'come on!', 'one more pull\u2026'];
+	var lineIndex = 0;
+
+	function setBubble(text) {
+		var bubble = element('ginger-bubble');
+		if (bubble) {
+			bubble.textContent = text;
+		}
+	}
+
+	function moved() {
+		lastMove = Date.now();
+		if (!straining) {
+			return;
+		}
+		straining = false;
+		clearInterval(bubbleTimer);
+		var bar = element('ginger-bar');
+		if (bar) {
+			bar.classList.remove('ginger-strain');
+			bar.classList.add('ginger-heave');
+		}
+		setBubble('yes!');
+		clearTimeout(heaveTimer);
+		heaveTimer = setTimeout(function () {
+			var current = element('ginger-bar');
+			if (current) {
+				current.classList.remove('ginger-heave');
+			}
+			setBubble('');
+		}, 700);
+	}
+
+	function startStrain() {
+		straining = true;
+		var bar = element('ginger-bar');
+		if (bar) {
+			bar.classList.add('ginger-strain');
+		}
+		lineIndex = 0;
+		setBubble(lines[0]);
+		clearInterval(bubbleTimer);
+		bubbleTimer = setInterval(function () {
+			lineIndex = (lineIndex + 1) % lines.length;
+			setBubble(lines[lineIndex]);
+		}, 1400);
+	}
+
+	setInterval(function () {
+		if (!straining && !document.body.classList.contains('ginger-loaded') && Date.now() - lastMove > STALL_MS) {
+			startStrain();
+		}
+	}, 100);
 
 	window.gingerSplash = {
 		set: function (current, total) {

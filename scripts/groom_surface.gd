@@ -726,6 +726,14 @@ func paint_uv(uv: Vector2, zone: int, tool: String, radius_uv: float, allowed: P
 						_mask_data[base] = int(round(new_clean * 255.0))
 						_region_clean_changed(pixel, clean, new_clean)
 						did_paint = true
+					# The face brush also polishes once the head is clean, with
+					# the same falloff as the soft brush.
+					if tool == "face" and clean >= SOFT_MIN_CLEAN:
+						var face_polish := maxf(polish, falloff * (0.35 + 0.65 * clean))
+						if face_polish > polish + 0.0005:
+							_mask_data[base + 1] = int(round(face_polish * 255.0))
+							_region_polish_changed(pixel, polish, face_polish)
+							did_paint = true
 				"soft":
 					if clean < SOFT_MIN_CLEAN:
 						continue
@@ -764,7 +772,9 @@ func _tool_allows_zone(tool: String, zone: int) -> bool:
 		"dandy":
 			return zone == ZONE_COAT or zone == ZONE_LEG
 		"soft":
-			return zone == ZONE_COAT or zone == ZONE_LEG
+			# The soft brush polishes the body and legs, and the head once it is
+			# clean (the face brush cleans it).  paint_uv gates on clean coat.
+			return zone == ZONE_COAT or zone == ZONE_LEG or zone == ZONE_FACE
 		"face":
 			return zone == ZONE_FACE
 		"hoof":

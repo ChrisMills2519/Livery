@@ -16,8 +16,8 @@ const WARM := Color(0.98, 0.82, 0.48, 1.0)
 const TOOLS := [
 	{"id": "curry", "name": "Curry comb", "key": "1", "desc": "Body and legs — loosen dirt in small circles."},
 	{"id": "dandy", "name": "Dandy brush", "key": "2", "desc": "Body and legs — lift the loosened dirt."},
-	{"id": "soft", "name": "Soft brush", "key": "3", "desc": "Clean coat and legs — polish for shine."},
-	{"id": "face", "name": "Face brush", "key": "4", "desc": "Head only — gentle strokes."},
+	{"id": "soft", "name": "Soft brush", "key": "3", "desc": "Clean coat, legs and head — polish for shine."},
+	{"id": "face", "name": "Face brush", "key": "4", "desc": "Head only — clean, then polish gently."},
 	{"id": "hoof", "name": "Hoof pick", "key": "5", "desc": "Muddy hooves — pick all four."},
 ]
 
