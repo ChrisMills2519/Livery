@@ -55,6 +55,7 @@
 		if (bar) {
 			bar.style.setProperty('--ginger-progress', percent + '%');
 		}
+		placeBubble();
 		var label = element('ginger-percent');
 		if (label) {
 			label.textContent = percent >= 100 ? 'READY' : 'LOADING ' + percent + '%';
@@ -79,8 +80,32 @@
 		var bubble = element('ginger-bubble');
 		if (bubble) {
 			bubble.textContent = text;
+			placeBubble();
 		}
 	}
+
+	/* Ahead of the puller is where the bubble belongs, until he reaches the end of
+	   the track: then it would hang off the edge of the screen, which on a phone
+	   is 41 px of `one more pull...` cut off.  The side is chosen from the measured
+	   boxes rather than from a progress threshold, so a tablet, with room to
+	   spare, keeps it ahead.  Guarded throughout: a loading screen may not throw. */
+	function placeBubble() {
+		var bubble = element('ginger-bubble');
+		var bar = element('ginger-bar');
+		if (!bubble || !bar) {
+			return;
+		}
+		var width = bubble.offsetWidth;
+		if (!width) {
+			return;
+		}
+		var box = bar.getBoundingClientRect();
+		var edge = box.left + box.width * (Math.max(0, shown) / 100);
+		var roomAhead = window.innerWidth - (edge + 60);
+		var roomBehind = edge - 8;
+		bar.classList.toggle('ginger-bubble-back', roomAhead < width && roomBehind > roomAhead);
+	}
+	window.addEventListener('resize', placeBubble);
 
 	function moved() {
 		lastMove = Date.now();

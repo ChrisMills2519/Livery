@@ -234,9 +234,11 @@ body.ginger-loaded #ginger-body {
 
 #ginger-bubble {
 	position: absolute;
-	bottom: 100px;
-	left: var(--ginger-progress);
-	transform: translateX(-30%);
+	/* Level with the bar and just ahead of the puller: above the bar the
+	   livery plaque covers it, below the bar the LOADING label does. */
+	top: 50%;
+	margin-top: -0.8rem;
+	left: calc(var(--ginger-progress) + 60px);
 	background: #fffaf0;
 	border: 2px solid var(--ginger-orange);
 	border-radius: 10px;
@@ -250,6 +252,19 @@ body.ginger-loaded #ginger-body {
 
 #ginger-bubble:not(:empty) {
 	opacity: 1;
+}
+
+/* Near the end of the track there is no room ahead of the puller, so the bubble
+   moves behind him rather than hanging off the edge of a phone screen.  It also
+   lifts clear of the track: level with the bar it hid 114 px of a 234 px fill,
+   and a bar that reads half full at 93% is worse than a clipped bubble.
+   splash.js picks the side from the measured widths, not from a threshold. */
+#ginger-bar.ginger-bubble-back #ginger-bubble {
+	left: auto;
+	right: calc(100% - var(--ginger-progress) + 8px);
+	top: auto;
+	bottom: calc(100% + 4px);
+	margin-top: 0;
 }
 
 #ginger-sweat {
