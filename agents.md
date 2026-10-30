@@ -57,19 +57,30 @@ mode (`GROOM_TOUCH=1|0`, `?touch=1|0`, F3 in debug builds).
 - A stick holder that has gone quiet is claimable (`STICK_STALE_MS`, 250 ms):
   iOS Safari cancels a touch instead of ending it, so `_touch_up` never runs.
   Only the finger that owns the stick may release it.
-- **A pushed stick owns the movement frame.** `player.steer_yaw()` returns the
-  yaw captured at the push, and `horse._ride()` maps through the same frame.
-  Do not replace it with a live `transform.basis`; the right thumb starts
-  re-aiming the walk again.
-- **The root carries the view; the model carries the facing.** `rotation.y` is
-  the camera yaw and what every `tools/` aim means; `_body_yaw` eases toward
-  travel and is written as `_model_base_yaw + wrapf(_body_yaw - rotation.y, -PI, PI)`.
+- **A pushed stick owns the movement frame, on foot only.** `player.steer_yaw()`
+  returns the yaw captured at the push and the walk maps through it. Do not
+  replace it with a live `transform.basis`; the right thumb starts re-aiming the
+  walk again.
+- **The horse steers in its own frame and never reads the camera.** `horse._ride()`
+  turns by a yaw rate from the stick's left/right axis and accelerates along the
+  horse's own facing. The mounted camera is an offset on top
+  (`_look_offset_yaw`, which decays after `LOOK_RECENTRE_DELAY`), so a look drag
+  can only move the view. Routing the horse's heading through the camera again
+  brings back the spin loop the frozen frame used to paper over.
+- **The root carries the view; the model carries the facing.** On foot
+  `rotation.y` is the camera yaw and what every `tools/` aim means; `_body_yaw`
+  eases toward travel and is written as
+  `_model_base_yaw + wrapf(_body_yaw - rotation.y, -PI, PI)`. Mounted, the root
+  follows the horse's yaw instead and the look offset rides on `CameraPivot`,
+  which is why `_align_to_seat` still finds zero error.
 - **Movement is the raw input vector rotated by the steering yaw:**
   `Basis(Vector3.UP, steer_yaw()) * Vector3(input.x, 0, input.y)`. Building a
   forward vector and multiplying by `input.y` applies Godot's forward-is-`-Z`
   negation twice and swaps W and S. That inversion has been introduced once.
-- Touch look runs at `LOOK_GAIN` (0.55) of the mouse rate on purpose; movement is
-  camera-relative, so a 1:1 drag reads as spinning. Do not raise it toward 1.0.
+- Touch look runs at `LOOK_GAIN` (0.55) of the mouse rate **on foot**, where
+  movement is camera-relative and a 1:1 drag reads as spinning. Mounted it runs
+  at `LOOK_GAIN_MOUNTED` (1.0), because there a drag only moves the decaying
+  look offset. Do not raise the on-foot value toward 1.0.
 - Two-finger orbit is sampled **per frame** and only zooms once the gap changes
   by more than `PINCH_TRIGGER` (10%). Below that it is pure orbit.
 - Touch grooming cleans **above** the thumb: `TOUCH_BRUSH_OFFSET` (0, -64) lifts

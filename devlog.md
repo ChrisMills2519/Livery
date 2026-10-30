@@ -1038,4 +1038,101 @@ The care loop itself is compact on purpose (it is a phone game and `check_care`/
 - The failure path - a browser without WebGL2, and the notice panel on cream - was styled and rendered only through the preview's `?notice=1`.
 - No device pass: the splash has not been seen on the iPad, which is the screen this whole exercise is for.
 
+## The camera comes out of the reins, and the gaits hold
+
+2026-10-30
+
+### What was wrong
+
+- One value did three jobs: the player root's yaw was the camera yaw, the
+  steering frame and the mounted camera's anchor. Looking around therefore
+  turned the horse, and `steer_yaw()` needed a frozen frame to stop the
+  camera-relative feedback loop from accelerating into a spin.
+- The gait ladder was a timer: `gait_hold_time` (0.9 s) turned a held run into
+  a walk, then a trot, then a canter. No gait could be held, and pulling the
+  stick back turned the horse round and cantered it at the camera.
+
+### What changed
+
+- **Steering.** `horse._ride()` turns by a yaw rate from the stick's left/right
+  axis - `ridden_turn_rate_walk` 2.6 rad/s falling to 1.5 at the canter, 1.3 in
+  place - and accelerates along the horse's own facing. It reads no camera and
+  no `steer_yaw()`; the frozen frame stays as an on-foot rule only.
+- **Look.** `_look_offset_yaw` and `_look_pitch` are driven by drags alone and
+  decay to a rear view after `LOOK_RECENTRE_DELAY` (1.2 s) at 1.2 rad/s, pitch
+  to `MOUNTED_PITCH_NEUTRAL` (0.12 rad). There is no follow logic and no
+  feedback loop, because the steering frame never reads the camera.
+- **Camera.** The boom is the profile's walking pose plus `RIDE_BOOM_CANTER`
+  (1.2 m) and `RIDE_LIFT_CANTER` (0.55 m) at the canter, eased at 2.0/s, and the
+  lens opens 75 to 78 degrees. It resolves through `_resolve_camera_position()`
+  with a `floor` and `allow_overhead` argument: mounted it uses
+  `MOUNTED_MIN_BOOM` (0.9 m) and refuses the indoor overhead look-down, so a
+  fence behind the rider shortens the boom instead of putting the lens in it.
+  The horse is added as a cast exception on mounting, because its body is a
+  default-layer-1 box that would otherwise block its own boom.
+- **Gaits.** `gait_hold_time` and `_gait_hold` are gone. Stick magnitude past
+  the 0.15 deadzone asks for a walk, past 0.7 for a trot; a held `gallop`
+  action asks for the canter and lands back on the trot when released. Pulled
+  back past 0.75 and held 0.2 s the horse brakes at 10 m/s^2, stays stopped
+  `REIN_BACK_DELAY` (0.25 s) and then reins back at 0.9 m/s.
+- **Speeds.** Trot 1.95 to 2.925 and canter 4.98 to 5.976 m/s: exactly 1.5x and
+  1.2x of the clips' measured 1.95 and 4.98. The trot sits on the state
+  machine's 1.5x playback clamp and below its 3.0 m/s canter threshold, so no
+  FSM constant had to move and the planted-hoof velocity scales with playback.
+- **Touch.** The gallop joins JUMP under the right thumb only while mounted, and
+  LEAD and RESET move out along the top edge. The stick ring is the gait
+  readout, and it classifies through `TouchControls.gait_for()`, the same
+  function the horse uses, so it cannot promise a gait the ride will not take.
+  `STICK_RADIUS` is 120 and the stick snaps to the thumb's natural rest when a
+  landing is within `STICK_SNAP` (28 px); a landing further out keeps its own
+  point, because the iOS stale-holder rules depend on knowing where that finger
+  went down. Mounted drags run at `LOOK_GAIN_MOUNTED` (1.0).
+- **On foot.** Ground speed ramps at `ON_FOOT_ACCEL` 24 and coasts at
+  `ON_FOOT_FRICTION` 30, with `AIR_CONTROL` 6 in the air, `COYOTE_TIME` and
+  `JUMP_BUFFER` 0.12 each, and a jump cut to 0.45 of the launch speed.
+  `CAMERA_PITCH_MAX` rises 0.35 to 0.85 rad.
+
+### One measurement changed the shape of the on-foot change
+
+- Accelerating the whole velocity vector at 24 m/s^2 made
+  `check_walkthrough` fail: "study back to opening" stopped 1.06 m short, then
+  0.00 m/s with the stick held. The body's velocity lagged the heading by up to
+  0.125 s, so a sharp turn carried it into the doorway jamb instead of through
+  it.
+- Proved by contrast rather than by eye: the same route passes with the rate
+  raised to 1000 (instant). So the cause was the direction lag, not the room.
+- Ground movement now accelerates the *speed along the current heading* and
+  lets the heading turn at once, and a reversal starts from rest. Starting and
+  stopping have weight; momentum never carries the body sideways. Air movement
+  keeps the momentum-preserving vector form.
+
+### Verification
+
+- `tools/check_mount.gd`: a 120 px mounted drag moves the view 0.288 rad and
+  the horse 0.000 rad, moving and idle; walk 1.74 m/s; held gallop 5.98 m/s in
+  the canter clip; release settles at 2.92 m/s on the trot; stick back reaches
+  0.00 m/s and then reins back; a fence 3 m behind shortens the boom to 2.43 m
+  with the rider's body still visible.
+- `tools/check_touch.gd`: PASS, including the gallop's hit rect, hidden while
+  dismounted, the ring reading walk/trot/canter/halt, and the brake gesture
+  stopping the horse inside 1.5 s without turning it.
+- `tools/check_walkthrough.gd`: PASS, 57 legs 0 failed, 7378 camera samples,
+  0 clipped frames, 0 outward pops - the farmhouse profile is untouched.
+- `tools/check_all.sh`: `CHECK ALL: PASS (32/32 in 487s)`.
+
+### Limitations
+
+- No device pass. Rendered feel and thumb reach have not been seen on the iPad;
+  the dev machine has no WebGL2. The `?touch=1&touchdebug=1` readout now carries
+  the ring's gait for that session.
+- The trot has no headroom: 2.925 is exactly the 1.5x playback clamp. If it
+  wants to be faster, the clamp and the canter threshold have to move together.
+- The gallop key is `C`, not `G`: `groom` already owns G.
+- `check_player_models` no longer asserts the camera lands exactly on
+  `profile.ride_camera`; the boom now eases out and may legally come in for
+  scenery, so it asserts the pose as a ceiling and 4.0 m as the floor.
+- Runtime playback scaling is what retimes the clips, so the assets did not
+  change; re-authoring them would need `analyze_horse_clips.py` re-run against
+  the new takes.
+
 <!-- end -->
