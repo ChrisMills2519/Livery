@@ -16,4 +16,4 @@ hips_to_seat = 0.1
 stirrup_lift = 0.26
 hand_anchor_offset = Vector3(0, 0, 0)
 ride_pivot = Vector3(0, 1, 0)
-ride_camera = Vector3(0, 0, 4.2)
+ride_camera = Vector3(0, 0, 5.2)

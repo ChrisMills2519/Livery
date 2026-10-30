@@ -22,5 +22,8 @@ class_name PlayerModelProfile
 ## reach an adult saddle's standard tread height.
 @export var stirrup_lift := 0.0
 @export var hand_anchor_offset := Vector3.ZERO
+## The walking camera pose.  The rider's camera opens out from here at the
+## canter (see PlayerController.RIDE_BOOM_CANTER), so this is the walk baseline
+## for this body rather than a fixed offset.
 @export var ride_pivot := Vector3(0.0, 1.0, 0.0)
-@export var ride_camera := Vector3(0.0, 0.0, 4.2)
+@export var ride_camera := Vector3(0.0, 0.0, 5.2)

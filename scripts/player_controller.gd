@@ -75,8 +75,36 @@ const CAMERA_OVERHEAD_BLEND_SPEED := 8.0
 const CAMERA_SWING_ANGLE := 0.30
 const CAMERA_SWING_RADIUS := 0.62
 const CAMERA_PITCH_MIN := -1.0
-const CAMERA_PITCH_MAX := 0.35
-const RIDE_CAMERA := Vector3(0.0, 0.0, 4.2)
+const CAMERA_PITCH_MAX := 0.85
+const RIDE_CAMERA := Vector3(0.0, 0.0, 5.2)
+
+## Mounted look is an offset from the horse's heading rather than the root yaw.
+## The horse steers in its own frame, so a drag looks around without ever
+## re-aiming it - the camera-relative spin loop the devlog fought cannot come
+## back through this path, because nothing the horse reads goes through here.
+## After a moment without dragging the offset eases back to a rear view, which
+## is the whole of the auto-recentre: no follow logic, no feedback loop.
+const MOUNTED_PITCH_MIN := -0.85
+const MOUNTED_PITCH_MAX := 0.60
+const MOUNTED_PITCH_NEUTRAL := 0.12
+const LOOK_RECENTRE_DELAY := 1.2
+const LOOK_RECENTRE_RATE := 1.2
+const LOOK_PITCH_RETURN_RATE := 0.6
+## The boom and the pivot height are the character profile's walking pose plus
+## this much at the canter, so the frame opens up as the horse speeds up.
+const RIDE_BOOM_CANTER := 1.2
+const RIDE_LIFT_CANTER := 0.55
+const RIDE_POSE_RATE := 2.0
+## Horse speeds the canter pose is measured between.  Below the first the frame
+## is the walking one; above the second it is fully open.
+const RIDE_CANTER_START := 3.2
+const RIDE_CANTER_FULL := 5.6
+## A mounted boom never comes in below this, so the rider's body stays in frame
+## even with a fence directly behind the horse.
+const MOUNTED_MIN_BOOM := 0.9
+## A canter widens the lens a little, eased so a gait change never pops.
+const CANTER_FOV := 78.0
+const FOV_RATE := 2.0
 ## How fast the body swings round to face the direction it is walking, in
 ## radians per second.  Fast enough to read as a turn rather than a slide, slow
 ## enough that reversing does not snap the model round.
@@ -131,6 +159,15 @@ var _model_base_yaw := 0.0
 ## camera hangs off it, so the body keeps its own facing: walking sideways or
 ## backwards turns the character instead of sliding him across the ground.
 var _body_yaw := 0.0
+## Mounted look state.  The root follows the horse's yaw; these are the only
+## things the rider's thumb steers.
+var _look_offset_yaw := 0.0
+var _look_pitch := MOUNTED_PITCH_NEUTRAL
+var _look_idle := LOOK_RECENTRE_DELAY
+## Eased 0..1 weight for the canter pose, so the boom opens with the gait.
+var _ride_canter_weight := 0.0
+## The scene's own lens at the walking camera pose; the canter opens from here.
+var _fov_base := 75.0
 var _camera_pivot_base := Vector3.ZERO
 var _camera_base := Vector3.ZERO
 var _camera_max_boom := 3.0
@@ -164,6 +201,7 @@ func _ready() -> void:
 	footsteps.volume_db = -8.0
 	if camera_cast != null:
 		camera_cast.add_exception(self)
+	_fov_base = camera.fov
 	_camera_pivot_base = camera_pivot.position
 	_camera_base = camera.position
 	_apply_camera_profile()
@@ -371,24 +409,33 @@ func _process(delta: float) -> void:
 	var pivot_target := _camera_pivot_base
 	var camera_target := _camera_base
 	var jump_target := 0.0
+	var horse: Node3D = null
 	if mounted:
+		horse = get_tree().get_first_node_in_group("horse") as Node3D
 		pivot_target = RIDE_PIVOT
 		camera_target = RIDE_CAMERA
 		if character_profile != null:
 			pivot_target = character_profile.ride_pivot
 			camera_target = character_profile.ride_camera
-		var horse := get_tree().get_first_node_in_group("horse") as Node3D
+		_update_mounted_look(delta, horse)
+		var canter := _update_canter_weight(delta, horse)
+		pivot_target += Vector3(0.0, RIDE_LIFT_CANTER * canter, 0.0)
+		camera_target += Vector3(0.0, 0.0, RIDE_BOOM_CANTER * canter)
 		if horse != null and horse.has_method("is_airborne") and horse.is_airborne():
 			jump_target = 1.0
 	var blend := 1.0 - exp(-6.0 * delta)
 	camera_pivot.position = camera_pivot.position.lerp(pivot_target, blend)
 	if mounted:
-		# The riding camera is a fixed cinematic offset; it must not be pulled
-		# in by the horse or the ground, and it must not inherit the on-foot
-		# corner look-down if the player mounted from a tight space.
-		camera.position = camera.position.lerp(camera_target, blend)
+		# The same four-case solver as on foot, so a fence behind the horse pulls
+		# the boom in instead of letting the lens sit in the rails.  The mounted
+		# call passes its own floor and refuses the overhead look-down, which is
+		# an indoor answer and would frame the rider from above at a fence.
+		var resolved := _resolve_camera_position(camera_target, delta, MOUNTED_MIN_BOOM, false)
+		camera.position = resolved
+		_boom_length = resolved.length()
+		# A tilt left over from an indoor mount would otherwise stay on the lens.
 		camera.rotation.x = 0.0
-		_boom_length = camera_target.length()
+		_update_mounted_fov(delta)
 		if model != null:
 			model.visible = true
 	else:
@@ -402,6 +449,49 @@ func _process(delta: float) -> void:
 	if mounted and ride_pose != null:
 		var phase := 0.5 - 0.5 * cos(Time.get_ticks_msec() * 0.001 * TAU * RIDE_SWAY_HZ)
 		ride_pose.apply(phase, _jump_blend)
+
+
+## Points the root and the camera pivot for a rider.  The root follows the
+## horse, the pivot carries the look offset, and the offset eases back to a rear
+## view once the thumb has been still for LOOK_RECENTRE_DELAY.
+func _update_mounted_look(delta: float, horse: Node3D) -> void:
+	_look_idle += delta
+	if horse != null:
+		rotation.y = horse.global_rotation.y
+	if _look_idle >= LOOK_RECENTRE_DELAY:
+		_look_offset_yaw = move_toward(_look_offset_yaw, 0.0, LOOK_RECENTRE_RATE * delta)
+		_look_pitch = move_toward(_look_pitch, MOUNTED_PITCH_NEUTRAL, LOOK_PITCH_RETURN_RATE * delta)
+	camera_pivot.rotation.y = _look_offset_yaw
+	camera_pivot.rotation.x = _look_pitch
+
+
+## 0 at the walking frame, 1 at the canter frame, eased so the boom opens and
+## closes with the gait instead of stepping with it.
+func _update_canter_weight(delta: float, horse: Node3D) -> float:
+	var speed := 0.0
+	if horse != null:
+		speed = Vector2(horse.velocity.x, horse.velocity.z).length()
+	var target := clampf(
+		(speed - RIDE_CANTER_START) / maxf(RIDE_CANTER_FULL - RIDE_CANTER_START, 0.001), 0.0, 1.0
+	)
+	_ride_canter_weight = move_toward(_ride_canter_weight, target, RIDE_POSE_RATE * delta)
+	return _ride_canter_weight
+
+
+func _update_mounted_fov(delta: float) -> void:
+	var target := lerpf(_fov_base, CANTER_FOV, _ride_canter_weight)
+	camera.fov = lerpf(camera.fov, target, 1.0 - exp(-FOV_RATE * delta))
+
+
+## Mounting always starts from a rear view, whatever the rider was looking at
+## on foot.  The look layer's gain goes to its mounted value here.
+func _reset_mounted_look() -> void:
+	_look_offset_yaw = 0.0
+	_look_pitch = MOUNTED_PITCH_NEUTRAL
+	_look_idle = LOOK_RECENTRE_DELAY
+	camera_pivot.rotation.y = 0.0
+	camera_pivot.rotation.x = _look_pitch
+	TouchControls.set_mounted(true)
 
 
 ## Shows the prompt on whichever interactable the camera is aimed at.
@@ -497,13 +587,15 @@ func _line_reachable(candidate: Vector3) -> bool:
 ##     before easing out.  A plain ease would stay pinned at the head because
 ##     the straight path to the side crosses the very blocker being avoided.
 ## The final path is cast again, so a wall cannot be crossed between lines.
-func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
+func _resolve_camera_position(
+	target: Vector3, delta: float, floor: float = CAMERA_MIN_BOOM, allow_overhead: bool = true
+) -> Vector3:
 	var length := target.length()
 	if length < 0.01 or camera_cast == null:
 		return target
 	var direct_safe := _cast_safe_distance(target)
-	var desired := target.normalized() * maxf(direct_safe, CAMERA_MIN_BOOM)
-	var best_score := maxf(direct_safe, CAMERA_MIN_BOOM)
+	var desired := target.normalized() * maxf(direct_safe, floor)
+	var best_score := maxf(direct_safe, floor)
 	var overhead_position := Vector3.ZERO
 	var overhead_length := 0.0
 	var current_safe := _cast_safe_distance(camera.position) if camera.position.length() > 0.01 else 0.0
@@ -518,7 +610,7 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 				continue
 			var candidate := target + Vector3(offset, 0.0, 0.0)
 			var safe := _cast_safe_distance(candidate)
-			var position := candidate.normalized() * maxf(safe, CAMERA_MIN_BOOM)
+			var position := candidate.normalized() * maxf(safe, floor)
 			if position.z < 0.15 or atan2(absf(position.x), position.z) > CAMERA_SLIDE_MAX_ANGLE:
 				continue
 			# A lateral line that is only clear further out cannot be reached
@@ -538,11 +630,11 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 			for side in CAMERA_OVERHEAD_OFFSETS:
 				var overhead := Vector3(side, lift, 0.0)
 				var overhead_safe := _cast_safe_distance(overhead)
-				var position := overhead.normalized() * maxf(overhead_safe, CAMERA_MIN_BOOM)
+				var position := overhead.normalized() * maxf(overhead_safe, floor)
 				if position.length() > overhead_length and (not recovering or _line_reachable(position)):
 					overhead_length = position.length()
 					overhead_position = position
-		if best_score < CAMERA_OVERHEAD_TRIGGER and overhead_length > best_score + 0.05:
+		if allow_overhead and best_score < CAMERA_OVERHEAD_TRIGGER and overhead_length > best_score + 0.05:
 			desired = overhead_position
 	var proposed := camera.position.move_toward(desired, CAMERA_RETURN_SPEED * delta)
 	if desired.length() > 0.01 and camera.position.length() > 0.01:
@@ -557,11 +649,12 @@ func _resolve_camera_position(target: Vector3, delta: float) -> Vector3:
 			if _cast_safe_distance(swing) > swing_length - 0.05:
 				proposed = swing
 	if proposed.length() < 0.01:
-		proposed = desired.normalized() * CAMERA_MIN_BOOM if desired.length() > 0.01 else Vector3(0.0, 0.0, CAMERA_MIN_BOOM)
+		proposed = desired.normalized() * floor if desired.length() > 0.01 else Vector3(0.0, 0.0, floor)
 	var safe := _cast_safe_distance(proposed)
-	# The min boom is a floor on the result, not only a clamp when shortening;
+	# The floor is a floor on the result, not only a clamp when shortening;
 	# otherwise the ease can keep walking the camera below it frame by frame.
-	var final_length := maxf(minf(proposed.length(), safe), CAMERA_MIN_BOOM)
+	# Mounted it is MOUNTED_MIN_BOOM, which is what keeps the rider in frame.
+	var final_length := maxf(minf(proposed.length(), safe), floor)
 	return proposed.normalized() * final_length
 
 
@@ -706,6 +799,14 @@ func _capture_mouse() -> void:
 
 
 func _look(relative: Vector2) -> void:
+	if mounted:
+		# Mounted, a drag is a camera offset from the horse, never a heading.
+		_look_offset_yaw = wrapf(_look_offset_yaw - relative.x * mouse_sensitivity, -PI, PI)
+		_look_pitch = clampf(
+			_look_pitch - relative.y * mouse_sensitivity, MOUNTED_PITCH_MIN, MOUNTED_PITCH_MAX
+		)
+		_look_idle = 0.0
+		return
 	rotate_y(-relative.x * mouse_sensitivity)
 	camera_pivot.rotation.x = clamp(
 		camera_pivot.rotation.x - relative.y * mouse_sensitivity, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX
@@ -773,6 +874,7 @@ func stand_up(where: Vector3, yaw: float) -> void:
 	_boom_length = _camera_base.length()
 	camera.rotation.x = 0.0
 	camera_pivot.rotation.x = 0.0
+	camera_pivot.rotation.y = 0.0
 	if model != null:
 		model.visible = true
 	$Collision.set_deferred("disabled", false)
@@ -794,6 +896,13 @@ func try_mount() -> void:
 	$Collision.disabled = true
 	velocity = Vector3.ZERO
 	footsteps.stop()
+	# The boom is cast from the saddle, so the horse's own body would otherwise
+	# block it and pull the lens into the rider.
+	if camera_cast != null:
+		var mounted_body := horse as CollisionObject3D
+		if mounted_body != null:
+			camera_cast.add_exception(mounted_body)
+	_reset_mounted_look()
 	# Stop the locomotion mixer so it cannot overwrite the riding overlay.
 	anim_player.stop()
 	_current_anim_state = "ride"
@@ -807,8 +916,20 @@ func dismount() -> void:
 	var horse := get_tree().get_first_node_in_group("horse") as Node3D
 	mounted = false
 	_jump_blend = 0.0
+	_look_offset_yaw = 0.0
+	_look_pitch = MOUNTED_PITCH_NEUTRAL
+	_look_idle = LOOK_RECENTRE_DELAY
+	_ride_canter_weight = 0.0
+	camera_pivot.rotation.y = 0.0
+	camera_pivot.rotation.x = clampf(camera_pivot.rotation.x, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX)
+	camera.fov = _fov_base
+	TouchControls.set_mounted(false)
 	if horse:
 		horse.clear_rider()
+		if camera_cast != null:
+			var mounted_body := horse as CollisionObject3D
+			if mounted_body != null:
+				camera_cast.remove_exception(mounted_body)
 		# Step off on the horse's left side, then find the ground below that
 		# point so the player does not get left floating or inside the horse.
 		var side := -horse.global_transform.basis.x.normalized()
@@ -858,8 +979,8 @@ func _align_to_seat(horse: Node3D) -> void:
 		if horse.has_method("get_rider_seat_position"):
 			global_position = horse.get_rider_seat_position()
 		return
-	# The visible rider faces the horse, while the player root keeps the mouse
-	# yaw that steers the horse.  Rotate first, then align the pelvis.
+	# The visible rider faces the horse, while the player root follows it while
+	# mounted.  Rotate first, then align the pelvis.
 	model.rotation.y = _model_base_yaw + wrapf(horse.global_rotation.y - rotation.y, -PI, PI)
 	var hips_world := _skeleton.global_transform * _skeleton.get_bone_global_pose(_hips_bone).origin
 	var contact := hips_world - Vector3.UP * hips_to_seat

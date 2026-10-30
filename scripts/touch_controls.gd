@@ -19,10 +19,14 @@ extends CanvasLayer
 const STICK_RADIUS := 110.0
 const RUN_ENTER := 0.80
 const RUN_EXIT := 0.70
-## Fraction of the mouse look rate a finger drag applies.  A thumb covers far
-## less distance than a mouse sweep, and movement is camera-relative, so at 1:1
-## dragging to look also re-aims the character's heading and the view spins.
+## Fraction of the mouse look rate a finger drag applies.  On foot movement is
+## camera-relative, so at 1:1 dragging to look also re-aims the character's
+## heading and the view spins; that is why the walking gain is damped.
 const LOOK_GAIN := 0.55
+## Mounted, a drag only moves a look offset that decays back behind the horse
+## (PlayerController._look), so it can run at the full mouse rate.  The damped
+## value is what made looking around from the saddle feel sluggish.
+const LOOK_GAIN_MOUNTED := 1.0
 ## How far the stick finger may sit from its anchor and still count as resting
 ## (a palm, or a thumb that has not pushed yet).
 const STICK_REST := 10.0
@@ -76,6 +80,9 @@ var _stick_offset := Vector2.ZERO
 var _stick_seen_ms := 0
 var _move := Vector2.ZERO
 var _running := false
+## True while the player is in the saddle, which is when the look drag is an
+## offset rather than a heading and the full gain is safe.
+var _mounted := false
 var _look_accum := Vector2.ZERO
 var _orbit_accum := Vector2.ZERO
 var _pinch_ratio := 1.0
@@ -158,9 +165,16 @@ func get_move_input() -> Vector2:
 ## Accumulated look drag since the last call, in the same pixel units as a mouse
 ## motion event.
 func consume_look() -> Vector2:
-	var out := _look_accum * LOOK_GAIN
+	var out := _look_accum * (LOOK_GAIN_MOUNTED if _mounted else LOOK_GAIN)
 	_look_accum = Vector2.ZERO
 	return out
+
+
+## Set by the player on mounting and dismounting: the mounted camera takes a
+## look offset instead of a heading, so its drag can run at the mouse rate.
+func set_mounted(value: bool) -> void:
+	_mounted = value
+	_look_accum = Vector2.ZERO
 
 
 func consume_orbit() -> Vector2:

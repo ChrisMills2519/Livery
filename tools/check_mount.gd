@@ -13,7 +13,8 @@ var _state := 0
 var _state_ms := 0
 var _start_ms := 0
 var _failures: Array[String] = []
-var _turn_yaw := 0.0
+var _horse_yaw := 0.0
+var _view_yaw := 0.0
 
 
 func _initialize() -> void:
@@ -47,15 +48,17 @@ func _process(_delta: float) -> bool:
 		2:
 			if now - _state_ms >= 500:
 				_check_mounted("rest")
-				_turn_yaw = _player.rotation.y
+				_horse_yaw = _horse.rotation.y
+				_view_yaw = _camera().global_rotation.y
 				# Headless cannot capture the mouse, so drive the look helper
-				# directly and let the horse turn in place toward it.
-				_player.call("_look", Vector2(400.0, 0.0))
+				# directly.  Mounted this is a camera offset: it has to move the
+				# view and leave the horse's heading alone.
+				_player.call("_look", Vector2(120.0, 0.0))
 				_state = 21
 				_state_ms = now
 		21:
 			if now - _state_ms >= 500:
-				_check_mouse_turn()
+				_check_look_offset()
 				Input.action_press("move_forward")
 				_state = 3
 				_state_ms = now
@@ -146,7 +149,7 @@ func _check_mounted(label: String) -> void:
 	var pivot := _player.get_node("CameraPivot") as Node3D
 	var cam := _player.get_node("CameraPivot/Camera3D") as Camera3D
 	var want_pivot := Vector3(0.0, 1.0, 0.0)
-	var want_camera := Vector3(0.0, 0.0, 4.2)
+	var want_camera := Vector3(0.0, 0.0, 5.2)
 	if profile != null:
 		want_pivot = profile.ride_pivot
 		want_camera = profile.ride_camera
@@ -154,8 +157,14 @@ func _check_mounted(label: String) -> void:
 	if label == "walk":
 		if pivot.position.distance_to(want_pivot) > 0.05:
 			_fail("%s: camera pivot did not blend to the riding offset" % label)
-		if cam.position.distance_to(want_camera) > 0.05:
-			_fail("%s: camera did not blend to the riding distance" % label)
+		# The boom opens with the gait and may only come in for something behind
+		# the horse, so the walking pose is a ceiling and MOUNTED_MIN_BOOM is
+		# the floor.  A fence must never push the lens into the rider.
+		var boom := cam.position.length()
+		if boom > want_camera.length() + 0.05:
+			_fail("%s: camera sits %.2f m back, past the %.2f m pose" % [label, boom, want_camera.length()])
+		if boom < 0.9 - 0.001:
+			_fail("%s: boom fell to %.2f m, inside the mounted floor" % [label, boom])
 
 
 func _check_ride_pose(skel: Skeleton3D, label: String) -> void:
@@ -186,25 +195,27 @@ func _check_ride_pose(skel: Skeleton3D, label: String) -> void:
 			_fail("%s: %s points %.1f deg away from the riding pose" % [label, bone_name, angle])
 
 
-func _check_mouse_turn() -> void:
-	var yaw_delta := absf(wrapf(_player.rotation.y - _turn_yaw, -PI, PI))
-	var horse_fwd := -_horse.global_transform.basis.z
-	horse_fwd.y = 0.0
-	var rider_fwd := -_player.global_transform.basis.z
-	rider_fwd.y = 0.0
-	var heading_error := 0.0
-	if horse_fwd.length_squared() > 0.001 and rider_fwd.length_squared() > 0.001:
-		heading_error = rad_to_deg(horse_fwd.normalized().angle_to(rider_fwd.normalized()))
+func _camera() -> Camera3D:
+	return _player.get_node("CameraPivot/Camera3D") as Camera3D
+
+
+## The headline regression.  Mounted, a 120 px look drag turns the camera and
+## leaves the horse's heading alone.  Before the camera was broken out of the
+## reins this drag re-aimed the horse, which is the spin loop the devlog fought:
+## if a camera-relative frame ever comes back, this is the pin that goes red.
+func _check_look_offset() -> void:
+	var view_delta := absf(wrapf(_camera().global_rotation.y - _view_yaw, -PI, PI))
+	var horse_delta := absf(wrapf(_horse.rotation.y - _horse_yaw, -PI, PI))
 	var speed := Vector2(_horse.velocity.x, _horse.velocity.z).length()
-	print("mouse turn: player_yaw=%.2f horse_heading_err=%.1f speed=%.2f" % [
-		yaw_delta, heading_error, speed
+	print("mounted look: view_delta=%.3f horse_delta=%.3f speed=%.2f" % [
+		view_delta, horse_delta, speed
 	])
-	if yaw_delta < 0.5:
-		_fail("mouse look did not rotate the player (%.2f rad)" % yaw_delta)
-	if heading_error > 15.0:
-		_fail("stationary horse did not turn toward the mouse (%.1f deg off)" % heading_error)
+	if view_delta < 0.1:
+		_fail("a 120 px mounted look drag did not turn the camera (%.3f rad)" % view_delta)
+	if horse_delta > 0.02:
+		_fail("a mounted look drag re-aimed the horse (%.3f rad)" % horse_delta)
 	if speed > 0.1:
-		_fail("horse turned in place but drifted (%.2f m/s)" % speed)
+		_fail("the idle horse drifted during a look drag (%.2f m/s)" % speed)
 
 
 func _check_dismount() -> void:
