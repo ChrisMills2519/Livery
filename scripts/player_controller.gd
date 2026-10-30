@@ -105,6 +105,22 @@ const MOUNTED_MIN_BOOM := 0.9
 ## A canter widens the lens a little, eased so a gait change never pops.
 const CANTER_FOV := 78.0
 const FOV_RATE := 2.0
+
+## On foot the body has a little mass: it accelerates to a walk or a run
+## instead of snapping there, and coasts to a stop once the stick is released.
+const ON_FOOT_ACCEL := 24.0
+const ON_FOOT_FRICTION := 30.0
+const AIR_CONTROL := 6.0
+## A jump asked for just after stepping off a ledge, or just before landing,
+## still counts.  Both windows are short enough that a jump never fires by
+## itself, and long enough that a thumb landing one frame late still gets it.
+const COYOTE_TIME := 0.12
+const JUMP_BUFFER := 0.12
+## Letting go of jump early clips the rise to this fraction of the launch
+## speed, so a tap is a hop and a hold is the full jump.
+const JUMP_CUT := 0.45
+## Jump-cut never applies to a rise faster than the launch itself.
+const JUMP_RISE_EPSILON := 0.01
 ## How fast the body swings round to face the direction it is walking, in
 ## radians per second.  Fast enough to read as a turn rather than a slide, slow
 ## enough that reversing does not snap the model round.
@@ -176,6 +192,8 @@ var _boom_length := 3.0
 var _camera_slide := 0.0
 var _jump_blend := 0.0
 var _was_on_floor := true
+var _coyote := 0.0
+var _jump_buffer := 0.0
 ## Yaw captured when the touch stick was last pushed.  While the thumb holds a
 ## direction the frame stays put, so the right thumb can look around without
 ## re-aiming the walk or the horse.
@@ -1010,15 +1028,31 @@ func _physics_process(delta: float) -> void:
 		if led_horse == null or led_horse.get("leader") == null:
 			leading = false
 
-	if is_on_floor():
-		if not _was_on_floor:
-			_land_timer = landing_time
+	var grounded := is_on_floor()
+	if grounded and not _was_on_floor:
+		_land_timer = landing_time
+	# Coyote time and a jump buffer.  Both count down every frame whichever way
+	# the body is going, so the window is measured in seconds, not frames.
+	_coyote = COYOTE_TIME if grounded else maxf(_coyote - delta, 0.0)
+	if controls_enabled and Input.is_action_just_pressed("jump"):
+		_jump_buffer = JUMP_BUFFER
+	else:
+		_jump_buffer = maxf(_jump_buffer - delta, 0.0)
+
+	if _jump_buffer > 0.0 and _coyote > 0.0:
+		velocity.y = jump_velocity
+		_land_timer = 0.0
+		_jump_buffer = 0.0
+		_coyote = 0.0
+	elif grounded:
 		velocity.y = 0.0
-		if controls_enabled and Input.is_action_just_pressed("jump"):
-			velocity.y = jump_velocity
-			_land_timer = 0.0
 	else:
 		velocity.y -= gravity * delta
+
+	# Jump cut: releasing early clips the rise.  Only an upward velocity is cut,
+	# so falling is never softened by letting go.
+	if not grounded and velocity.y > JUMP_RISE_EPSILON and not Input.is_action_pressed("jump"):
+		velocity.y = minf(velocity.y, jump_velocity * JUMP_CUT)
 
 	var input := Vector2.ZERO
 	if controls_enabled:
@@ -1037,8 +1071,28 @@ func _physics_process(delta: float) -> void:
 	var running := controls_enabled and Input.is_action_pressed("run")
 	# A light touch on the stick walks slower; keys and full pushes are unchanged.
 	var speed := (run_speed if running else walk_speed) * clampf(input.length(), 0.0, 1.0)
-	velocity.x = dir.x * speed
-	velocity.z = dir.z * speed
+	if grounded:
+		# The heading turns with the input at once and the speed ramps after it,
+		# rather than accelerating the whole velocity vector.  Starting and
+		# stopping have weight; momentum never carries the body sideways into a
+		# doorway while the direction catches up.  A reversal starts from rest,
+		# so backing out of a corner is a plant and turn, not a slide.
+		if dir.length_squared() < 0.0001:
+			var coast := Vector2(velocity.x, velocity.z).move_toward(
+				Vector2.ZERO, ON_FOOT_FRICTION * delta
+			)
+			velocity.x = coast.x
+			velocity.z = coast.y
+		else:
+			var along := maxf(Vector2(velocity.x, velocity.z).dot(Vector2(dir.x, dir.z)), 0.0)
+			var next := move_toward(along, speed, ON_FOOT_ACCEL * delta)
+			velocity.x = dir.x * next
+			velocity.z = dir.z * next
+	else:
+		# Airborne the body keeps the momentum it left the ground with and only
+		# steers a little, so a jump cannot be redirected in mid-air.
+		velocity.x = move_toward(velocity.x, dir.x * speed, AIR_CONTROL * delta)
+		velocity.z = move_toward(velocity.z, dir.z * speed, AIR_CONTROL * delta)
 	move_and_slide()
 
 	_land_timer = maxf(0.0, _land_timer - delta)
