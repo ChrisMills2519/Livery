@@ -16,9 +16,22 @@ extends CanvasLayer
 ## Modes: "off", "ride" (stick, look and cluster), "groom" (gestures only),
 ## "select" (swipe only).
 
-const STICK_RADIUS := 110.0
+const STICK_RADIUS := 120.0
+## These two only gate the on-foot sprint now.  The horse's gait comes from the
+## stick's magnitude and the gallop button, never from the ring's run threshold.
 const RUN_ENTER := 0.80
 const RUN_EXIT := 0.70
+## Kept in step with horse.gd's STEER_DEADZONE and TROT_NOTCH: the ring shows
+## the gait the ride will actually take, through the same classifier.
+const GAIT_DEADZONE := 0.15
+const TROT_NOTCH := 0.70
+## How near the canonical thumb rest a landing has to be before the stick snaps
+## to it.  The ring then sits where the thumb naturally rests instead of
+## wherever the first touch of the session happened to land, which is what made
+## a slightly-high press bias every push.  A landing further away keeps its own
+## point: the ownership rules in agents.md depend on knowing where that finger
+## went down, and a cancelled iOS touch has to stay claimable there.
+const STICK_SNAP := 28.0
 ## Fraction of the mouse look rate a finger drag applies.  On foot movement is
 ## camera-relative, so at 1:1 dragging to look also re-aims the character's
 ## heading and the view spins; that is why the walking gain is damped.
@@ -235,6 +248,29 @@ func is_running() -> bool:
 	return _running
 
 
+## The gait a movement input asks for.  The ride and the on-screen ring both go
+## through this one classifier, so the ring cannot promise a gait the horse will
+## not take.  `stick_driving` is true while a thumb owns the stick, which is when
+## the input's magnitude - rather than a key - decides walk or trot.
+func gait_for(input: Vector2, stick_driving: bool, keyboard_trot: bool, gallop: bool) -> String:
+	var forward := -input.y
+	if forward <= GAIT_DEADZONE:
+		return "halt"
+	if gallop:
+		return "canter"
+	if stick_driving:
+		var magnitude := clampf((forward - GAIT_DEADZONE) / (1.0 - GAIT_DEADZONE), 0.0, 1.0)
+		return "trot" if magnitude > TROT_NOTCH else "walk"
+	return "trot" if keyboard_trot else "walk"
+
+
+## What the stick is asking for right now, for the ring and the debug readout.
+func stick_gait() -> String:
+	if not _stick_owned:
+		return "halt"
+	return gait_for(_move, true, false, Input.is_action_pressed("gallop"))
+
+
 ## Current context action and label shown on the big CONTEXT button.
 func context_action() -> String:
 	return String(_context.get("action", ""))
@@ -426,6 +462,11 @@ func _claim_stick(index: int, pos: Vector2) -> void:
 	_stick_index = index
 	_stick_owned = true
 	_stick_base = pos
+	# A landing on the thumb's natural rest snaps to it, so the ring sits where
+	# the thumb already is.  A landing anywhere else keeps its own point.
+	var rest := stick_rest_anchor()
+	if pos.distance_to(rest) <= STICK_SNAP:
+		_stick_base = rest
 	_stick_offset = Vector2.ZERO
 	_move = Vector2.ZERO
 	_stick_seen_ms = Time.get_ticks_msec()
@@ -470,6 +511,13 @@ func _try_push_reclaim(index: int, pos: Vector2) -> void:
 		return
 	_claim_stick(index, anchor)
 	_update_stick(pos)
+
+
+## Where the left thumb naturally rests, inside the bottom-left safe area.
+func stick_rest_anchor() -> Vector2:
+	var size := get_viewport().get_visible_rect().size
+	var insets := _safe_insets(size)
+	return Vector2(insets.x + STICK_RADIUS + 40.0, size.y - insets.w - STICK_RADIUS - 24.0)
 
 
 ## Hands the stick to a finger already resting in the stick half, so lifting one
@@ -546,20 +594,30 @@ func _update_pinch() -> void:
 
 # --- Cluster -----------------------------------------------------------------
 
-## Layout of the bottom-right action cluster in viewport coordinates.  It is
-## derived from the viewport size and the display safe area on every call so a
-## rotation or notch is picked up without any cache to invalidate.
+## Layout of the action buttons in viewport coordinates.  It is derived from the
+## viewport size and the display safe area on every call so a rotation or notch
+## is picked up without any cache to invalidate.
+##
+## The three riding buttons sit under the right thumb; LEAD and RESET are out
+## along the top edge instead.  Five circles plus a look area under one thumb is
+## a mis-tap factory on a tablet, and the two thumbs that matter while riding are
+## the left one on the stick and the right one on the camera.
 func _cluster() -> Array:
 	var size := get_viewport().get_visible_rect().size
 	var insets := _safe_insets(size)
 	var right := size.x - insets.z - 84.0
 	var bottom := size.y - insets.w - 84.0
-	return [
-		{"id": "context", "center": Vector2(right, bottom), "radius": 62.0},
-		{"id": "jump", "center": Vector2(right - 118.0, bottom + 30.0), "radius": 42.0},
-		{"id": "lead", "center": Vector2(right - 22.0, bottom - 118.0), "radius": 40.0},
-		{"id": "reset", "center": Vector2(right - 140.0, bottom - 96.0), "radius": 38.0},
+	var top := insets.y + 44.0
+	var buttons := [
+		{"id": "context", "center": Vector2(right, bottom), "radius": 62.0, "group": "thumb"},
+		{"id": "jump", "center": Vector2(right - 118.0, bottom + 30.0), "radius": 42.0, "group": "thumb"},
+		{"id": "lead", "center": Vector2(right - 4.0, top), "radius": 38.0, "group": "strip"},
+		{"id": "reset", "center": Vector2(right - 92.0, top), "radius": 38.0, "group": "strip"},
 	]
+	# The gallop is a riding control, so it is not offered on foot at all.
+	if _mounted:
+		buttons.append({"id": "gallop", "center": Vector2(right - 118.0, bottom - 74.0), "radius": 46.0, "group": "thumb"})
+	return buttons
 
 
 func button_center(id: String) -> Vector2:
@@ -584,6 +642,8 @@ func _action_for(id: String) -> String:
 			return context_action()
 		"jump":
 			return "jump"
+		"gallop":
+			return "gallop"
 		"lead":
 			return "lead"
 		"reset":
@@ -680,6 +740,7 @@ func _draw_debug() -> void:
 	# "no owner" is the bug this readout was added to catch.
 	parts.append(("stick %d" % _stick_index) if _stick_owned else "stick -")
 	parts.append("move %.2f,%.2f" % [_move.x, _move.y])
+	parts.append("gait %s" % stick_gait())
 	lines.append("  ".join(parts))
 	var body := get_tree().get_first_node_in_group("player") as CharacterBody3D
 	if body != null:
@@ -720,14 +781,46 @@ func _draw_debug() -> void:
 		y += line_height
 
 
+## The ring is the gait readout: dim at a walk, accent at a trot, run-colour at
+## a canter, with the one word beside it.  A rider can see what the horse is
+## about to do without looking away from it.
 func _draw_stick() -> void:
 	if not _stick_owned:
 		return
-	var color := RUN_COLOR if _running else DIM_COLOR
+	var gait := stick_gait()
+	var color := DIM_COLOR
+	if gait == "canter":
+		color = RUN_COLOR
+	elif gait == "trot":
+		color = ACCENT
 	_overlay.draw_arc(_stick_base, STICK_RADIUS, 0.0, TAU, 64, color, 3.0)
-	_overlay.draw_arc(_stick_base, STICK_RADIUS * RUN_ENTER, 0.0, TAU, 64, Color(color.r, color.g, color.b, 0.22), 2.0)
+	_overlay.draw_arc(_stick_base, STICK_RADIUS * TROT_NOTCH, 0.0, TAU, 64, Color(color.r, color.g, color.b, 0.22), 2.0)
 	var knob := _stick_base + _stick_offset.limit_length(STICK_RADIUS)
 	_overlay.draw_circle(knob, 34.0, Color(color.r, color.g, color.b, 0.55))
+	var label := _gait_label(gait)
+	if not label.is_empty():
+		var font := ThemeDB.fallback_font
+		var width := STICK_RADIUS * 2.0
+		_overlay.draw_string(
+			font,
+			_stick_base + Vector2(-STICK_RADIUS, STICK_RADIUS + 28.0),
+			label,
+			HORIZONTAL_ALIGNMENT_CENTER,
+			width,
+			15,
+			color
+		)
+
+
+func _gait_label(gait: String) -> String:
+	match gait:
+		"walk":
+			return "WALK"
+		"trot":
+			return "TROT"
+		"canter":
+			return "CANTER"
+	return ""
 
 
 func _draw_cluster() -> void:
@@ -754,6 +847,8 @@ func _label_for(id: String) -> String:
 			return context_label()
 		"jump":
 			return "JUMP"
+		"gallop":
+			return "GALLOP"
 		"lead":
 			return "LEAD"
 		"reset":

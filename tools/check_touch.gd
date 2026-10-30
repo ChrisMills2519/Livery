@@ -94,6 +94,7 @@ func _run() -> void:
 	await _check_raw_events()
 	await _check_keyboard_still_works()
 	await _check_context_mount()
+	await _check_gallop_button()
 	await _check_grooming_gestures()
 	_check_select_swipe()
 
@@ -401,6 +402,97 @@ func _check_context_mount() -> void:
 	_check(bool(_player.get("mounted")), "tapping CONTEXT mounts the horse")
 	_player.call("dismount")
 	await _frames(2)
+
+
+# --- Ride: gallop button, gait readout and the brake -------------------------
+
+func _cluster_ids() -> Array:
+	var ids := []
+	for def in _touch._cluster():
+		ids.append(String(def["id"]))
+	return ids
+
+
+func _horse_speed() -> float:
+	var v: Vector3 = _horse.get("velocity")
+	return Vector2(v.x, v.z).length()
+
+
+func _check_gallop_button() -> void:
+	# The ring and the ride classify the gait separately, so the two pairs of
+	# thresholds have to stay equal or the ring starts lying.
+	var horse_consts: Dictionary = _horse.get_script().get_script_constant_map()
+	var touch_consts: Dictionary = _touch.get_script().get_script_constant_map()
+	_check(
+		is_equal_approx(float(horse_consts["STEER_DEADZONE"]), float(touch_consts["GAIT_DEADZONE"]))
+		and is_equal_approx(float(horse_consts["TROT_NOTCH"]), float(touch_consts["TROT_NOTCH"])),
+		"the ring and the ride share their gait thresholds")
+
+	_check(not _cluster_ids().has("gallop"), "the gallop button is hidden while dismounted")
+	_check(_touch.button_center("gallop") == Vector2.ZERO, "a hidden gallop button has no hit rect")
+
+	_player.try_mount()
+	await _physics_frames(4)
+	_check(bool(_player.get("mounted")), "the player mounts for the gallop check")
+	if not bool(_player.get("mounted")):
+		return
+	_check(_cluster_ids().has("gallop"), "the gallop button appears in the saddle")
+
+	var gallop: Vector2 = _touch.button_center("gallop")
+	_check(gallop != Vector2.ZERO, "the gallop button has a hit rect")
+	_check(String(_touch._button_at(gallop).get("id", "")) == "gallop",
+		"the gallop button answers at its centre")
+	_check(String(_touch._button_at(gallop + Vector2(0.0, -55.0)).get("id", "")) != "gallop",
+		"the gallop hit rect ends at its own radius")
+
+	# The ring's magnitude asks for the gait, and the button asks for the canter.
+	var base := Vector2(200, 500)
+	_touch.feed_touch(70, base, true)
+	_touch.feed_drag(70, base + Vector2(0, -70), Vector2(0, -70))
+	await _frames(2)
+	_check(_touch.stick_gait() == "walk", "a half push asks for a walk (ring reads %s)" % _touch.stick_gait())
+	_touch.feed_drag(70, base + Vector2(0, -116), Vector2(0, -46))
+	await _frames(2)
+	_check(_touch.stick_gait() == "trot", "a full push asks for a trot (ring reads %s)" % _touch.stick_gait())
+
+	_touch.feed_touch(71, gallop, true)
+	await _frames(2)
+	_check(Input.is_action_pressed("gallop"), "touching GALLOP holds the gallop action")
+	_check(_touch.stick_gait() == "canter", "the ring reads canter while the gallop is held")
+	_touch.feed_touch(71, gallop, false)
+	await _frames(2)
+	_check(not Input.is_action_pressed("gallop"), "lifting the thumb releases the gallop")
+	_check(_touch.stick_gait() == "trot", "releasing the gallop leaves the ring on the trot")
+
+	# Open ground: against the yard's stable wall, move_and_slide would write the
+	# collision back into velocity and the brake would be reading a wall.
+	_horse.global_position = Vector3(40.0, 0.1, 40.0)
+	_horse.set("velocity", Vector3.ZERO)
+	_horse.set("_ride_speed", 0.0)
+	_touch.feed_touch(71, gallop, true)
+	await _wait_ms(1700)
+	_check(_horse_speed() > 4.6,
+		"the gallop button and a full stick canter the horse (%.2f m/s)" % _horse_speed())
+	_touch.feed_touch(71, gallop, false)
+
+	# Pulled back past the notch and held, the horse brakes instead of turning
+	# round and running at the camera.  Sampled per frame because the brake
+	# passes through a stop and then into a rein-back.
+	var yaw_before: float = _horse.rotation.y
+	_touch.feed_drag(70, base + Vector2(0, 116), Vector2(0, 232))
+	var stopped := false
+	for i in range(90):
+		if _horse_speed() < 0.1:
+			stopped = true
+		await physics_frame
+	_check(stopped, "pulling the stick back brakes the horse inside 1.5 s")
+	_check(_touch.stick_gait() == "halt", "the ring reads halt while braking")
+	_check(absf(wrapf(_horse.rotation.y - yaw_before, -PI, PI)) < 0.05,
+		"the brake gesture does not turn the horse round")
+	_touch.feed_touch(70, base + Vector2(0, 116), false)
+	await _frames(2)
+	_player.call("dismount")
+	await _physics_frames(4)
 
 
 # --- Grooming gestures --------------------------------------------------------

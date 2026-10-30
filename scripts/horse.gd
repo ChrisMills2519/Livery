@@ -13,6 +13,9 @@ const TROT_NOTCH := 0.70
 ## Pulled back this far, held for BRAKE_HOLD, the stick brakes the horse.
 const BRAKE_NOTCH := 0.75
 const BRAKE_HOLD := 0.2
+## Once the brake has stopped the horse it stays stopped this long before
+## reining back, so the stop is a stop rather than a bounce off zero.
+const REIN_BACK_DELAY := 0.25
 
 ## Gait speeds are the clip library's own measured ground speed times the
 ## playback scale the state machine applies, so the hooves stay planted instead
@@ -160,6 +163,7 @@ var _bridle_rest := Transform3D.IDENTITY
 var _seat_in_saddle := Transform3D.IDENTITY
 var _ride_speed := 0.0
 var _brake_hold := 0.0
+var _stop_hold := 0.0
 ## True between releasing the gallop and the rider either stopping or easing the
 ## stick back: the horse lands on the trot rather than collapsing to a walk.
 var _gallop_coast := false
@@ -359,6 +363,7 @@ func clear_rider() -> void:
 	rider = null
 	_ride_speed = 0.0
 	_brake_hold = 0.0
+	_stop_hold = 0.0
 	_gallop_coast = false
 	# Stop over a short, firm settle and then go straight to Idle instead of
 	# letting the speed-driven FSM walk down through canter/trot/walk.
@@ -429,6 +434,7 @@ func board() -> bool:
 	velocity = Vector3.ZERO
 	_ride_speed = 0.0
 	_brake_hold = 0.0
+	_stop_hold = 0.0
 	_gallop_coast = false
 	_settle_time = 0.0
 	airborne = false
@@ -450,6 +456,7 @@ func release_from_stable(anchor: Transform3D) -> void:
 	velocity = Vector3.ZERO
 	_ride_speed = 0.0
 	_brake_hold = 0.0
+	_stop_hold = 0.0
 	_gallop_coast = false
 	_settle_time = 0.0
 	airborne = false
@@ -557,6 +564,7 @@ func begin_grooming(anchor: Transform3D) -> bool:
 	_settle_time = 0.0
 	_ride_speed = 0.0
 	_brake_hold = 0.0
+	_stop_hold = 0.0
 	_gallop_coast = false
 	if gallop != null:
 		gallop.stop()
@@ -789,9 +797,13 @@ func _ride(delta: float) -> void:
 		if airborne:
 			return
 		_ride_speed = move_toward(_ride_speed, 0.0, brake_speed * delta)
-		if _ride_speed <= 0.01:
-			# Stopped and still held back: rein back rather than turn round.
-			_ride_speed = -rein_back_speed
+		if is_zero_approx(_ride_speed):
+			_stop_hold += delta
+			if _stop_hold >= REIN_BACK_DELAY:
+				# Stopped and still held back: rein back rather than turn round.
+				_ride_speed = -rein_back_speed
+		else:
+			_stop_hold = 0.0
 		_travel()
 		return
 
@@ -801,6 +813,7 @@ func _ride(delta: float) -> void:
 	# than guarded against.
 	if forward_ask <= STEER_DEADZONE:
 		_gallop_coast = false
+		_stop_hold = 0.0
 		# Turning in place: the heading can still be lined up before moving off,
 		# at the slower rate.  A standing horse never pivots to face the camera.
 		rotation.y -= turn * ridden_turn_rate_in_place * delta
@@ -817,27 +830,25 @@ func _ride(delta: float) -> void:
 	if airborne:
 		return
 
-	# Stick magnitude asks for the gait, renormalised past the deadzone so a
-	# small push is a slow walk and a full push is a trot.  The gallop action is
-	# a hold: it asks for the canter, and releasing it drops back to the trot.
-	var magnitude := clampf((forward_ask - STEER_DEADZONE) / (1.0 - STEER_DEADZONE), 0.0, 1.0)
+	# The gait comes from one classifier shared with the on-screen ring, so the
+	# ring cannot promise something the horse will not do.  A touch stick carries
+	# its own magnitude; keys have none, so W walks and Shift asks for the trot.
 	var stick_driving := TouchControls.is_stick_active()
+	var gallop_held := Input.is_action_pressed("gallop")
+	var keyboard_trot := Input.is_action_pressed("run") and not stick_driving
+	var ask := TouchControls.gait_for(input, stick_driving, keyboard_trot, gallop_held)
+	var eased := TouchControls.gait_for(input, stick_driving, keyboard_trot, false)
 	var target := walk_speed
-	if stick_driving:
-		# A touch stick carries its own magnitude, so the ring's run threshold
-		# stays an on-foot idea and never drives the horse.
-		if magnitude > TROT_NOTCH:
+	match ask:
+		"trot":
 			target = trot_speed
-	elif Input.is_action_pressed("run"):
-		# Keys have no magnitude: W walks, Shift asks for the trot.
-		target = trot_speed
-	if Input.is_action_pressed("gallop"):
-		target = canter_speed
-	elif Input.is_action_just_released("gallop"):
+		"canter":
+			target = canter_speed
+	if Input.is_action_just_released("gallop"):
 		# Dropping the gallop lands on the trot, not the walk.
 		_gallop_coast = true
 	if _gallop_coast:
-		if stick_driving and magnitude <= TROT_NOTCH:
+		if stick_driving and eased == "walk":
 			# The stick was eased back on purpose, which is a walk request.
 			_gallop_coast = false
 		else:
