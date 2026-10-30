@@ -59,7 +59,7 @@ func _process(_delta: float) -> bool:
 				_horse.global_position = OPEN_GROUND
 				_horse.velocity = Vector3.ZERO
 				Input.action_press("move_forward")
-				Input.action_press("run")
+				Input.action_press("gallop")
 			if _frame < 70:
 				_track_horse()
 				return false
@@ -83,7 +83,7 @@ func _process(_delta: float) -> bool:
 				_shot("jump_landed")
 				Engine.time_scale = 1.0
 				Input.action_release("move_forward")
-				Input.action_release("run")
+				Input.action_release("gallop")
 				quit(0)
 				return true
 			if _jump_started:

@@ -56,12 +56,12 @@ func _process(_delta: float) -> bool:
 		3:
 			if elapsed >= 500:
 				_check_walk()
-				Input.action_press("run")
+				Input.action_press("gallop")
 				_next(4, now)
 		4:
 			if elapsed >= 1700:
 				_check_canter()
-				Input.action_release("run")
+				Input.action_release("gallop")
 				Input.action_release("move_forward")
 				_next(5, now)
 		5:
@@ -383,7 +383,7 @@ func _check_reset() -> void:
 
 func _finish() -> void:
 	Input.action_release("move_forward")
-	Input.action_release("run")
+	Input.action_release("gallop")
 	Input.action_release("jump")
 	Input.action_release("jump")
 	if _failures.is_empty():
