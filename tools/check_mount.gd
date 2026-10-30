@@ -13,7 +13,13 @@ var _state := 0
 var _state_ms := 0
 var _start_ms := 0
 var _failures: Array[String] = []
-var _turn_yaw := 0.0
+var _horse_yaw := 0.0
+var _view_yaw := 0.0
+var _walk_horse_yaw := 0.0
+var _walk_view_yaw := 0.0
+var _min_speed := 1e9
+var _saw_rein_back := false
+var _fence: StaticBody3D = null
 
 
 func _initialize() -> void:
@@ -47,22 +53,79 @@ func _process(_delta: float) -> bool:
 		2:
 			if now - _state_ms >= 500:
 				_check_mounted("rest")
-				_turn_yaw = _player.rotation.y
+				_horse_yaw = _horse.rotation.y
+				_view_yaw = _camera().global_rotation.y
 				# Headless cannot capture the mouse, so drive the look helper
-				# directly and let the horse turn in place toward it.
-				_player.call("_look", Vector2(400.0, 0.0))
+				# directly.  Mounted this is a camera offset: it has to move the
+				# view and leave the horse's heading alone.
+				_player.call("_look", Vector2(120.0, 0.0))
 				_state = 21
 				_state_ms = now
 		21:
 			if now - _state_ms >= 500:
-				_check_mouse_turn()
+				_check_look_offset()
+				# The gait run needs room.  In the yard the horse reaches the stable
+				# wall, move_and_slide writes the collision back into velocity, and
+				# every speed assertion would be reading a wall instead of a gait.
+				_horse.global_position = Vector3(40.0, 0.1, 40.0)
+				_horse.rotation.y = 0.0
+				_horse.velocity = Vector3.ZERO
+				_horse.set("_ride_speed", 0.0)
 				Input.action_press("move_forward")
+				# The same pin while the horse is actually moving: a camera-relative
+				# frame used to turn this drag into a spin.
+				_walk_horse_yaw = _horse.rotation.y
+				_walk_view_yaw = _camera().global_rotation.y
+				_player.call("_look", Vector2(120.0, 0.0))
 				_state = 3
 				_state_ms = now
 		3:
-			if now - _state_ms >= 900:
+			if now - _state_ms >= 700:
 				_check_mounted("walk")
+				_check_walking_look()
+				Input.action_press("gallop")
+				_state = 31
+				_state_ms = now
+		31:
+			if now - _state_ms >= 1500:
+				_check_canter()
+				Input.action_release("gallop")
+				_state = 32
+				_state_ms = now
+		32:
+			if now - _state_ms >= 350:
+				_check_trot_after_gallop()
+				Input.action_press("gallop")
+				_state = 33
+				_state_ms = now
+		33:
+			if now - _state_ms >= 600:
+				_check_back_at_canter()
+				Input.action_release("gallop")
 				Input.action_release("move_forward")
+				Input.action_press("move_back")
+				_min_speed = 1e9
+				_saw_rein_back = false
+				_state = 34
+				_state_ms = now
+		34:
+			# Sampled every frame: the brake passes through a stop and then into a
+			# rein-back, so the end state is not where the measurement is.
+			_min_speed = minf(_min_speed, Vector2(_horse.velocity.x, _horse.velocity.z).length())
+			var back := _horse.global_transform.basis.z
+			back.y = 0.0
+			if back.dot(_horse.velocity) > 0.05:
+				_saw_rein_back = true
+			if now - _state_ms >= 1600:
+				_check_brake()
+				Input.action_release("move_back")
+				_add_test_fence()
+				_state = 35
+				_state_ms = now
+		35:
+			if now - _state_ms >= 900:
+				_check_fence_boom()
+				_free_test_fence()
 				_player.dismount()
 				_state = 4
 				_state_ms = now
@@ -146,7 +209,7 @@ func _check_mounted(label: String) -> void:
 	var pivot := _player.get_node("CameraPivot") as Node3D
 	var cam := _player.get_node("CameraPivot/Camera3D") as Camera3D
 	var want_pivot := Vector3(0.0, 1.0, 0.0)
-	var want_camera := Vector3(0.0, 0.0, 4.2)
+	var want_camera := Vector3(0.0, 0.0, 5.2)
 	if profile != null:
 		want_pivot = profile.ride_pivot
 		want_camera = profile.ride_camera
@@ -154,8 +217,14 @@ func _check_mounted(label: String) -> void:
 	if label == "walk":
 		if pivot.position.distance_to(want_pivot) > 0.05:
 			_fail("%s: camera pivot did not blend to the riding offset" % label)
-		if cam.position.distance_to(want_camera) > 0.05:
-			_fail("%s: camera did not blend to the riding distance" % label)
+		# The boom opens with the gait and may only come in for something behind
+		# the horse, so the walking pose is a ceiling and MOUNTED_MIN_BOOM is
+		# the floor.  A fence must never push the lens into the rider.
+		var boom := cam.position.length()
+		if boom > want_camera.length() + 0.05:
+			_fail("%s: camera sits %.2f m back, past the %.2f m pose" % [label, boom, want_camera.length()])
+		if boom < 0.9 - 0.001:
+			_fail("%s: boom fell to %.2f m, inside the mounted floor" % [label, boom])
 
 
 func _check_ride_pose(skel: Skeleton3D, label: String) -> void:
@@ -186,25 +255,131 @@ func _check_ride_pose(skel: Skeleton3D, label: String) -> void:
 			_fail("%s: %s points %.1f deg away from the riding pose" % [label, bone_name, angle])
 
 
-func _check_mouse_turn() -> void:
-	var yaw_delta := absf(wrapf(_player.rotation.y - _turn_yaw, -PI, PI))
-	var horse_fwd := -_horse.global_transform.basis.z
-	horse_fwd.y = 0.0
-	var rider_fwd := -_player.global_transform.basis.z
-	rider_fwd.y = 0.0
-	var heading_error := 0.0
-	if horse_fwd.length_squared() > 0.001 and rider_fwd.length_squared() > 0.001:
-		heading_error = rad_to_deg(horse_fwd.normalized().angle_to(rider_fwd.normalized()))
+func _camera() -> Camera3D:
+	return _player.get_node("CameraPivot/Camera3D") as Camera3D
+
+
+## The headline regression.  Mounted, a 120 px look drag turns the camera and
+## leaves the horse's heading alone.  Before the camera was broken out of the
+## reins this drag re-aimed the horse, which is the spin loop the devlog fought:
+## if a camera-relative frame ever comes back, this is the pin that goes red.
+func _check_look_offset() -> void:
+	var view_delta := absf(wrapf(_camera().global_rotation.y - _view_yaw, -PI, PI))
+	var horse_delta := absf(wrapf(_horse.rotation.y - _horse_yaw, -PI, PI))
 	var speed := Vector2(_horse.velocity.x, _horse.velocity.z).length()
-	print("mouse turn: player_yaw=%.2f horse_heading_err=%.1f speed=%.2f" % [
-		yaw_delta, heading_error, speed
+	print("mounted look: view_delta=%.3f horse_delta=%.3f speed=%.2f" % [
+		view_delta, horse_delta, speed
 	])
-	if yaw_delta < 0.5:
-		_fail("mouse look did not rotate the player (%.2f rad)" % yaw_delta)
-	if heading_error > 15.0:
-		_fail("stationary horse did not turn toward the mouse (%.1f deg off)" % heading_error)
+	if view_delta < 0.1:
+		_fail("a 120 px mounted look drag did not turn the camera (%.3f rad)" % view_delta)
+	if horse_delta > 0.02:
+		_fail("a mounted look drag re-aimed the horse (%.3f rad)" % horse_delta)
 	if speed > 0.1:
-		_fail("horse turned in place but drifted (%.2f m/s)" % speed)
+		_fail("the idle horse drifted during a look drag (%.2f m/s)" % speed)
+
+
+## The moving version of the look pin.  Speed is checked first: a horse that
+## never moved off would pass the yaw assertion for the wrong reason.
+func _check_walking_look() -> void:
+	var horse_delta := absf(wrapf(_horse.rotation.y - _walk_horse_yaw, -PI, PI))
+	var view_delta := absf(wrapf(_camera().global_rotation.y - _walk_view_yaw, -PI, PI))
+	var speed := _ground_speed()
+	print("walking look: view_delta=%.3f horse_delta=%.3f speed=%.2f" % [
+		view_delta, horse_delta, speed
+	])
+	if speed < 1.0:
+		_fail("stick forward did not move the horse (%.2f m/s)" % speed)
+	if view_delta < 0.1:
+		_fail("a look drag while walking did not turn the camera (%.3f rad)" % view_delta)
+	if horse_delta > 0.02:
+		_fail("a look drag while walking turned the horse (%.3f rad)" % horse_delta)
+
+
+func _ground_speed() -> float:
+	return Vector2(_horse.velocity.x, _horse.velocity.z).length()
+
+
+func _horse_state() -> String:
+	var fsm := _horse.get_node_or_null("AnimStateMachine")
+	if fsm == null:
+		return ""
+	return String(fsm.get("current_state"))
+
+
+## A held gallop is the canter, inside the 1.6 s the plan allows for the ramp.
+func _check_canter() -> void:
+	_check_mounted("canter")
+	var speed := _ground_speed()
+	print("gallop held: speed=%.2f state=%s" % [speed, _horse_state()])
+	if speed < 5.4:
+		_fail("held gallop did not reach canter speed within 1.6 s (%.2f m/s)" % speed)
+	if _horse_state() != "canter":
+		_fail("held gallop did not put the horse in its canter gait (state %s)" % _horse_state())
+
+
+## Releasing the gallop drops to the trot, not the walk, and the clip agrees: a
+## trot-speed horse playing the Run clip would be the foot-slide case.
+func _check_trot_after_gallop() -> void:
+	var speed := _ground_speed()
+	print("gallop released: speed=%.2f state=%s" % [speed, _horse_state()])
+	if speed < 2.5 or speed > 3.3:
+		_fail("releasing the gallop did not settle on the trot (%.2f m/s)" % speed)
+	if _horse_state() != "trot":
+		_fail("releasing the gallop did not return the horse to its trot (state %s)" % _horse_state())
+
+
+func _check_back_at_canter() -> void:
+	var speed := _ground_speed()
+	print("back to canter: speed=%.2f state=%s" % [speed, _horse_state()])
+	if speed < 4.6:
+		_fail("the brake case did not get back up to a canter (%.2f m/s)" % speed)
+
+
+## Held back past the notch the horse brakes rather than turning round, and once
+## stopped it reins back instead of staying pinned at a walk.
+func _check_brake() -> void:
+	print("brake: min_speed=%.2f rein_back=%s" % [_min_speed, str(_saw_rein_back)])
+	if _min_speed > 0.1:
+		_fail("holding the stick back did not stop the horse (min %.2f m/s)" % _min_speed)
+	if not _saw_rein_back:
+		_fail("a held brake never reined back after the stop")
+
+
+## A fence directly behind the rider is the mounted answer the on-foot solver
+## never had to give: the boom has to shorten, and must not pass its floor.
+func _add_test_fence() -> void:
+	var body := StaticBody3D.new()
+	body.name = "MountedCameraTestFence"
+	body.collision_layer = 1
+	body.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(12.0, 3.0, 0.4)
+	shape.shape = box
+	body.add_child(shape)
+	_world.add_child(body)
+	var back := _horse.global_transform.basis.z
+	back.y = 0.0
+	body.global_position = _horse.global_position + back.normalized() * 3.0 + Vector3.UP * 1.5
+	_fence = body
+
+
+func _free_test_fence() -> void:
+	if _fence != null and is_instance_valid(_fence):
+		_fence.queue_free()
+	_fence = null
+
+
+func _check_fence_boom() -> void:
+	var boom := _camera().position.length()
+	var model := _player.get_node("Model") as Node3D
+	print("fence behind: boom=%.2f model_visible=%s" % [boom, str(model.visible)])
+	if boom > 4.6:
+		_fail("the boom did not shorten with a fence behind the rider (%.2f m)" % boom)
+	if boom < 0.9 - 0.001:
+		_fail("the boom fell below the mounted floor (%.2f m)" % boom)
+	if not model.visible:
+		_fail("the rider's body was hidden at a shortened boom")
 
 
 func _check_dismount() -> void:

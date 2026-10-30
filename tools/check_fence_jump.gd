@@ -60,7 +60,7 @@ func _process(_delta: float) -> bool:
 				if _course.faults < 4:
 					_fail("hitting the fence did not record a knockdown (faults=%d)" % _course.faults)
 				Input.action_release("move_forward")
-				Input.action_release("run")
+				Input.action_release("gallop")
 				_next(4, now)
 		4:
 			if elapsed >= 400:
@@ -79,7 +79,7 @@ func _process(_delta: float) -> bool:
 			if elapsed >= 1800:
 				Input.action_release("jump")
 				Input.action_release("move_forward")
-				Input.action_release("run")
+				Input.action_release("gallop")
 				print("jumped approach: z=%.2f max_z=%.2f clears=%d" % [
 					_horse.global_position.z, _max_z, _course.cleared_count
 				])
@@ -136,12 +136,12 @@ func _setup_approach() -> void:
 	_jump_sent = false
 	_max_z = -999.0
 	Input.action_press("move_forward")
-	Input.action_press("run")
+	Input.action_press("gallop")
 
 
 func _finish() -> void:
 	Input.action_release("move_forward")
-	Input.action_release("run")
+	Input.action_release("gallop")
 	Input.action_release("jump")
 	if _failures.is_empty():
 		print("FENCE JUMP CHECK: PASS")

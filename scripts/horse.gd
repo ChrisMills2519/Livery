@@ -4,29 +4,50 @@ signal landed
 signal jumped
 signal training_awarded(new_skill: float, new_fitness: float)
 
-## Gait speeds matched to the clip library's own measured ground speed, so the
-## hooves stay planted instead of sliding: Walk/Trot/Run cruise at 1.74/1.95/4.98 m/s.
+## Stick movement below this is a resting thumb, not a throttle: the steering
+## axes are renormalised past it so a small push is still a slow walk.
+const STEER_DEADZONE := 0.15
+## Past this renormalised magnitude the stick asks for the trot; there is no
+## second hold timer, because a gait you can hold is the gait you get.
+const TROT_NOTCH := 0.70
+## Pulled back this far, held for BRAKE_HOLD, the stick brakes the horse.
+const BRAKE_NOTCH := 0.75
+const BRAKE_HOLD := 0.2
+## Once the brake has stopped the horse it stays stopped this long before
+## reining back, so the stop is a stop rather than a bounce off zero.
+const REIN_BACK_DELAY := 0.25
+
+## Gait speeds are the clip library's own measured ground speed times the
+## playback scale the state machine applies, so the hooves stay planted instead
+## of sliding: Walk/Trot/Run cruise at 1.74/2.925/5.976 m/s, which is 1.0x/1.5x/
+## 1.2x of the clips' 1.74/1.95/4.98.  The trot sits exactly on the 1.5x
+## playback clamp and below the 3.0 m/s canter threshold on purpose.
 @export var walk_speed := 1.74
-@export var trot_speed := 1.95
-@export var canter_speed := 4.98
+@export var trot_speed := 2.925
+@export var canter_speed := 5.976
 @export var turn_speed := 4.0
 @export var gravity := 20.0
 @export var mount_range := 2.2
 
 @export_group("Riding")
-## How long the rider has to hold run before the horse moves up from trot to
-## canter.  Walk is the default gait, run alone reaches trot, and holding run
-## for this long asks for the canter.
-@export var gait_hold_time := 0.9
-@export var acceleration := 4.5
-@export var deceleration := 7.0
+## How quickly the ride speed chases the gait the rider asked for, in m/s^2.
+## A gentler ramp up than down: picking up speed reads as the horse gathering
+## itself, while coming down should feel like it is listening.
+@export var acceleration := 3.5
+@export var deceleration := 10.0
+## The brake gesture's rate, and how fast a stopped horse reins back.
+@export var brake_speed := 10.0
+@export var rein_back_speed := 0.9
 ## Dismounting is a short, firm settle rather than a long coast through trot
 ## and walk: the horse is stopped over this time and then forced into Idle.
 @export var dismount_settle_time := 0.2
 @export var dismount_deceleration := 24.0
-## Mounted turning follows the mouse/camera.  This is faster than the walking
-## turn rate so a mouse sweep turns the horse promptly, including in place.
-@export var ridden_turn_speed := 6.0
+## Ridden turning is a yaw rate in radians per second, not a lerp factor, so
+## the turn has weight: a canter turns in a wide arc instead of pivoting on the
+## spot.  The stick's left/right axis asks for this rate; the camera never does.
+@export var ridden_turn_rate_walk := 2.6
+@export var ridden_turn_rate_canter := 1.5
+@export var ridden_turn_rate_in_place := 1.3
 
 @export_group("Leading")
 ## How far the handler can be from the horse when the lead is taken.
@@ -141,7 +162,11 @@ var _saddle_rest := Transform3D.IDENTITY
 var _bridle_rest := Transform3D.IDENTITY
 var _seat_in_saddle := Transform3D.IDENTITY
 var _ride_speed := 0.0
-var _gait_hold := 0.0
+var _brake_hold := 0.0
+var _stop_hold := 0.0
+## True between releasing the gallop and the rider either stopping or easing the
+## stick back: the horse lands on the trot rather than collapsing to a walk.
+var _gallop_coast := false
 var _air_time := 0.0
 var _jump_air_time := 0.8
 var _settle_time := 0.0
@@ -337,7 +362,9 @@ func set_rider(p: Node3D) -> void:
 func clear_rider() -> void:
 	rider = null
 	_ride_speed = 0.0
-	_gait_hold = 0.0
+	_brake_hold = 0.0
+	_stop_hold = 0.0
+	_gallop_coast = false
 	# Stop over a short, firm settle and then go straight to Idle instead of
 	# letting the speed-driven FSM walk down through canter/trot/walk.
 	_settle_time = maxf(dismount_settle_time, 0.0)
@@ -406,7 +433,9 @@ func board() -> bool:
 	boarded = true
 	velocity = Vector3.ZERO
 	_ride_speed = 0.0
-	_gait_hold = 0.0
+	_brake_hold = 0.0
+	_stop_hold = 0.0
+	_gallop_coast = false
 	_settle_time = 0.0
 	airborne = false
 	air_phase = 0.0
@@ -426,7 +455,9 @@ func release_from_stable(anchor: Transform3D) -> void:
 	global_transform = anchor
 	velocity = Vector3.ZERO
 	_ride_speed = 0.0
-	_gait_hold = 0.0
+	_brake_hold = 0.0
+	_stop_hold = 0.0
+	_gallop_coast = false
 	_settle_time = 0.0
 	airborne = false
 	air_phase = 0.0
@@ -532,7 +563,9 @@ func begin_grooming(anchor: Transform3D) -> bool:
 	velocity = Vector3.ZERO
 	_settle_time = 0.0
 	_ride_speed = 0.0
-	_gait_hold = 0.0
+	_brake_hold = 0.0
+	_stop_hold = 0.0
+	_gallop_coast = false
 	if gallop != null:
 		gallop.stop()
 	if mount_prompt != null:
@@ -745,57 +778,101 @@ func _ride(delta: float) -> void:
 	if Input.is_action_just_pressed("jump"):
 		jump()
 
-	# The rider root carries the mouse yaw and the camera hangs off it, so this
-	# is the direction the player is looking/steering.
-	var look := -rider.global_transform.basis.z
-	look.y = 0.0
-	if look.length_squared() > 0.001:
-		look = look.normalized()
-
 	var input := TouchControls.get_move_input()
-	if input.length() <= 0.1:
-		_gait_hold = 0.0
-		# Turning in place: a stationary horse still follows the mouse so the
-		# heading can be lined up before moving off.
-		if look.length_squared() > 0.001:
-			_face(look, delta, ridden_turn_speed)
+	var turn := clampf(input.x, -1.0, 1.0)
+	# Godot's forward is -Z, so a push up puts negative Y on the stick.
+	var forward_ask := -input.y
+	var back_ask := input.y
+
+	# The brake gesture: pulled back past the notch and held.  Brushing the back
+	# of the ring never arms it, so turning with the thumb low cannot brake the
+	# horse by accident.
+	if back_ask >= BRAKE_NOTCH:
+		_brake_hold += delta
+	else:
+		_brake_hold = 0.0
+	if _brake_hold >= BRAKE_HOLD:
+		_gallop_coast = false
+		rotation.y -= turn * ridden_turn_rate_in_place * delta
+		if airborne:
+			return
+		_ride_speed = move_toward(_ride_speed, 0.0, brake_speed * delta)
+		if is_zero_approx(_ride_speed):
+			_stop_hold += delta
+			if _stop_hold >= REIN_BACK_DELAY:
+				# Stopped and still held back: rein back rather than turn round.
+				_ride_speed = -rein_back_speed
+		else:
+			_stop_hold = 0.0
+		_travel()
+		return
+
+	# The horse steers in its own frame: left/right is a turn rate, up/down is
+	# throttle.  Nothing in this path reads the camera, so a look drag can never
+	# re-aim the horse - the camera-relative spin loop is impossible here rather
+	# than guarded against.
+	if forward_ask <= STEER_DEADZONE:
+		_gallop_coast = false
+		_stop_hold = 0.0
+		# Turning in place: the heading can still be lined up before moving off,
+		# at the slower rate.  A standing horse never pivots to face the camera.
+		rotation.y -= turn * ridden_turn_rate_in_place * delta
 		if not airborne:
 			_ride_speed = move_toward(_ride_speed, 0.0, deceleration * delta)
 			velocity.x = move_toward(velocity.x, 0.0, deceleration * delta)
 			velocity.z = move_toward(velocity.z, 0.0, deceleration * delta)
 		return
 
-	# The horse follows the same steering frame as the walk: camera-relative
-	# while the view is free, frozen while a touch stick is pushed.  Godot's
-	# forward is -Z and Input.get_vector puts forward on the negative Y axis, so
-	# the raw (x, 0, y) already points where the rider is pushing; only the frame
-	# comes from the view.  Multiplying a forward vector by input.y instead
-	# swaps W and S.
-	var yaw := rotation.y
-	if rider.has_method("steer_yaw"):
-		yaw = float(rider.call("steer_yaw"))
-	var dir := Basis(Vector3.UP, yaw) * Vector3(input.x, 0.0, input.y)
-	dir.y = 0.0
-	if dir.length_squared() > 0.001:
-		_face(dir.normalized(), delta, ridden_turn_speed)
+	rotation.y -= turn * _ridden_turn_rate() * delta
 
 	# Airborne steering is limited to body rotation; the horse keeps the
 	# momentum it left the ground with.
 	if airborne:
 		return
 
-	var running := Input.is_action_pressed("run")
-	if running:
-		_gait_hold += delta
-	else:
-		_gait_hold = 0.0
-
+	# The gait comes from one classifier shared with the on-screen ring, so the
+	# ring cannot promise something the horse will not do.  A touch stick carries
+	# its own magnitude; keys have none, so W walks and Shift asks for the trot.
+	var stick_driving := TouchControls.is_stick_active()
+	var gallop_held := Input.is_action_pressed("gallop")
+	var keyboard_trot := Input.is_action_pressed("run") and not stick_driving
+	var ask := TouchControls.gait_for(input, stick_driving, keyboard_trot, gallop_held)
+	var eased := TouchControls.gait_for(input, stick_driving, keyboard_trot, false)
 	var target := walk_speed
-	if running:
-		target = trot_speed if _gait_hold < gait_hold_time else canter_speed
-	_ride_speed = move_toward(_ride_speed, target, acceleration * delta)
-	# Travel along the direction the horse actually faces, not the raw stick
-	# direction, or it slides sideways while the model is still turning.
+	match ask:
+		"trot":
+			target = trot_speed
+		"canter":
+			target = canter_speed
+	if Input.is_action_just_released("gallop"):
+		# Dropping the gallop lands on the trot, not the walk.
+		_gallop_coast = true
+	if _gallop_coast:
+		if stick_driving and eased == "walk":
+			# The stick was eased back on purpose, which is a walk request.
+			_gallop_coast = false
+		else:
+			target = maxf(target, trot_speed)
+	# A horse already above a trot never collapses straight to a walk mid-hold.
+	if _ride_speed > trot_speed:
+		target = maxf(target, trot_speed)
+	var rate := acceleration if target > _ride_speed else deceleration
+	_ride_speed = move_toward(_ride_speed, target, rate * delta)
+	_travel()
+
+
+## The ridden turn rate for the current ground speed: a walk turns tightly, a
+## canter carves a wide arc.  Turning in place uses its own, slower rate.
+func _ridden_turn_rate() -> float:
+	var speed := Vector2(velocity.x, velocity.z).length()
+	var span := maxf(canter_speed - walk_speed, 0.001)
+	var weight := clampf((speed - walk_speed) / span, 0.0, 1.0)
+	return lerpf(ridden_turn_rate_walk, ridden_turn_rate_canter, weight)
+
+
+## Moves along the direction the horse actually faces, not the raw stick
+## direction, or it slides sideways while the model is still turning.
+func _travel() -> void:
 	var forward := -global_transform.basis.z
 	forward.y = 0.0
 	if forward.length_squared() > 0.001:
